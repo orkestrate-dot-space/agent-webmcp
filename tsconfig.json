@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ESNext"],
+    "types": ["bun"],
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "exactOptionalPropertyTypes": false,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts", "scripts/**/*.ts"]
+}
