@@ -29,7 +29,7 @@ export const unregisterSnippet = (name: string): string =>
 
 export function parseRegisterReply(value: unknown, name: string): string | null {
   if (typeof value !== "string") {
-    if (value === undefined) return "page has no WebMCP domain (document.modelContext is absent) — connect a WebMCP-capable browser (agent-browser daemons launch flagged Chrome; plain builds need --enable-features=DevToolsWebMCPSupport).";
+    if (value === undefined) return "page has no WebMCP domain (document.modelContext is absent) — connect a WebMCP-capable browser (agent-browser daemons launch flagged Chrome; plain builds need --enable-features=WebMCPTesting,DevToolsWebMCPSupport).";
     return "page returned non-JSON (contract broken).";
   }
   let parsed: unknown;
