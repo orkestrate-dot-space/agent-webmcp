@@ -49,4 +49,39 @@ describe("runner", () => {
     expect(r.ok).toBe(true);
     if (r.ok) { expect(r.spilled).toBe(true); expect(String(r.value).length).toBeLessThanOrEqual(120); }
   });
+
+  test("console output returns as logs", async () => {
+    const r = await runCode({
+      code: "console.log('trace', { n: 1 }); console.warn('careful'); return 1;",
+      calls: {},
+      budgets,
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.logs).toEqual(["[log] trace {\"n\":1}", "[warn] careful"]);
+      expect(r.value).toBe(1);
+    }
+  });
+
+  test("reserved search/catalog paths reach the host", async () => {
+    const r = await runCode({
+      code: "const hits = await search({ query: 'book' }); const det = await catalog('add_book'); return { hits, det };",
+      calls: {
+        search: async (input) => [{ path: "add_book", description: `hit for ${JSON.stringify(input)}` }],
+        catalog: async (input) => ({ detail: String(input) }),
+      },
+      budgets,
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.value).toEqual({ hits: [{ path: "add_book", description: 'hit for {"query":"book"}' }], det: { detail: "add_book" } });
+      expect(r.calls).toEqual(["search", "catalog"]);
+    }
+  });
+
+  test("unknown tool path names the fix", async () => {
+    const r = await runCode({ code: "return await tools.nope({});", calls: {}, budgets });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.message).toMatch(/unknown tool path: nope/);
+  });
 });

@@ -7,6 +7,7 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { admitOnCall, reapplyOrigin } from "./admission.ts";
+import { catalogDetail, searchCatalog, type CatalogEntry } from "./catalog.ts";
 import { EngineFailed, fail } from "./result.ts";
 import { discoverDaemonBrowser, invokePageTool, listPageTools } from "./transport.ts";
 import { listOriginTools, loadTool, originSkill, registryRoot } from "./registry.ts";
@@ -135,6 +136,7 @@ const handlers: Record<string, VerbHandler> = {
     const counts = new Map<string, number>();
     const held: Array<{ targetId: string; handle: string }> = [];
     const conns: Array<{ close: () => void }> = [];
+    const entries: Array<CatalogEntry> = [];
     try {
       for (const ref of refs) {
         const record = loadRecord(ref.handle);
@@ -153,6 +155,7 @@ const handlers: Record<string, VerbHandler> = {
         }
         for (const tool of live) {
           const path = flat ? tool.name : `${ref.as}.${tool.name}`;
+          entries.push({ path, description: tool.description, inputSchema: tool.inputSchema, admitted: true });
           calls[path] = async (input: unknown) => {
             const toolArgs = (input ?? {}) as Record<string, unknown>;
             const gated = consequentialGate(ctx.policy, confirmed, tool.name, tool.annotations.consequential === true || diskConsequential.has(tool.name));
@@ -185,6 +188,10 @@ const handlers: Record<string, VerbHandler> = {
         for (const name of listOriginTools(record.origin)) {
           if (liveByName.has(name)) continue;
           const path = flat ? name : `${ref.as}.${name}`;
+          try {
+            const loaded = loadTool(record.origin, name);
+            entries.push({ path, description: loaded.spec.description, inputSchema: loaded.spec.inputSchema, admitted: loaded.stamp !== null });
+          } catch { /* bad shape — open already reported it */ }
           calls[path] = async (input: unknown) => {
             const toolArgs = (input ?? {}) as Record<string, unknown>;
             let disk;
@@ -192,19 +199,38 @@ const handlers: Record<string, VerbHandler> = {
             catch (e) { throw new Error(`${name}: [NO_SUCH_TOOL] ${e instanceof Error ? e.message : String(e)}`); }
             const gated = consequentialGate(ctx.policy, confirmed, name, disk.spec.consequential === true);
             if (gated !== null) throw new Error(gated);
-            const { frameId } = await admitOnCall(conn, sessionId, record.origin, name, { confirm: confirmed, timeoutMs }).catch((e: unknown) => {
+            const { frameId, stamp } = await admitOnCall(conn, sessionId, record.origin, name, { confirm: confirmed, timeoutMs }).catch((e: unknown) => {
               throw new Error(`${name}: [${e instanceof EngineFailed ? e.reason : "ADMIT_FAILED"}] ${e instanceof Error ? e.message.slice(0, 300) : String(e)}`);
             });
             const out = await invokePageTool(conn, sessionId, { frameId, toolName: name, args: toolArgs }, timeoutMs).catch((e: unknown) => {
               throw new Error(`${name}: [TRANSPORT] ${e instanceof Error ? e.message.slice(0, 200) : String(e)} — retry once, then re-list.`);
             });
             if (out.status === "Error") throw new Error(`${name}: [PAGE_REFUSED] ${String(out.errorText ?? "page error").slice(0, 300)}`);
+            stamp(); // consequential proof lands only when the confirmed call succeeds
             return out.output ?? null;
           };
         }
         counts.set(ref.as, 0);
       }
-      const result = await runCode({ code, calls, budgets: { timeoutMs, maxToolCalls, maxChars, maxResultChars } });
+      // In-dialect discovery: search()/catalog() resolve against the same
+      // live + on-disk verbs the run can call. Builtins win over
+      // same-named page verbs (don't name a verb search or catalog).
+      calls["search"] = async (input: unknown) => {
+        const q = (input ?? {}) as { query?: unknown; namespace?: unknown; limit?: unknown };
+        return searchCatalog(entries, {
+          ...(typeof q.query === "string" ? { query: q.query } : {}),
+          ...(typeof q.namespace === "string" ? { namespace: q.namespace } : {}),
+          ...(typeof q.limit === "number" ? { limit: q.limit } : {}),
+        });
+      };
+      calls["catalog"] = async (input: unknown) => {
+        const path = typeof input === "string" ? input : (input as { path?: unknown } | null)?.path;
+        return catalogDetail(entries, typeof path === "string" ? path : undefined);
+      };
+      let result = await runCode({ code, calls, budgets: { timeoutMs, maxToolCalls, maxChars, maxResultChars } });
+      if (!result.ok && result.error.kind === "ToolFailure" && result.error.message.startsWith("unknown tool path")) {
+        result = { ...result, error: { ...result.error, message: `[UNKNOWN_TOOL] ${result.error.message} — call search() to discover verbs, or list first.` } };
+      }
       for (const c of result.calls) {
         const alias = flat ? (refs[0] as { as: string }).as : (c.split(".")[0] ?? "?");
         counts.set(alias, (counts.get(alias) ?? 0) + 1);
@@ -216,9 +242,9 @@ const handlers: Record<string, VerbHandler> = {
           const alias = flat ? (refs[0] as { as: string }).as : (c.split(".")[0] ?? "?");
           perSession[alias] = (perSession[alias] ?? 0) + 1;
         }
-        return { content: JSON.stringify({ value: result.value, spilled: result.spilled, toolCalls: result.toolCalls, perSession, origins: refs.map((r) => r.handle), untrusted: true }) };
+        return { content: JSON.stringify({ value: result.value, spilled: result.spilled, toolCalls: result.toolCalls, perSession, origins: refs.map((r) => r.handle), untrusted: true, ...(result.logs.length > 0 ? { logs: result.logs } : {}) }) };
       }
-      return { content: JSON.stringify({ value: null, spilled: false, toolCalls: result.toolCalls, perSession, origins: refs.map((r) => r.handle), untrusted: true, error: result.error }) };
+      return { content: JSON.stringify({ value: null, spilled: false, toolCalls: result.toolCalls, perSession, origins: refs.map((r) => r.handle), untrusted: true, error: result.error, ...(result.logs.length > 0 ? { logs: result.logs } : {}) }) };
     } finally {
       for (const c of conns) c.close();
       for (const h of held) releaseTabLock(h.targetId, h.handle);
