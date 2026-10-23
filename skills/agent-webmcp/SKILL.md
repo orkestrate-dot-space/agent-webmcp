@@ -8,13 +8,19 @@ description: Act on web pages through declared verbs that persist as files. Use 
 Teach any page a verb, prove it, keep it. Connect-only: the engine never
 launches a browser — it attaches tabs in a reachable one (your driver
 skill knows the endpoint; daemon discovery, then loopback 9222/9229).
+Lifecycle verbs live only behind MCP (`mcp serve`); the shell binary
+serves just `doctor` and `--version`. There is no CLI verb surface.
 
 ## Drive loop
 
 1. `skill action=show name=drivers` — learn to see/act on this session's browser.
 2. `open {url, cdp?}` — fresh tab, returns `{handle, toolCount, cdpUrl}`.
    Drive the tab through `cdpUrl` with your driver. `briefing` (when
-   present) is this origin's standing orders — obey it.
+   present) is this origin's standing orders — obey it. `toolCount` is
+   the native burst plus re-applied files at open time; `list` is the
+   live truth and may differ (late-announcing natives). A `null` return
+   from a verb is success with no output — verify with a read, don't
+   retry blindly.
 3. `list {handle}` — the only names `execute` may call. Rows by default;
    `list {handle, tool:name}` for the full schema of one verb.
 4. `execute {handle, code}` — plain JS over `tools.NAME(args)`; its return

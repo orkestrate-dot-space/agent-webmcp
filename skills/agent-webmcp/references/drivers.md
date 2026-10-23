@@ -1,8 +1,14 @@
 # Drivers (agent-webmcp reference)
 
 The engine never drives browsers. Pair every session with a driver via the
-`cdpUrl` from `open`. One appendix table — recon is observe → act → mine
-traffic everywhere.
+`cdpUrl` from `open`. Bootstrap a daemon-owned browser when none answers:
+
+```bash
+AGENT_BROWSER_SESSION=work agent-browser open https://example.com  # daemon owns it
+agent-browser get cdp-url                                          # hand this to open's cdp
+```
+
+One appendix table — recon is observe → act → mine traffic everywhere.
 
 | Driver | See | Act | Mine traffic | Page tools? | Notes |
 |---|---|---|---|---|---|
