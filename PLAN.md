@@ -126,7 +126,11 @@ admits files lazily at first use:
 plain JS, no harness-specific constructs — identical from opencode, pi,
 Claude Code, or anything speaking MCP. Discovery is `list` (per-session
 verbs + full schemas via `list tool:<name>`); composition is the
-`tools.NAME(args)` dialect, flat for one session, `alias.NAME` for several.
+`tools.NAME(args)` dialect, flat for one session, `tools.ALIAS.NAME` for several (one root object).
+Page verbs live INSIDE this dialect, never as top-level harness tools:
+flat MCP entries would push every schema into the model context on every
+turn, bypass budgets and the envelope, and depend on mid-session catalog
+refreshes no harness guarantees.
 No search verb: the skill teaches open → list → compose, and anything
 worth composing twice becomes a file (Section 3.4).
 
