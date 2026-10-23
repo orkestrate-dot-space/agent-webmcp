@@ -43,8 +43,10 @@ describe("transpileBody", () => {
 });
 
 describe("slugOf", () => {
-  test("host lowercased, non-alphanumerics dashed", () => {
+  test("host lowercased, non-alphanumerics dashed, ports kept", () => {
     expect(slugOf("https://WWW.Example.COM/x")).toBe("www-example-com");
     expect(slugOf("https://a_b.test/")).toBe("a-b-test");
+    expect(slugOf("http://127.0.0.1:8099/index.html")).toBe("127-0-0-1-8099");
+    expect(slugOf("http://127.0.0.1:8100/")).not.toBe(slugOf("http://127.0.0.1:8099/"));
   });
 });

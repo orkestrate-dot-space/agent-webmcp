@@ -18,7 +18,10 @@ export function registryRoot(): string {
 
 export function slugOf(origin: string): string {
   let host: string;
-  try { host = new URL(origin).hostname.toLowerCase(); } catch { host = origin.toLowerCase(); }
+  try {
+    const u = new URL(origin);
+    host = u.host.toLowerCase(); // host INCLUDES a non-default port — :8099 and :8100 are different origins
+  } catch { host = origin.toLowerCase(); }
   return host.replaceAll(/[^a-z0-9]/g, "-");
 }
 
