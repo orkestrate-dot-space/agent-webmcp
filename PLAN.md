@@ -13,14 +13,20 @@ proven semantics are carried across, code is rewritten, nothing is ported.
 - No Effect, no framework, no codegen, no `generated/` embeds.
 - No engine-map / parallel tool tables. Native WebMCP only; incapable
   browsers fail loud naming the flag.
+- No `register` / `unregister` verbs. Authoring is skill + files the agent
+  writes with its own tools; the engine only reads, validates, injects, and
+  proves (lazy admission). This is the agent-browser `webmcp-gen` pattern:
+  the loop lives in the skill, the core only loads.
+- No registry configuration of any kind: no `--registry` flag, no roots,
+  no pin, no project overlay, no `origin.txt`, no symlink walks. One fixed
+  directory (Section 3.3). Tests isolate via `HOME`, not flags.
 - No sites index, no `search`/`find` verbs, no workers, no `/sites` catalog,
   no seed/scan/population work. The 68-row D1 ledger stays frozen and
   untouched by this branch.
 - No CLI verb surface beyond `serve`/`doctor`. No config files, no env
-  parsing, no walk-up beyond the single registry root flag.
-- No `unregister` verb (register overwrites, navigation wipes, close drops,
-  true deletion is `rm`). No suspect/stale tracking (skip-reasons tell the
-  story). No per-origin skill serve in v1 (files on disk + `skill list`).
+  parsing.
+- No suspect/stale tracking (skip-reasons tell the story). No per-origin
+  skill serve in v1 (files on disk + `skill list`).
 - No frame-targeted eval (separate track, nothing here depends on it).
 - No feature without a stranger run. No behavior change without a changelog
   entry. No push/tag/deploy/release without an explicit user order naming
@@ -66,45 +72,71 @@ green.
 - Accept: open → attach → close leaves no tab; concurrent executes on one
   tab serialize; dead tab drops, dead browser keeps.
 
-### 3.3 Registry + validation — "files are the library"
+### 3.3 Registry — "files are the library, in one fixed place"
 
-- Code: layout `<root>/<origin-slug>/{origin.txt, <name>/{spec.json,
-  body.ts}}`. Roots: `--registry DIR` pin, else project overlay over the
-  user-global main store (reads merge project-first, writes go resolved
-  root). `origin.txt` slug-collision guard, symlink escape refusal.
+- Code (read-mostly): ONE directory, always
+  `~/.local/share/agent-webmcp/registry/` (from `HOME`; tests isolate by
+  setting `HOME`, never by flag). Layout:
+  `<origin-slug>/<name>/{spec.json, body.ts}` plus `<origin-slug>/SKILL.md`
+  and optional `evidence/`. The origin lives inside `spec.json` and is
+  verified on load — no `origin.txt`. The engine READS (load, validate,
+  inject, stamp); the agent WRITES (with its own file tools, taught by the
+  skill) — so there is no save path, no write root, no symlink walk, just a
+  normalization check on reads. One stamp function writes back
+  `{verified, bodyHash}` after proof (~15 lines).
+- Spec fields, minimal: `name, description, inputSchema` + optional
+  `annotations?, fixtureInput?, consequential?, verified?, bodyHash?`.
   `checkSpec`: closed object schema, honest names, non-empty description,
   no `eval`/`new Function`, size cap — pure, same bytes → same verdict.
   Bodies are TS; transpile at load (Bun transpiler, plain JS passes
   through); untranspilable = corrupt file, named, never injected.
-- Language: agent authors all three files guided by the skill.
-- Accept: unit suite on fixtures (good shape passes, each bad shape names
-  its reason); legacy `body.js` fallback reads.
+- Language: agent authors all files guided by the skill. Sharing between
+  projects is by pack directories (copy), not overlays — one store means
+  memory is cross-project by default.
+- Accept: unit suite on fixtures (each bad shape names its reason); legacy
+  `body.js` fallback reads; a second `HOME` sees a disjoint store.
 
-### 3.4 Engine verbs, native-only — "missing verbs exist and are proven"
+### 3.4 Admission — "missing verbs exist and are proven" (no authoring verbs)
 
-- Code: ONE snippet family on `document.modelContext` (register / list-via-
-  burst / invoke). `reapply` on open: skip-if-live (never overwrite a
-  native verb), else validate → inject → presence-check → stamp
-  `{verified, bodyHash}` for non-consequential, hand-prove path for
-  consequential. Bad shapes skip with reasons in `skipped[]`, files kept.
-  `register` verb: pre-check native catalog FIRST — name collision fails
-  loud naming both claimants — then validate → inject → fixture-prove →
-  persist. Fixture failure rolls back live + files, reason names the fix.
+There is no `register` verb. The agent writes `spec.json` + `body.ts`
+directly (skill-taught, agent-browser `webmcp-gen` pattern); the engine
+admits files lazily at first use:
+
+- Code, on `execute` naming an unknown verb (or `open` re-applying):
+  load → `checkSpec` → native-catalog collision check FIRST (same name
+  fails loud naming both claimants) → inject → prove → stamp.
+  Prove: `fixtureInput` present and non-consequential → run it, success
+  stamps `{verified, bodyHash}`; consequential → the `confirm:true` call
+  itself is the proof. No fixture and no confirm → fail naming both
+  proving paths, files kept. `open` fast-path: stamped + unchanged bytes
+  re-inject silently; changed bytes re-prove; unstamped admittance is
+  marked `unverified` in `list`.
 - Language: agent does recon, seam choice, body logic, spec naming,
-  fixture input. The fixture is the handshake: agent writes it, code runs
-  it, neither does the other's half.
-- Accept: register → prove → invoke → close → re-open re-applies silently;
-  changed bytes re-prove; planted `eval()` body skips with reason, nothing
-  injected; native-collision attempt fails loud.
+  fixture input, and all repairs from skip/proof reasons. The fixture is
+  the handshake: agent writes it, code runs it, neither does the other's
+  half.
+- Accept: write files → first `execute` proves → close → re-open
+  re-applies silently; changed bytes re-prove; planted `eval()` body
+  skips with reason, nothing injected; native-collision attempt fails
+  loud; unprovable tool fails naming the two proving paths.
 
-### 3.5 Execute — "code over verbs returns a value, safely"
+### 3.5 Execute — "code over verbs returns a value, safely" (the codemode interface)
+
+`execute` IS the harness-codemode exposure: one MCP tool taking a string of
+plain JS, no harness-specific constructs — identical from opencode, pi,
+Claude Code, or anything speaking MCP. Discovery is `list` (per-session
+verbs + full schemas via `list tool:<name>`); composition is the
+`tools.NAME(args)` dialect, flat for one session, `alias.NAME` for several.
+No search verb: the skill teaches open → list → compose, and anything
+worth composing twice becomes a file (Section 3.4).
 
 - Code: `execute {handle, code, confirm?, budgets?}` runs agent JS in a
-  `Bun.Worker` behind a `tools.NAME` proxy (flat) / `alias.NAME`
-  (multi-session). Host bridges each call to CDP invocation. Budgets:
-  wall-clock, max calls, max input chars, max result chars. Consequential
-  gate: `ask` requires `confirm:true` in the call, `deny` blocks, `allow`
-  runs free — verb-level, the one layer that sees inside the code string.
+  `Bun.Worker` behind the `tools` proxy. Host bridges each call to CDP
+  invocation, including lazy admission (Section 3.4) for names that are on
+  disk but not yet live. Budgets: wall-clock, max calls, max input chars,
+  max result chars. Consequential gate: `ask` requires `confirm:true` in
+  the call, `deny` blocks, `allow` runs free — verb-level, the one layer
+  that sees inside the code string.
   Every failure is a coded reason + human fix (`NO_SUCH_TOOL`,
   `NEEDS_CONFIRM`, `PAGE_REFUSED` with recovered page text, `STALE_DRAFT`
   after nav wipe + heal attempt). Envelope always carries `untrusted:true`.
@@ -113,22 +145,28 @@ green.
   never hang it; each error reason demonstrably self-healed by the agent
   in a live run.
 
-### 3.6 Skill — "a stranger is competent in one read"
+### 3.6 Skill — "a stranger is competent in one read" (the other half of the product)
 
-- Language (the product): core `SKILL.md` (drive loop: open → list →
-  compose; author loop: recon → write files → register → prove; compose
-  shape), plus `author.md`, `drivers.md` (one appendix table, no
-  modelContext prerequisite language), `memory.md` (files-first registry).
-  Open standard format (`agentskills.io` frontmatter: `name` matching
-  dirname, `description` with trigger keywords) so the same files load in
-  opencode, pi, and Claude unmodified. Core under ~2k tokens; per-origin
-  `SKILL.md` files live beside tools; references load on demand
-  (progressive disclosure).
+Anything instructable lives here, not in code — following the
+agent-browser pattern (tiny discovery stub + version-matched served
+content + specialized skills + whole authoring loops as skill text):
+
+- Language (the product): core `SKILL.md` as discovery stub — drive loop
+  (open → list → compose), compose dialect, budgets, envelope meaning —
+  under ~100 lines with trigger-rich description. The AUTHOR skill is the
+  star: full authoring doctrine (recon via driver, traffic mining, seam
+  choice, file layout, closed schemas, envelope contract, fixture
+  discipline, debug playbook with stale-tab and sequence-guard rules,
+  evidence as trust). One driver appendix table (snapshot/eval/HAR per
+  driver). Open standard format (`agentskills.io` frontmatter) so the same
+  files load in opencode, pi, and Claude unmodified — distribution by
+  conformance, not invention.
 - Code: `skill show` serves core + refs from disk (no codegen, no embeds);
-  `skill list` inventories origins; shape-check in gate that served text
-  equals the files.
+  `skill list` inventories origins. Gate shape-checks served text equals
+  the files. No `install` action in v1 (packs move by directory copy).
 - Accept: a stranger with only the skill text completes the Section 7
-  stranger run. Skill edits never require a code release.
+  stranger run — including authoring a file-tool with NO authoring verb.
+  Skill edits never require a code release.
 
 ### 3.7 Install, gate, doctor — "green means shippable"
 
@@ -139,17 +177,24 @@ green.
 - Accept: `gate` green on a clean checkout; install script proven
   end-to-end in a scratch env.
 
-## 4. Verb surface (final, seven)
+## 4. Verb surface (final, six)
 
-`open`, `list`, `execute`, `register`, `close`, `skill`, `doctor`.
-Schemas stay minimal; every high-value input field carries a `description`
-annotation that flows into the served `inputSchema`. No other verbs ship.
+`open`, `list`, `execute`, `close`, `skill`, `doctor` — and the reasoning:
+`open`/`close` bracket the tab we mint (we reap what we create);
+`list` is codemode discovery (names + schemas to compose with);
+`execute` is codemode itself plus lazy admission; `skill` teaches both;
+`doctor` reports reachability. Schemas stay minimal; every high-value
+input field carries a `description` annotation that flows into the served
+`inputSchema`. No other verbs ship.
 
 ## 5. Line budgets (aspiration, not law)
 
-main+args+serve ~80 · transport ~220 · sessions ~150 · registry ~220 ·
-register+prove ~120 · execute+runner+gate ~270 · skill+doctor ~110.
-≈1,200 lines, one dependency (`@modelcontextprotocol/sdk`), ~50-line
+main+args+serve ~80 · transport ~220 · sessions ~150 (record is
+`{handle, targetId, origin}` — authored lists live on disk, not in the
+record) · registry ~150 (read + checkSpec + inject + stamp; no save path,
+no roots, no guards) · admission ~80 (folded into execute/open paths) ·
+execute+runner+gate ~270 · skill+doctor ~100.
+≈1,050 lines, one dependency (`@modelcontextprotocol/sdk`), ~50-line
 `Result` kit replacing Effect. If a module can't be rewritten in one
 session, it's too big.
 
