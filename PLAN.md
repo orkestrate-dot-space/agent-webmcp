@@ -77,8 +77,11 @@ green.
 - Code (read-mostly): ONE directory, always
   `~/.local/share/agent-webmcp/registry/` (from `HOME`; tests isolate by
   setting `HOME`, never by flag). Layout:
-  `<origin-slug>/<name>/{spec.json, body.ts}` plus `<origin-slug>/SKILL.md`
-  and optional `evidence/`. The origin lives inside `spec.json` and is
+  `<origin-slug>/{SKILL.md, <capability>/{SKILL.md, <name>/{spec.json, body.ts}}}` plus optional `evidence/`.
+  Capabilities group an origin's verbs (chat agent, docs pack, page verbs);
+  a verb lives in exactly one capability — duplicates across capabilities
+  fail loud naming both. `SKILL.md` at each level teaches that level: the
+  origin skill names capabilities, each capability skill teaches its verbs. The origin lives inside `spec.json` and is
   verified on load — no `origin.txt`. The engine READS (load, validate,
   inject, stamp); the agent WRITES (with its own file tools, taught by the
   skill) — so there is no save path, no write root, no symlink walk, just a

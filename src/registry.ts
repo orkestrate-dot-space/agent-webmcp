@@ -3,7 +3,7 @@
 // file tools, taught by the skill. No flags, no overlays, no markers —
 // the origin lives inside spec.json and is verified on load.
 // Layout: <root>/<origin-slug>/{SKILL.md, <name>/{spec.json, body.ts, stamp.json}}
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { normalize, relative, sep } from "node:path";
 import { Transpiler } from "bun";
@@ -102,11 +102,40 @@ function insideRoot(root: string, path: string): void {
   }
 }
 
-export interface LoadedTool { readonly spec: ToolSpec; readonly body: string; readonly stamp: ToolStamp | null }
+export interface LoadedTool { readonly spec: ToolSpec; readonly body: string; readonly stamp: ToolStamp | null; readonly capability: string }
+
+export interface OriginTool { readonly name: string; readonly capability: string }
+
+// Layout: <root>/<origin-slug>/{SKILL.md, <capability>/{SKILL.md, <name>/{spec.json, body.ts, stamp.json}}}
+// Capabilities group an origin's verbs (chat, docs, ...); each carries its
+// own SKILL.md (doctrine + rules). Flat <slug>/<name> dirs are NOT read —
+// every verb lives in exactly one capability, so names resolve
+// unambiguously and search/list can scope by capability.
+function capabilityDirs(root: string, slug: string): Array<string> {
+  try {
+    return readdirSync(`${root}/${slug}`, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
+  } catch { return []; }
+}
+
+function toolDir(root: string, slug: string, capability: string, name: string): string {
+  return `${root}/${slug}/${capability}/${name}`;
+}
 
 export function loadTool(origin: string, name: string): LoadedTool {
   const root = registryRoot();
-  const dir = `${root}/${slugOf(origin)}/${name}`;
+  const slug = slugOf(origin);
+  const matches: Array<string> = [];
+  for (const cap of capabilityDirs(root, slug)) {
+    const dir = toolDir(root, slug, cap, name);
+    try {
+      readFileSync(`${dir}/spec.json`, "utf8");
+      matches.push(cap);
+    } catch { /* not here */ }
+  }
+  if (matches.length === 0) throw fail("missing", `no saved tool '${name}' for ${origin}`, "write spec.json plus body.ts first, under a capability dir.");
+  if (matches.length > 1) throw fail("ambiguous", `'${name}' lives in ${matches.length} capabilities (${matches.join(", ")})`, "rename one — a verb belongs to exactly one capability.");
+  const capability = matches[0] as string;
+  const dir = toolDir(root, slug, capability, name);
   insideRoot(root, dir);
   let raw: string, source: string;
   try {
@@ -128,14 +157,14 @@ export function loadTool(origin: string, name: string): LoadedTool {
     const parsed = JSON.parse(readFileSync(`${dir}/stamp.json`, "utf8")) as ToolStamp;
     if (parsed && typeof parsed.bodyHash === "string") stamp = parsed;
   } catch { /* unstamped — first admission will stamp */ }
-  return { spec, body: transpileBody(source), stamp };
+  return { spec, body: transpileBody(source), stamp, capability };
 }
 
 export function stampTool(origin: string, name: string, bodyHash: string): void {
+  const loaded = loadTool(origin, name);
   const root = registryRoot();
-  const dir = `${root}/${slugOf(origin)}/${name}`;
+  const dir = toolDir(root, slugOf(origin), loaded.capability, name);
   insideRoot(root, dir);
-  mkdirSync(dir, { recursive: true });
   writeFileSync(`${dir}/stamp.json`, JSON.stringify({ verified: true, bodyHash, at: Date.now() }));
 }
 
@@ -143,17 +172,46 @@ export function bodyHashOf(body: string): string {
   return Bun.hash(body).toString(16);
 }
 
-export function listOriginTools(origin: string): Array<string> {
-  const dir = `${registryRoot()}/${slugOf(origin)}`;
-  try {
-    return readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
-  } catch { return []; }
+export function listOriginTools(origin: string): Array<OriginTool> {
+  const root = registryRoot();
+  const slug = slugOf(origin);
+  const out: Array<OriginTool> = [];
+  for (const cap of capabilityDirs(root, slug)) {
+    let names: Array<string> = [];
+    try {
+      names = readdirSync(`${root}/${slug}/${cap}`, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+    } catch { continue; }
+    for (const name of names) {
+      try {
+        readFileSync(`${root}/${slug}/${cap}/${name}/spec.json`, "utf8");
+        out.push({ name, capability: cap });
+      } catch { /* not a tool dir — skip */ }
+    }
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Best-effort capability lookup for a name (used for briefings). Null
+// when the file is missing, corrupt, or ambiguous.
+export function capabilityOf(origin: string, name: string): string | null {
+  try { return loadTool(origin, name).capability; }
+  catch { return null; }
 }
 
 export function originSkill(origin: string): string | null {
   try {
     const text = readFileSync(`${registryRoot()}/${slugOf(origin)}/SKILL.md`, "utf8");
-    return text.trim().length === 0 ? null : text.slice(0, 4096);
+    return text.trim().length === 0 ? null : text.slice(0, 2048);
+  } catch { return null; }
+}
+
+// Capability briefing: the nested SKILL.md that teaches one capability's
+// verbs, order, and rules. Capped — briefings ride on every open.
+export function capabilitySkill(origin: string, capability: string): string | null {
+  if (!/^[A-Za-z0-9_-]+$/.test(capability)) return null;
+  try {
+    const text = readFileSync(`${registryRoot()}/${slugOf(origin)}/${capability}/SKILL.md`, "utf8");
+    return text.trim().length === 0 ? null : text.slice(0, 2048);
   } catch { return null; }
 }
 

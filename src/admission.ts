@@ -65,7 +65,7 @@ export async function reapplyOrigin(
 ): Promise<{ reapplied: Array<string>; skipped: Array<AdmitSkipped> }> {
   const reapplied: Array<string> = [];
   const skipped: Array<AdmitSkipped> = [];
-  const names = listOriginTools(origin);
+  const names = listOriginTools(origin).map((t) => t.name);
   if (names.length === 0) return { reapplied, skipped };
   const live = await liveNames(conn, sessionId, timeoutMs);
   for (const name of names) {

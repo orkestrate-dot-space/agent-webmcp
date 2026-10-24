@@ -83,17 +83,17 @@ function withHome<T>(fn: (home: string) => Promise<T>): Promise<T> {
   });
 }
 
-function writeTool(home: string, origin: string, name: string, spec: Record<string, unknown>, body: string): void {
+function writeTool(home: string, origin: string, name: string, spec: Record<string, unknown>, body: string, capability = "chat"): void {
   const slug = new URL(origin).hostname.replaceAll(/[^a-z0-9]/g, "-");
-  const dir = join(home, ".local/share/agent-webmcp/registry", slug, name);
+  const dir = join(home, ".local/share/agent-webmcp/registry", slug, capability, name);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "spec.json"), JSON.stringify({ name, description: `${name} tool`, inputSchema: { type: "object", properties: {} }, origin, version: 1, createdAt: 0, ...spec }));
   writeFileSync(join(dir, "body.ts"), body);
 }
 
-function writeStamp(home: string, origin: string, name: string, bodyHash: string): void {
+function writeStamp(home: string, origin: string, name: string, bodyHash: string, capability = "chat"): void {
   const slug = new URL(origin).hostname.replaceAll(/[^a-z0-9]/g, "-");
-  writeFileSync(join(home, ".local/share/agent-webmcp/registry", slug, name, "stamp.json"), JSON.stringify({ verified: true, bodyHash, at: 0 }));
+  writeFileSync(join(home, ".local/share/agent-webmcp/registry", slug, capability, name, "stamp.json"), JSON.stringify({ verified: true, bodyHash, at: 0 }));
 }
 
 const BODY = "(async () => { return { content: [{ type: 'text', text: 'hi' }] }; })";
@@ -144,6 +144,21 @@ describe("reapply", () => {
     });
   });
 
+  test("ambiguous names across capabilities fail naming both", async () => {
+    await withHome(async (home) => {
+      writeTool(home, ORIGIN, "dup", { fixtureInput: {} }, BODY, "chat");
+      writeTool(home, ORIGIN, "dup", { fixtureInput: {} }, BODY, "docs");
+      const fake = serveFake();
+      try {
+        const conn: CdpConnection = await connect(fake.wsUrl);
+        const out = await reapplyOrigin(conn, "s1", ORIGIN, 3000);
+        await conn.close();
+        expect(out.reapplied).toEqual([]);
+        expect(out.skipped[0]?.reason).toMatch(/ambiguous|2 capabilities/);
+      } finally { fake.stop(); }
+    });
+  });
+
   test("unstamped consequential never injects on open", async () => {    await withHome(async (home) => {
       writeTool(home, ORIGIN, "hands", { consequential: true }, BODY);
       const fake = serveFake();
@@ -178,6 +193,19 @@ describe("reapply", () => {
 });
 
 describe("admitOnCall", () => {
+  test("capability is reported on admission", async () => {
+    await withHome(async (home) => {
+      writeTool(home, ORIGIN, "capped", { fixtureInput: {} }, BODY, "docs");
+      const fake = serveFake();
+      try {
+        const conn: CdpConnection = await connect(fake.wsUrl);
+        const { loadTool } = await import("./registry.ts");
+        expect(loadTool(ORIGIN, "capped").capability).toBe("docs");
+        await conn.close();
+      } finally { fake.stop(); }
+    });
+  });
+
   test("refusals precede injection: NEEDS_CONFIRM and NO_PROOF_PATH inject nothing", async () => {
     await withHome(async (home) => {
       writeTool(home, ORIGIN, "hands", { consequential: true }, BODY);

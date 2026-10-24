@@ -18,15 +18,20 @@ Root is fixed: `~/.local/share/agent-webmcp/registry/`
 (isolate tests with `HOME`, never with flags).
 
 ```
-<origin-slug>/{SKILL.md, <name>/{spec.json, body.ts, stamp.json, evidence/}}
+<origin-slug>/{SKILL.md, <capability>/{SKILL.md, <name>/{spec.json, body.ts, stamp.json, evidence/}}}
 ```
 
 `<origin-slug>` is the lowercased host with non-alphanumerics as `-`.
-`SKILL.md` (per origin, ≤4KB) teaches future sessions: when to use these
-verbs, in what order, what rules apply — it is served back to you on every
-`open` as `briefing`. `stamp.json` is engine-owned (proof record); never
-hand-write it. `evidence/` holds fixture transcripts and eval notes —
-trust is the reader's informed decision.
+One origin holds one or more **capabilities** — a chat agent, a docs
+pack, a page-verb set — each a directory with its own `SKILL.md`
+(doctrine + rules for exactly those verbs). The origin `SKILL.md` says
+which capabilities exist and when to reach for each. A verb lives in
+exactly one capability; the same name in two capabilities fails loud
+at load — rename, don't shadow. `open` serves the origin skill plus the
+capability skills behind the re-applied verbs as `briefing` (bounded).
+`stamp.json` is engine-owned (proof record); never hand-write it.
+`evidence/` holds fixture transcripts and eval notes — trust is the
+reader's informed decision.
 
 ## 3. Spec (taste lives here)
 
