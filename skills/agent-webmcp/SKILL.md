@@ -11,6 +11,22 @@ skill knows the endpoint; daemon discovery, then loopback 9222/9229).
 Lifecycle verbs live only behind MCP (`mcp serve`); the shell binary
 serves just `doctor` and `--version`. There is no CLI verb surface.
 
+## Skill map (what lives where — 8 files, ~265 lines total, each loaded only when needed)
+
+- This file (always): drive → compose. The loop. Nothing else.
+- `skill show name=drivers` (before first recon): see/act per driver,
+  recon discipline, the driver table.
+- `skill show name=author` (before authoring): files-first doctrine —
+  layout, specs, envelopes, fixtures, debug playbook, site-agent pattern.
+- Per-origin `SKILL.md` (auto-attached on `open` as briefing): which
+  capabilities this origin has, when to reach for each.
+- Per-capability `SKILL.md` (attached with the briefing for every
+  re-applied capability): the verbs, their order, their rules.
+
+Five layers, one question each: how do I drive / how do I compose /
+how do I see / how do I author / how does THIS place work. Nothing
+loads twice; nothing loads before its moment.
+
 ## Drive loop
 
 1. `skill action=show name=drivers` — learn to see/act on this session's browser.
