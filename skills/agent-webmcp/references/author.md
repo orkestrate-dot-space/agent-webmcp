@@ -33,6 +33,18 @@ capability skills behind the re-applied verbs as `briefing` (bounded).
 `evidence/` holds fixture transcripts and eval notes — trust is the
 reader's informed decision.
 
+Install a capability by copying directories; remove one by deleting
+them. No registration, no restart — next `open` discovers, first call
+admits:
+
+```bash
+cp -r ./my-pack/eve-dev/chat ~/.local/share/agent-webmcp/registry/eve-dev/chat
+rm -rf ~/.local/share/agent-webmcp/registry/eve-dev/chat/stale_verb
+```
+
+Budgets the briefing enforces: origin `SKILL.md` ≤2KB, capability
+`SKILL.md` ≤2KB, assembled `briefing` ≤6KB. Write under them.
+
 ## 3. Spec (taste lives here)
 
 `{name, description, inputSchema, origin, annotations?, fixtureInput?,

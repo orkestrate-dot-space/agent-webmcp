@@ -1,31 +1,27 @@
 ---
 name: agent-webmcp
-description: Act on web pages through declared verbs that persist as files. Use when the task touches a live page beyond reading: operating site features, authoring reusable page tools, composing multi-step page workflows. Triggers include working with a session handle, calling page verbs, writing spec.json or body.ts, proving a tool with a fixture, or composing verbs with execute. Prefer listed verbs over driver eval; author a verb instead of guessing DOM twice.
+description: Page verbs that persist as files (drive, author, compose). Use when the task needs a live page verb, a new spec.json/body.ts pair, or execute over session handles. Prefer listed verbs over driver eval.
 ---
 
 # agent-webmcp
 
-Teach any page a verb, prove it, keep it. Connect-only: the engine never
-launches a browser — it attaches tabs in a reachable one (your driver
-skill knows the endpoint; daemon discovery, then loopback 9222/9229).
-Lifecycle verbs live only behind MCP (`mcp serve`); the shell binary
-serves just `doctor` and `--version`. There is no CLI verb surface.
+Teach a page a verb, prove it, keep it. Connect-only: the engine attaches
+tabs in a reachable browser — it never launches one. Your driver skill
+knows the endpoint; discovery tries per-call `cdp`, then daemon, then
+loopback 9222/9229. Lifecycle verbs live only behind MCP (`mcp serve`).
 
-## Skill map (what lives where — 8 files, ~265 lines total, each loaded only when needed)
+## Skill map (each loads only when needed)
 
-- This file (always): drive → compose. The loop. Nothing else.
-- `skill show name=drivers` (before first recon): see/act per driver,
-  recon discipline, the driver table.
-- `skill show name=author` (before authoring): files-first doctrine —
-  layout, specs, envelopes, fixtures, debug playbook, site-agent pattern.
-- Per-origin `SKILL.md` (auto-attached on `open` as briefing): which
+- This file (always): drive → compose.
+- `skill show name=drivers` (before first recon): how to see and act.
+- `skill show name=author` (before authoring): how to make a verb.
+- Per-origin `SKILL.md` (auto on `open` as `briefing`): which
   capabilities this origin has, when to reach for each.
-- Per-capability `SKILL.md` (attached with the briefing for every
-  re-applied capability): the verbs, their order, their rules.
+- Per-capability `SKILL.md` (with `briefing`, per re-applied
+  capability): the verbs, their order, their rules.
 
 Five layers, one question each: how do I drive / how do I compose /
-how do I see / how do I author / how does THIS place work. Nothing
-loads twice; nothing loads before its moment.
+how do I see / how do I author / how does THIS place work.
 
 ## Drive loop
 
@@ -53,21 +49,9 @@ then re-open. `unverified:true` in list means admitted but never proven.
 
 ## Author loop (no authoring verbs — files only)
 
-Missing verb? Write two files with your own tools, then call them:
-
-- `<root>/<origin-slug>/<name>/spec.json` — `{name, description,
-  inputSchema (closed object), origin, annotations?, fixtureInput?,
-  consequential?}`. Goal-named, honest description, real required fields.
-- `<root>/<origin-slug>/<name>/body.ts` — one function,
-  `fn(input)` returns `{content:[{type:'text',text}]}`. TypeScript allowed,
-  plain JS passes through. No imports, no `eval`, page origins only.
-
-First `execute` naming it admits it: validates, checks the native catalog
-(same name fails loud — natives are never overwritten), injects, runs the
-fixture (or your `confirm:true` call proves consequential verbs), stamps.
-Bad files never inject — the reason names the fix. See `skill show
-name=author` for the full doctrine: recon, seam choice, envelope,
-fixtures, debug playbook, evidence.
+Missing verb? `skill show name=author`, write
+`<root>/<slug>/<capability>/<name>/{spec.json, body.ts}`, then call it —
+first call admits it. Bad files never inject; the reason names the fix.
 
 ## Compose rules
 

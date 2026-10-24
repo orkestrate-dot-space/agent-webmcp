@@ -25,6 +25,7 @@ echo "building agent-webmcp..."
 mkdir -p "$BIN_DIR" "$DATA_DIR/skills"
 cp "$SRC_DIR/dist/agent-webmcp" "$BIN_DIR/agent-webmcp"
 chmod +x "$BIN_DIR/agent-webmcp"
+rm -rf "$DATA_DIR/skills/agent-webmcp"
 cp -r "$SRC_DIR/skills/." "$DATA_DIR/skills/"
 
 "$BIN_DIR/agent-webmcp" --version
