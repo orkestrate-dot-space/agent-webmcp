@@ -8,6 +8,13 @@ AGENT_BROWSER_SESSION=work agent-browser open https://example.com  # daemon owns
 agent-browser get cdp-url                                          # hand this to open's cdp
 ```
 
+Recon discipline — stale tabs are the #1 failure mode. Every recon:
+
+1. Fresh driver session per task (`session: <task>` or `AGENT_BROWSER_SESSION=<task>`). Never reuse a tab spawned ages ago — verify with a snapshot before acting.
+2. Check viewport first for desktop-only UI (chat rails hide below ~1280px). Set `--window-size=1366,900` when launching headless.
+3. Snapshot → act by `@ref` → snapshot. Refs beat selectors; eval is the last resort, never the first move.
+4. Close the driver session when done. The engine never sees driver tabs; leaked tabs are yours.
+
 One appendix table — recon is observe → act → mine traffic everywhere.
 
 | Driver | See | Act | Mine traffic | Page tools? | Notes |

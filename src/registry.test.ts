@@ -14,6 +14,8 @@ describe("checkSpec", () => {
     expect(checkSpec({ ...goodSpec(), description: "  " }, "1")).toMatch(/description/);
     expect(checkSpec({ ...goodSpec(), inputSchema: [] }, "1")).toMatch(/inputSchema/);
     expect(checkSpec({ ...goodSpec(), origin: undefined }, "1")).toMatch(/origin/);
+    expect(checkSpec({ ...goodSpec(), outputSchema: [] }, "1")).toMatch(/outputSchema/);
+    expect(checkSpec({ ...goodSpec(), outputSchema: { type: "object" } }, "1")).toBeNull();
     expect(checkSpec(goodSpec(), "")).toMatch(/body is empty/);
     expect(checkSpec(goodSpec(), "(async () => eval('1'))")).toMatch(/eval/);
     expect(checkSpec(goodSpec(), "(async () => new Function('1'))")).toMatch(/new Function/);

@@ -20,7 +20,9 @@ serves just `doctor` and `--version`. There is no CLI verb surface.
    the native burst plus re-applied files at open time; `list` is the
    live truth and may differ (late-announcing natives). A `null` return
    from a verb is success with no output — verify with a read, don't
-   retry blindly.
+   retry blindly. Wondering whether a verb already exists anywhere?
+   `skill action=search query="..."` searches every saved verb on every
+   origin — open that origin to use it.
 3. `list {handle}` — the only names `execute` may call. Rows by default;
    `list {handle, tool:name}` for the full schema of one verb.
 4. `execute {handle, code}` — plain JS over `tools.NAME(args)`; its return

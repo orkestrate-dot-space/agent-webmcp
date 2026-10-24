@@ -33,6 +33,10 @@ export interface ToolSpec {
   readonly annotations?: Record<string, unknown>;
   readonly fixtureInput?: unknown;
   readonly consequential?: boolean;
+  // Declared output contract: surfaced to agents via list/catalog so the
+  // return shape is visible before the first call. v1 is surface-only
+  // (validation lands with a schema-validator dep, not hand-rolled).
+  readonly outputSchema?: Record<string, unknown>;
 }
 
 export interface ToolStamp { readonly verified: boolean; readonly bodyHash: string; readonly at: number }
@@ -40,11 +44,12 @@ export interface ToolStamp { readonly verified: boolean; readonly bodyHash: stri
 // checkSpec: the gate every file passes before it may reach a page. Pure:
 // same bytes → same verdict. Reasons name the fix for the author.
 export function checkSpec(spec: unknown, code: string): string | null {
-  const s = spec as { name?: unknown; description?: unknown; inputSchema?: unknown; origin?: unknown };
+  const s = spec as { name?: unknown; description?: unknown; inputSchema?: unknown; origin?: unknown; outputSchema?: unknown };
   if (typeof s !== "object" || s === null) return "spec.json is not an object";
   if (typeof s.name !== "string" || !/^[A-Za-z][A-Za-z0-9._-]{0,63}$/.test(s.name)) return `bad tool name '${String(s.name)}' (letters, digits, ._-; lead with a letter)`;
   if (typeof s.description !== "string" || s.description.trim().length === 0) return "description is empty";
   if (typeof s.inputSchema !== "object" || s.inputSchema === null || Array.isArray(s.inputSchema)) return "inputSchema must be a JSON Schema object";
+  if (s.outputSchema !== undefined && (typeof s.outputSchema !== "object" || s.outputSchema === null || Array.isArray(s.outputSchema))) return "outputSchema must be a JSON Schema object";
   if (typeof s.origin !== "string" || s.origin.length === 0) return "origin is missing (the page origin this tool belongs to)";
   if (code.trim().length === 0) return "body is empty";
   if (code.length > 64000) return `body is ${code.length} chars (max 64000)`;

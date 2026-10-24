@@ -31,11 +31,13 @@ trust is the reader's informed decision.
 ## 3. Spec (taste lives here)
 
 `{name, description, inputSchema, origin, annotations?, fixtureInput?,
-consequential?}`. Names are goals (`notebook_write_cells`, not
+consequential?, outputSchema?}`. Names are goals (`notebook_write_cells`, not
 `call_api`). Descriptions say what it does plus what it returns — blind
 agents decide on this alone. `inputSchema` is a closed object: real
-`required`, `additionalProperties: false`. `fixtureInput` is a provable
-example — the proof runs it, so it must pass. Consequential verbs
+`required`, `additionalProperties: false`. `outputSchema` declares the
+return contract (closed object recommended) — it surfaces in `list` and
+`catalog` so callers see the shape before the first call. `fixtureInput`
+is a provable example — the proof runs it, so it must pass. Consequential verbs
 (mutations) carry `consequential: true` and skip fixtures: your confirmed
 call is the proof. `origin` is the page origin, exactly.
 
@@ -74,3 +76,14 @@ reasons.
 
 One verb per human goal. Two verbs that always run together are one verb.
 Delete (rm the dir) what the page outgrew — dead files still admit.
+
+## 8. Site agents (a pattern, not a privilege)
+
+A site with an AI chat gets the same four verbs as any other seam:
+open (reveal the panel) → ask (submit + verify) → read (settle-aware) →
+close (report state, never lie). No special engine support, no special
+marks — the per-origin `SKILL.md` teaches the order, the files carry the
+selectors. Chat quirks worth expecting: viewport-gated panels (widen
+first), Enter-to-send instead of a Submit button, icon-only buttons with
+empty innerText (match `aria-label` too), persistent desktop rails that
+never dismiss (report `open-pinned`, don't fail).

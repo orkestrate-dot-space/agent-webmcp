@@ -37,4 +37,12 @@ describe("catalogDetail", () => {
     expect((catalogDetail(entries, "nope") as { error: string }).error).toMatch(/search\(\)/);
     expect((catalogDetail(entries) as Array<unknown>).length).toBe(3);
   });
+
+  test("outputSchema surfaces in detail when declared", () => {
+    const withOut: Array<CatalogEntry> = [
+      { path: "typed", description: "Typed", inputSchema: { type: "object" }, outputSchema: { type: "object", properties: { text: { type: "string" } } }, admitted: true },
+    ];
+    const det = catalogDetail(withOut, "typed") as { outputSchema?: unknown };
+    expect(det.outputSchema).toEqual({ type: "object", properties: { text: { type: "string" } } });
+  });
 });

@@ -85,7 +85,10 @@ green.
   normalization check on reads. One stamp function writes back
   `{verified, bodyHash}` after proof (~15 lines).
 - Spec fields, minimal: `name, description, inputSchema` + optional
-  `annotations?, fixtureInput?, consequential?, verified?, bodyHash?`.
+  `annotations?, fixtureInput?, consequential?, outputSchema?`.
+  (`verified?`/`bodyHash?` live in engine-owned `stamp.json`, beside the
+  agent's files, never inside them.) `outputSchema` declares the return
+  contract — surfaced in `list`/`catalog`, closedness enforced at write.
   `checkSpec`: closed object schema, honest names, non-empty description,
   no `eval`/`new Function`, size cap — pure, same bytes → same verdict.
   Bodies are TS; transpile at load (Bun transpiler, plain JS passes
@@ -169,8 +172,9 @@ content + specialized skills + whole authoring loops as skill text):
   files load in opencode, pi, and Claude unmodified — distribution by
   conformance, not invention.
 - Code: `skill show` serves core + refs from disk (no codegen, no embeds);
-  `skill list` inventories origins. Gate shape-checks served text equals
-  the files. No `install` action in v1 (packs move by directory copy).
+  `skill list` inventories origins; `skill search` answers "do I already
+  have an agent for X?" across every saved verb. Gate shape-checks served
+  text equals the files. No `install` action in v1 (packs move by directory copy).
 - Accept: a stranger with only the skill text completes the Section 7
   stranger run — including authoring a file-tool with NO authoring verb.
   Skill edits never require a code release.

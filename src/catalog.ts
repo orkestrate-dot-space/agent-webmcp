@@ -5,6 +5,7 @@ export interface CatalogEntry {
   readonly path: string;
   readonly description: string;
   readonly inputSchema?: Record<string, unknown>;
+  readonly outputSchema?: Record<string, unknown>;
   readonly admitted: boolean;
 }
 
@@ -48,5 +49,5 @@ export function catalogDetail(entries: ReadonlyArray<CatalogEntry>, path?: strin
   }
   const found = entries.find((e) => e.path === path);
   if (!found) return { error: `no verb '${path}' — search() to discover verbs.` };
-  return { path: found.path, signature: buildSignature(found.path.split(".").pop() ?? found.path, found.inputSchema), description: found.description, inputSchema: found.inputSchema ?? { type: "object" } };
+  return { path: found.path, signature: buildSignature(found.path.split(".").pop() ?? found.path, found.inputSchema), description: found.description, inputSchema: found.inputSchema ?? { type: "object" }, ...(found.outputSchema !== undefined ? { outputSchema: found.outputSchema } : {}) };
 }
