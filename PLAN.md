@@ -87,11 +87,13 @@ green.
   skill) — so there is no save path, no write root, no symlink walk, just a
   normalization check on reads. One stamp function writes back
   `{verified, bodyHash}` after proof (~15 lines).
-- Spec fields, minimal: `name, description, inputSchema` + optional
-  `annotations?, fixtureInput?, consequential?, outputSchema?`.
+- Spec fields, minimal: `name, description, inputSchema, outputSchema` + optional
+  `annotations?, fixtureInput?, consequential?`.
   (`verified?`/`bodyHash?` live in engine-owned `stamp.json`, beside the
-  agent's files, never inside them.) `outputSchema` declares the return
-  contract — surfaced in `list`/`catalog`, closedness enforced at write.
+  agent's files, never inside them.) `outputSchema` is required: the schema
+  of the `text` payload (string verbs: `{"type":"string"}`; objects:
+  closed + `JSON.stringify`d into text) — surfaced in `list`/`catalog`,
+  shape-gated at write.
   `checkSpec`: closed object schema, honest names, non-empty description,
   no `eval`/`new Function`, size cap — pure, same bytes → same verdict.
   Bodies are TS; transpile at load (Bun transpiler, plain JS passes

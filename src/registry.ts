@@ -2,7 +2,7 @@
 // READS (load, validate, inject, stamp); the agent WRITES with its own
 // file tools, taught by the skill. No flags, no overlays, no markers —
 // the origin lives inside spec.json and is verified on load.
-// Layout: <root>/<origin-slug>/{SKILL.md, <name>/{spec.json, body.ts, stamp.json}}
+// Layout: <root>/<origin-slug>/{SKILL.md, <capability>/{SKILL.md, <name>/{spec.json, body.ts, stamp.json}}}
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { normalize, relative, sep } from "node:path";
@@ -33,10 +33,14 @@ export interface ToolSpec {
   readonly annotations?: Record<string, unknown>;
   readonly fixtureInput?: unknown;
   readonly consequential?: boolean;
-  // Declared output contract: surfaced to agents via list/catalog so the
-  // return shape is visible before the first call. v1 is surface-only
-  // (validation lands with a schema-validator dep, not hand-rolled).
-  readonly outputSchema?: Record<string, unknown>;
+  // Output contract (required): the schema of the `text` payload inside
+  // the returned envelope `{content:[{type:'text',text}]}`. String verbs
+  // use `{"type":"string"}`; object data must be `JSON.stringify`d into
+  // text and declared closed (`type:"object"` + `properties` +
+  // `additionalProperties:false`). Surfaced via list/catalog before the
+  // first call; shape-gated at write, value-checking lands with a
+  // schema-validator dep, not hand-rolled.
+  readonly outputSchema: Record<string, unknown>;
 }
 
 export interface ToolStamp { readonly verified: boolean; readonly bodyHash: string; readonly at: number }
@@ -49,7 +53,14 @@ export function checkSpec(spec: unknown, code: string): string | null {
   if (typeof s.name !== "string" || !/^[A-Za-z][A-Za-z0-9._-]{0,63}$/.test(s.name)) return `bad tool name '${String(s.name)}' (letters, digits, ._-; lead with a letter)`;
   if (typeof s.description !== "string" || s.description.trim().length === 0) return "description is empty";
   if (typeof s.inputSchema !== "object" || s.inputSchema === null || Array.isArray(s.inputSchema)) return "inputSchema must be a JSON Schema object";
-  if (s.outputSchema !== undefined && (typeof s.outputSchema !== "object" || s.outputSchema === null || Array.isArray(s.outputSchema))) return "outputSchema must be a JSON Schema object";
+  if (typeof s.outputSchema !== "object" || s.outputSchema === null || Array.isArray(s.outputSchema)) return "outputSchema is required (the schema of the text payload; string verbs use {\"type\":\"string\"})";
+  const outType = (s.outputSchema as { type?: unknown }).type;
+  if (typeof outType !== "string") return "outputSchema.type must be a JSON Schema type string (e.g. \"string\" or \"object\")";
+  if (outType === "object") {
+    const o = s.outputSchema as { properties?: unknown; additionalProperties?: unknown };
+    if (typeof o.properties !== "object" || o.properties === null || Array.isArray(o.properties)) return "outputSchema (object) needs properties + additionalProperties:false";
+    if (o.additionalProperties !== false) return "outputSchema (object) must be closed (additionalProperties:false)";
+  }
   if (typeof s.origin !== "string" || s.origin.length === 0) return "origin is missing (the page origin this tool belongs to)";
   if (code.trim().length === 0) return "body is empty";
   if (code.length > 64000) return `body is ${code.length} chars (max 64000)`;

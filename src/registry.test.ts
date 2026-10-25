@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { bodyWarnings, checkSpec, maskCode, slugOf, transpileBody } from "./registry.ts";
 
 const goodSpec = (extra?: Record<string, unknown>): Record<string, unknown> => ({
-  name: "ping", description: "Ping", inputSchema: { type: "object", properties: {} }, origin: "https://x.test", ...(extra ?? {}),
+  name: "ping", description: "Ping", inputSchema: { type: "object", properties: {} }, origin: "https://x.test", outputSchema: { type: "string" }, ...(extra ?? {}),
 });
 
 describe("checkSpec", () => {
@@ -15,7 +15,9 @@ describe("checkSpec", () => {
     expect(checkSpec({ ...goodSpec(), inputSchema: [] }, "1")).toMatch(/inputSchema/);
     expect(checkSpec({ ...goodSpec(), origin: undefined }, "1")).toMatch(/origin/);
     expect(checkSpec({ ...goodSpec(), outputSchema: [] }, "1")).toMatch(/outputSchema/);
-    expect(checkSpec({ ...goodSpec(), outputSchema: { type: "object" } }, "1")).toBeNull();
+    expect(checkSpec({ ...goodSpec(), outputSchema: { type: "object" } }, "1")).toMatch(/properties/);
+    expect(checkSpec({ ...goodSpec(), outputSchema: { type: "object", properties: {}, additionalProperties: false } }, "1")).toBeNull();
+    expect(checkSpec({ ...goodSpec(), outputSchema: undefined }, "1")).toMatch(/outputSchema is required/);
     expect(checkSpec(goodSpec(), "")).toMatch(/body is empty/);
     expect(checkSpec(goodSpec(), "(async () => eval('1'))")).toMatch(/eval/);
     expect(checkSpec(goodSpec(), "(async () => new Function('1'))")).toMatch(/new Function/);

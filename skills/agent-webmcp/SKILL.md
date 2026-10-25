@@ -51,7 +51,10 @@ then re-open. `unverified:true` in list means admitted but never proven.
 
 Missing verb? `skill show name=author`, write
 `<root>/<slug>/<capability>/<name>/{spec.json, body.ts}`, then call it —
-first call admits it. Bad files never inject; the reason names the fix.
+first call admits it. `spec.json` must declare `outputSchema` (the schema
+of the `text` payload); string verbs use `{"type":"string"}`, object data
+is `JSON.stringify`d into text and declared closed. Bad files never
+inject; the reason names the fix.
 
 ## Compose rules
 

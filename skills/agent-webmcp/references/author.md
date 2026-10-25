@@ -47,13 +47,18 @@ Budgets the briefing enforces: origin `SKILL.md` ≤2KB, capability
 
 ## 3. Spec (taste lives here)
 
-`{name, description, inputSchema, origin, annotations?, fixtureInput?,
-consequential?, outputSchema?}`. Names are goals (`notebook_write_cells`, not
+`{name, description, inputSchema, origin, outputSchema, annotations?, fixtureInput?,
+consequential?}`. `outputSchema` is required — the schema of the `text`
+payload inside the envelope (not the envelope itself). String verbs
+(read, open, ask, close) declare `{"type":"string"}` with a description
+of the string; object data is `JSON.stringify`d into `text` and declared
+closed (`type:"object"` + real `properties` + `additionalProperties:false`).
+It surfaces in `list tool:` and `catalog()` before the first call, so a
+blind agent can code against it; the capability `SKILL.md` documents the
+shape in words too. Names are goals (`notebook_write_cells`, not
 `call_api`). Descriptions say what it does plus what it returns — blind
 agents decide on this alone. `inputSchema` is a closed object: real
-`required`, `additionalProperties: false`. `outputSchema` declares the
-return contract (closed object recommended) — it surfaces in `list` and
-`catalog` so callers see the shape before the first call. `fixtureInput`
+`required`, `additionalProperties: false`. `fixtureInput`
 is a provable example — the proof runs it, so it must pass. Consequential verbs
 (mutations) carry `consequential: true` and skip fixtures: your confirmed
 call is the proof. `origin` is the page origin, exactly.
@@ -61,7 +66,8 @@ call is the proof. `origin` is the page origin, exactly.
 ## 4. Body (contract, not style)
 
 One function: `fn(input)` returns `{content:[{type:'text',text}]}` and
-nothing else. Self-contained: no imports, no network beyond the page's own
+nothing else, where `text` matches `outputSchema` (`JSON.stringify(data)`
+for objects, raw string for strings). Self-contained: no imports, no network beyond the page's own
 origins, no `eval`/`new Function`. Return the envelope — a raw number or
 string fails the shape check at the reader, not at author time, so get it
 right now. Bodies may use TypeScript; plain JS passes through untouched.

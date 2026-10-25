@@ -87,7 +87,7 @@ function writeTool(home: string, origin: string, name: string, spec: Record<stri
   const slug = new URL(origin).hostname.replaceAll(/[^a-z0-9]/g, "-");
   const dir = join(home, ".local/share/agent-webmcp/registry", slug, capability, name);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "spec.json"), JSON.stringify({ name, description: `${name} tool`, inputSchema: { type: "object", properties: {} }, origin, version: 1, createdAt: 0, ...spec }));
+  writeFileSync(join(dir, "spec.json"), JSON.stringify({ name, description: `${name} tool`, inputSchema: { type: "object", properties: {} }, origin, version: 1, createdAt: 0, outputSchema: { type: "string" }, ...spec }));
   writeFileSync(join(dir, "body.ts"), body);
 }
 
