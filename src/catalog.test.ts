@@ -46,7 +46,16 @@ describe("catalogDetail", () => {
     const withOut: Array<CatalogEntry> = [
       { path: "typed", description: "Typed", inputSchema: { type: "object" }, outputSchema: { type: "object", properties: { text: { type: "string" } } }, admitted: true },
     ];
-    const det = catalogDetail(withOut, "typed") as { outputSchema?: unknown };
+    const det = catalogDetail(withOut, "typed") as { outputSchema?: unknown; returns?: unknown };
     expect(det.outputSchema).toEqual({ type: "object", properties: { text: { type: "string" } } });
+    expect(det.returns).toBe("object{text}");
+  });
+
+  test("describeReturns hints strings, objects, and unknowns", async () => {
+    const { describeReturns } = await import("./catalog.ts");
+    expect(describeReturns({ type: "string" })).toBe("string");
+    expect(describeReturns({ type: "object", properties: { a: {}, b: {} } })).toBe("object{a, b}");
+    expect(describeReturns(undefined)).toBe("unknown");
+    expect(describeReturns("junk")).toBe("unknown");
   });
 });

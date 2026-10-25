@@ -3,14 +3,24 @@
 When the page lacks the verb the task needs, author it. The engine admits
 files; all judgment here is yours.
 
-## 1. Recon (driver, with eyes)
+## 1. Recon (driver, with eyes — because the engine is blind)
 
-Open the page in your driver, snapshot it, act out the real user flow.
-Record traffic (HAR). Mine first-party JSON endpoints out of the noise:
-request/response shapes, auth pattern (cookies, XSRF headers, token
-exchange), sequence guards. Check the native catalog (`list`) first —
-consume native verbs, never rebuild them. Pick the seam: same-origin API
-wins; DOM scraping loses; cross-origin walls get named, not hacked.
+The engine never sees the page: no snapshot, no click, no network log.
+Your driver is the eyes and hands; recon happens there because selectors,
+sequence guards, and auth only exist there. Every guess you skip in recon
+costs an inject+prove cycle later — ten minutes with the driver saves five
+body rewrites.
+
+Open the page in your driver, snapshot it, act out the real user flow as
+the user would: click the actual buttons, submit the actual form. Record
+traffic (HAR) and mine first-party JSON endpoints out of the noise:
+request/response shapes (these become your schemas), auth pattern (cookies,
+XSRF headers, token exchange), sequence guards (what must be read before a
+write succeeds). Check the native catalog (`list`) first — consume native
+verbs, never rebuild them. Pick the seam: same-origin API wins (stable,
+typed); DOM scraping loses (brittle, restyle-broken); cross-origin walls
+get named in the skill, not hacked in the body. Write down the flow order,
+the guards, and the exact shapes — §3 turns them into schemas, §4 into code.
 
 ## 2. Files
 
@@ -45,34 +55,70 @@ rm -rf ~/.local/share/agent-webmcp/registry/eve-dev/chat/stale_verb
 Budgets the briefing enforces: origin `SKILL.md` ≤2KB, capability
 `SKILL.md` ≤2KB, assembled `briefing` ≤6KB. Write under them.
 
-## 3. Spec (taste lives here)
+## 3. Spec (schemas are the codemode types — taste lives here)
 
 `{name, description, inputSchema, origin, outputSchema, annotations?, fixtureInput?,
-consequential?}`. `outputSchema` is required — the schema of the `text`
-payload inside the envelope (not the envelope itself). String verbs
-(read, open, ask, close) declare `{"type":"string"}` with a description
-of the string; object data is `JSON.stringify`d into `text` and declared
-closed (`type:"object"` + real `properties` + `additionalProperties:false`).
-It surfaces in `list tool:` and `catalog()` before the first call, so a
-blind agent can code against it; the capability `SKILL.md` documents the
-shape in words too. Names are goals (`notebook_write_cells`, not
-`call_api`). Descriptions say what it does plus what it returns — blind
-agents decide on this alone. `inputSchema` is a closed object: real
-`required`, `additionalProperties: false`. `fixtureInput`
-is a provable example — the proof runs it, so it must pass. Consequential verbs
-(mutations) carry `consequential: true` and skip fixtures: your confirmed
-call is the proof. `origin` is the page origin, exactly.
+consequential?}`. The two schemas exist so codemode never guesses: an
+agent reads `catalog(path)` and gets `signature` (the input call-shape),
+`returns` (the output type-hint), `description`, plus both raw schemas —
+then writes `await tools.NAME(typedArgs)` with full confidence. Closed
+schemas mean no hallucinated fields; `required` means no missing-field
+failures at runtime. If the schema is vague, every caller pays in type
+errors — so write it like a type declaration, not a comment.
 
-## 4. Body (contract, not style)
+- `inputSchema`: the args type. Closed object, real `required`,
+  `additionalProperties: false`. Every property gets a `type` and, where
+  it matters, a `description` (units, bounds, format).
+- `outputSchema`: the type of the `text` payload inside the envelope —
+  required. String verbs (read, open, ask, close) declare
+  `{"type":"string","description":"..."}` describing the string. Object
+  data is `JSON.stringify`d into `text` and declared closed
+  (`type:"object"` + real `properties` + `additionalProperties:false`).
+  It surfaces in `list tool:` and `catalog()` before the first call, so a
+  blind agent codes against it; the capability `SKILL.md` documents the
+  shape in words too.
+- Calls resolve to the **envelope**, not the payload:
+  `await tools.NAME(args)` → `{content:[{type:'text',text}]}`. Unwrap with
+  `const text = out.content[0].text`, then `JSON.parse(text)` when
+  `returns` says `object{...}`. Raw strings need no parse. Never guess the
+  shape — `catalog(path)` first, destructure per `returns`, branch on the
+  coded failures (§6) instead of retrying blind.
+- Names are goals (`notebook_write_cells`, not `call_api`). Descriptions
+  say what it does plus what it returns — blind agents decide on this
+  alone. `fixtureInput` is a provable example — the proof runs it, so it
+  must pass. Consequential verbs (mutations) carry `consequential: true`
+  and skip fixtures: your confirmed call is the proof. `origin` is the
+  page origin, exactly.
 
-One function: `fn(input)` returns `{content:[{type:'text',text}]}` and
-nothing else, where `text` matches `outputSchema` (`JSON.stringify(data)`
-for objects, raw string for strings). Self-contained: no imports, no network beyond the page's own
-origins, no `eval`/`new Function`. Return the envelope — a raw number or
-string fails the shape check at the reader, not at author time, so get it
-right now. Bodies may use TypeScript; plain JS passes through untouched.
-Driver idioms (`page.*`, `$x`) pasted as bodies are flagged warn-only —
-page bodies run in the page, drivers act from outside.
+## 4. Body (typed TypeScript, not style)
+
+Write the body the way you write application code: interfaces first,
+envelope last. Mirror the schemas as types so mismatches fail in your
+head, not in the page:
+
+```ts
+interface Input { question: string }
+type Output = string; // objects: interface Out { reply: string; settled: boolean }
+const ok = (text: string) => ({ content: [{ type: "text" as const, text }] });
+(async (input: Input): Promise<{ content: Array<{ type: "text"; text: string }> }> => {
+  const q = (input.question ?? "").trim();
+  if (!q) throw new Error("ask: empty question — pass {question}");
+  // ... drive the DOM / call the page's own API (recon flow order here)
+  return ok(q); // objects: ok(JSON.stringify(data satisfies Output))
+})
+```
+
+Rules the template already follows: `Input` mirrors `inputSchema`
+(field for field, required for required); `Output` mirrors
+`outputSchema` (string stays raw, objects go through `JSON.stringify`);
+one function returning the envelope and nothing else — a raw number or
+string fails at the reader, so `ok()` it. `throw new Error("verb: what
+broke — what to do")` to refuse: your message becomes the `PAGE_REFUSED`
+reason the caller branches on. Self-contained: DOM lib only, no imports,
+no network beyond the page's own origins, no `eval`/`new Function`.
+Types erase at load (transpile) — they are author-time safety, the page
+runs JS. Driver idioms (`page.*`, `$x`) pasted as bodies are flagged
+warn-only — page bodies run in the page, drivers act from outside.
 
 ## 5. Prove
 
@@ -100,13 +146,9 @@ reasons.
 One verb per human goal. Two verbs that always run together are one verb.
 Delete (rm the dir) what the page outgrew — dead files still admit.
 
-## 8. Site agents (a pattern, not a privilege)
+## 8. Site agents (a pattern with its own skill)
 
-A site with an AI chat gets the same four verbs as any other seam:
-open (reveal the panel) → ask (submit + verify) → read (settle-aware) →
-close (report state, never lie). No special engine support, no special
-marks — the per-origin `SKILL.md` teaches the order, the files carry the
-selectors. Chat quirks worth expecting: viewport-gated panels (widen
-first), Enter-to-send instead of a Submit button, icon-only buttons with
-empty innerText (match `aria-label` too), persistent desktop rails that
-never dismiss (report `open-pinned`, don't fail).
+Chat-agent packs (open → ask → read → close) carry enough doctrine —
+order, settle-waiting, viewport quirks, rail-that-never-closes — to deserve
+their own file: `skill show name=site-agents` before authoring one. The
+engine gives no privilege; the pattern is all skill.

@@ -26,6 +26,24 @@ export function searchCatalog(entries: ReadonlyArray<CatalogEntry>, q: SearchQue
   return out;
 }
 
+// Short return-type hint derived from an outputSchema: the type of the
+// `text` payload (string verbs) or the object shape (closed objects).
+// Best-effort, never throws — agents code against this + the raw schema.
+export function describeReturns(schema: unknown): string {
+  try {
+    const s = schema as { type?: unknown; properties?: unknown } | null;
+    if (s === null || typeof s !== "object" || Array.isArray(s)) return "unknown";
+    if (typeof s.type === "string" && s.type !== "object") return s.type;
+    if (s.type === "object") {
+      const props = s.properties as Record<string, unknown> | null;
+      const keys = props !== null && typeof props === "object" && !Array.isArray(props) ? Object.keys(props) : [];
+      return keys.length === 0 ? "object" : `object{${keys.slice(0, 10).join(", ")}}`;
+    }
+    return "unknown";
+  } catch {
+    return "unknown";
+  }
+}
 // Render a TS-ish signature from a JSON Schema object. Best-effort:
 // unknown shapes degrade to `args: object`, never throw.
 export function buildSignature(name: string, schema: unknown): string {
@@ -46,9 +64,9 @@ export function buildSignature(name: string, schema: unknown): string {
 
 export function catalogDetail(entries: ReadonlyArray<CatalogEntry>, path?: string): unknown {
   if (path === undefined) {
-    return entries.slice(0, 30).map((e) => ({ path: e.path, signature: buildSignature(e.path.split(".").pop() ?? e.path, e.inputSchema), description: e.description, ...(e.capability !== undefined ? { capability: e.capability } : {}) }));
+    return entries.slice(0, 30).map((e) => ({ path: e.path, signature: buildSignature(e.path.split(".").pop() ?? e.path, e.inputSchema), returns: describeReturns(e.outputSchema), description: e.description, ...(e.capability !== undefined ? { capability: e.capability } : {}) }));
   }
   const found = entries.find((e) => e.path === path);
   if (!found) return { error: `no verb '${path}' — search() to discover verbs.` };
-  return { path: found.path, signature: buildSignature(found.path.split(".").pop() ?? found.path, found.inputSchema), description: found.description, inputSchema: found.inputSchema ?? { type: "object" }, ...(found.outputSchema !== undefined ? { outputSchema: found.outputSchema } : {}), ...(found.capability !== undefined ? { capability: found.capability } : {}) };
+  return { path: found.path, signature: buildSignature(found.path.split(".").pop() ?? found.path, found.inputSchema), returns: describeReturns(found.outputSchema), description: found.description, inputSchema: found.inputSchema ?? { type: "object" }, ...(found.outputSchema !== undefined ? { outputSchema: found.outputSchema } : {}), ...(found.capability !== undefined ? { capability: found.capability } : {}) };
 }

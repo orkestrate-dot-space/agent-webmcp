@@ -15,6 +15,8 @@ loopback 9222/9229. Lifecycle verbs live only behind MCP (`mcp serve`).
 - This file (always): drive → compose.
 - `skill show name=drivers` (before first recon): how to see and act.
 - `skill show name=author` (before authoring): how to make a verb.
+- `skill show name=site-agents` (before authoring a chat pack): the
+  open → ask → read → close pattern and its quirks.
 - Per-origin `SKILL.md` (auto on `open` as `briefing`): which
   capabilities this origin has, when to reach for each.
 - Per-capability `SKILL.md` (with `briefing`, per re-applied
@@ -60,9 +62,12 @@ inject; the reason names the fix.
 
 - Read before every write; verify writes with a read-back.
 - Discover mid-run without leaving the code: `search({query, namespace?,
-  limit?})` filters verbs by name/description (on-disk-but-unadmitted
-  rows say so — calling one admits it); `catalog(path?)` renders TS
-  signatures, `catalog()` lists all (capped). Don't name a verb `search`
+  limit?})` filters verbs by name/description/capability (on-disk-but-unadmitted
+  rows say so — calling one admits it); `catalog(path?)` renders the TS
+  signature plus `returns` plus both raw schemas, `catalog()` lists all
+  (capped). Type the call from that: `catalog(path)` first, pass typed args
+  per `signature`, unwrap `out.content[0].text` (`JSON.parse` when `returns`
+  says `object{...}`). Don't name a verb `search`
   or `catalog` — the builtins win.
 - `console.log/warn/error` inside code returns as `logs` in the envelope
   (capped) — print-debug freely; the trace survives the return.
