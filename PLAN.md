@@ -78,7 +78,7 @@ green.
   `~/.local/share/agent-webmcp/registry/` (from `HOME`; tests isolate by
   setting `HOME`, never by flag). Layout:
   `<origin-slug>/{SKILL.md, <capability>/{SKILL.md, <name>/{spec.json, body.ts}}}` plus optional `evidence/`.
-  Capabilities group an origin's verbs (chat agent, docs pack, page verbs);
+  Capabilities group an origin's verbs (chat agent, docs agent, page verbs);
   a verb lives in exactly one capability — duplicates across capabilities
   fail loud naming both. `SKILL.md` at each level teaches that level: the
   origin skill names capabilities, each capability skill teaches its verbs. The origin lives inside `spec.json` and is
@@ -99,7 +99,7 @@ green.
   Bodies are TS; transpile at load (Bun transpiler, plain JS passes
   through); untranspilable = corrupt file, named, never injected.
 - Language: agent authors all files guided by the skill. Sharing between
-  projects is by pack directories (copy), not overlays — one store means
+  projects is by capability directories (copy), not overlays — one store means
   memory is cross-project by default.
 - Accept: unit suite on fixtures (each bad shape names its reason); legacy
   `body.js` fallback reads; a second `HOME` sees a disjoint store.
@@ -179,7 +179,7 @@ content + specialized skills + whole authoring loops as skill text):
 - Code: `skill show` serves core + refs from disk (no codegen, no embeds);
   `skill list` inventories origins; `skill search` answers "do I already
   have an agent for X?" across every saved verb. Gate shape-checks served
-  text equals the files. No `install` action in v1 (packs move by directory copy).
+  text equals the files. No `install` action in v1 (agents move by directory copy).
 - Accept: a stranger with only the skill text completes the Section 7
   stranger run — including authoring a file-tool with NO authoring verb.
   Skill edits never require a code release.

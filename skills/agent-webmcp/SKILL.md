@@ -15,7 +15,7 @@ loopback 9222/9229. Lifecycle verbs live only behind MCP (`mcp serve`).
 - This file (always): drive → compose.
 - `skill show name=drivers` (before first recon): how to see and act.
 - `skill show name=author` (before authoring): how to make a verb.
-- `skill show name=site-agents` (before authoring a chat pack): the
+- `skill show name=site-agents` (before authoring a chat agent): the
   open → ask → read → close pattern and its quirks.
 - Per-origin `SKILL.md` (auto on `open` as `briefing`): which
   capabilities this origin has, when to reach for each.

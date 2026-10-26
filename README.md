@@ -58,12 +58,12 @@ First `execute` naming the verb admits it (validate → native-collision check �
 | `SKILL.md` | always | drive → compose |
 | `show name=drivers` | before first recon | how to see/act (driver contract + your driver's own skill) |
 | `show name=author` | before authoring | files, schemas-as-types, body template, prove |
-| `show name=site-agents` | before chat packs | open → ask → read → close pattern |
+| `show name=site-agents` | before chat agents | open → ask → read → close pattern |
 | per-origin / per-capability | auto on `open` briefing | how THIS place works |
 
 ## Local + remote
 
-Both at once: two MCP entries, same six verbs. Local runs stdio keyless (the OS user is the auth) against your browsers and your filesystem registry. Remote runs streamable HTTP with a bearer key against shared browsers and vault-held logins. Same packs, same call shape — local for minting and daily driving, remote for unattended runs. The engine already abstracts the attach point (`open {url, cdp?}`).
+Both at once: two MCP entries, same six verbs. Local runs stdio keyless (the OS user is the auth) against your browsers and your filesystem registry. Remote runs streamable HTTP with a bearer key against shared browsers and vault-held logins. Same agents, same call shape — local for minting and daily driving, remote for unattended runs. The engine already abstracts the attach point (`open {url, cdp?}`).
 
 ## Neighbors (what each does, where we differ)
 
@@ -75,7 +75,7 @@ Both at once: two MCP entries, same six verbs. Local runs stdio keyless (the OS 
 | [Steel](https://github.com/steel-dev/steel-browser) (7.9k★, Apache-2.0) | Self-hostable browser API (sessions, stealth, proxies) | They're the browser fleet; we're the verb layer above any fleet |
 | [Playwright MCP](https://github.com/microsoft/playwright-mcp) (38k★) / [chrome-devtools-mcp](https://github.com/GoogleChromeLabs/chrome-devtools-mcp) (54k★) | Vendor tool servers: your agent calls browser actions | They expose *browser* actions; we expose *page* verbs, native + authored alike |
 | [Stagehand](https://github.com/browserbase/stagehand) (26k★) | act/extract/observe over Playwright, Browserbase-hosted | Natural-language acts per run; our acts compile to proven files |
-| [Skyvern](https://github.com/Skyvern-AI/skyvern) (23k★) | Agent + cloud for browser workflows | Workflow service; our unit is the versioned pack you keep |
+| [Skyvern](https://github.com/Skyvern-AI/skyvern) (23k★) | Agent + cloud for browser workflows | Workflow service; our unit is the versioned agent you keep |
 
 The bet: pages ship verbs (13k+ sites on WebMCP and counting). Consume natives where they exist, author the gap as files, run anywhere. No owned browsers, no model key, no third party holding your logins.
 

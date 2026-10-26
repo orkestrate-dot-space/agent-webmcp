@@ -4,7 +4,7 @@ A site with an AI chat gets the same four verbs as any other seam —
 open (reveal) → ask (submit + verify) → read (settle-aware) → close
 (report state, never lie). No special engine support, no special marks;
 the capability `SKILL.md` teaches the order for that site, the files
-carry the selectors. Author the pack when the chat is the task interface;
+carry the selectors. Author the agent when the chat is the task interface;
 consume natives for everything else.
 
 ## The four verbs
@@ -30,7 +30,7 @@ consume natives for everything else.
   don't fail — suggest navigating away or closing the tab.
 - Sequence: open before ask, ask before read, one question per read.
 
-## Typing the pack
+## Typing the agent
 
 Reads return long strings (`{"type":"string"}` + what FULL means);
 ask/open/close return status strings (`asked: …`, `opened x=… w=…`,

@@ -33,7 +33,7 @@ Root is fixed: `~/.local/share/agent-webmcp/registry/`
 
 `<origin-slug>` is the lowercased host with non-alphanumerics as `-`.
 One origin holds one or more **capabilities** — a chat agent, a docs
-pack, a page-verb set — each a directory with its own `SKILL.md`
+agent, a page-verb set — each a directory with its own `SKILL.md`
 (doctrine + rules for exactly those verbs). The origin `SKILL.md` says
 which capabilities exist and when to reach for each. A verb lives in
 exactly one capability; the same name in two capabilities fails loud
@@ -48,7 +48,7 @@ them. No registration, no restart — next `open` discovers, first call
 admits:
 
 ```bash
-cp -r ./my-pack/eve-dev/chat ~/.local/share/agent-webmcp/registry/eve-dev/chat
+cp -r ./my-agent/eve-dev/chat ~/.local/share/agent-webmcp/registry/eve-dev/chat
 rm -rf ~/.local/share/agent-webmcp/registry/eve-dev/chat/stale_verb
 ```
 
@@ -148,7 +148,7 @@ Delete (rm the dir) what the page outgrew — dead files still admit.
 
 ## 8. Site agents (a pattern with its own skill)
 
-Chat-agent packs (open → ask → read → close) carry enough doctrine —
+Chat agents (open → ask → read → close) carry enough doctrine —
 order, settle-waiting, viewport quirks, rail-that-never-closes — to deserve
 their own file: `skill show name=site-agents` before authoring one. The
 engine gives no privilege; the pattern is all skill.
