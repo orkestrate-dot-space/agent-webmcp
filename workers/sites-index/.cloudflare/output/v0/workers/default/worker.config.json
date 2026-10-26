@@ -1,1 +1,0 @@
-{"name":"agent-webmcp-sites","compatibilityDate":"2026-10-16","env":{"SITES":{"type":"d1","name":"agent-webmcp-sites","id":"fb62c79d-434f-47ac-be3a-8643069be866"}},"manifest":{"type":"complete","mainModule":"index.js","modules":{"index.js":{"type":"esm"},"index.js.map":{"type":"sourcemap"}}}}

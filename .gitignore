@@ -9,3 +9,4 @@ dist/
 .opencode/
 skills-lock.json
 space/preview-*.png
+.cloudflare/
