@@ -10,15 +10,13 @@ export interface CatalogEntry {
   readonly admitted: boolean;
 }
 
-export interface SearchQuery { readonly query?: string; readonly namespace?: string; readonly limit?: number }
+export interface SearchQuery { readonly query?: string; readonly limit?: number }
 
 export function searchCatalog(entries: ReadonlyArray<CatalogEntry>, q: SearchQuery): Array<{ path: string; description: string; capability?: string }> {
   const query = (q.query ?? "").trim().toLowerCase();
-  const namespace = (q.namespace ?? "").trim().toLowerCase().replace(/\.+$/, "");
   const limit = Number.isInteger(q.limit) && (q.limit as number) > 0 ? Math.min(q.limit as number, 100) : 25;
   const out: Array<{ path: string; description: string; capability?: string }> = [];
   for (const e of entries) {
-    if (namespace !== "" && !(e.path.toLowerCase() === namespace || e.path.toLowerCase().startsWith(namespace + "."))) continue;
     if (query !== "" && !(e.path.toLowerCase().includes(query) || e.description.toLowerCase().includes(query) || (e.capability ?? "").toLowerCase().includes(query))) continue;
     out.push({ path: e.path, description: e.description + (e.admitted ? "" : " [on disk — first call admits it]"), ...(e.capability !== undefined ? { capability: e.capability } : {}) });
     if (out.length >= limit) break;

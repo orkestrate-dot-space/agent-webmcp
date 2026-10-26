@@ -28,14 +28,16 @@ how do I see / how do I author / how does THIS place work.
 ## Drive loop
 
 1. `skill action=show name=drivers` — learn to see/act on this session's browser.
-2. `open {url, cdp?}` — fresh tab, returns `{handle, toolCount, cdpUrl}`.
+2. `open {url, cdp?, agent?}` — fresh tab, returns `{handle, toolCount, cdpUrl}`.
    Drive the tab through `cdpUrl` with your driver. `briefing` (when
-   present) is this origin's standing orders — obey it. `toolCount` is
+   present) is this origin's standing orders — obey it. Pass `agent:` to
+   bind one agent (reapply + briefing scoped to it). `toolCount` is
    the native burst plus re-applied files at open time; `list` is the
    live truth and may differ (late-announcing natives). A `null` return
    from a verb is success with no output — verify with a read, don't
    retry blindly. Wondering whether a verb already exists anywhere?
-   `skill action=search query="..."` searches every saved verb on every
+   `skill action=search` (empty query lists everything grouped;
+   `query`/`capability` filter) searches every saved verb on every
    origin — open that origin to use it.
 3. `list {handle}` — the only names `execute` may call. Rows by default;
    `list {handle, tool:name}` for the full schema of one verb.
@@ -61,8 +63,8 @@ inject; the reason names the fix.
 ## Compose rules
 
 - Read before every write; verify writes with a read-back.
-- Discover mid-run without leaving the code: `search({query, namespace?,
-  limit?})` filters verbs by name/description/capability (on-disk-but-unadmitted
+- Discover mid-run without leaving the code: `search({query?, limit?})`
+  filters verbs by name/description/capability (on-disk-but-unadmitted
   rows say so — calling one admits it); `catalog(path?)` renders the TS
   signature plus `returns` plus both raw schemas, `catalog()` lists all
   (capped). Type the call from that: `catalog(path)` first, pass typed args

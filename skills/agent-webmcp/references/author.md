@@ -38,8 +38,8 @@ agent, a page-verb set — each a directory with its own `SKILL.md`
 which capabilities exist and when to reach for each. A verb lives in
 exactly one capability; the same name in two capabilities fails loud
 at load — rename, don't shadow. `open` serves the origin skill plus the
-capability skills behind the re-applied verbs as `briefing` (bounded).
-`stamp.json` is engine-owned (proof record); never hand-write it.
+capability skills behind the re-applied verbs as `briefing` (bounded);
+pass `agent:` to bind one agent and scope both to it. `stamp.json` is engine-owned (proof record); never hand-write it.
 `evidence/` holds fixture transcripts and eval notes — trust is the
 reader's informed decision.
 

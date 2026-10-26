@@ -12,9 +12,7 @@ describe("searchCatalog", () => {
     expect(searchCatalog(entries, {}).map((e) => e.path)).toEqual(["add_book", "p1.count_books", "mark_read"]);
     expect(searchCatalog(entries, { limit: 1 }).length).toBe(1);
   });
-  test("namespace scopes; query matches path, description, and capability", () => {
-    expect(searchCatalog(entries, { namespace: "p1" }).map((e) => e.path)).toEqual(["p1.count_books"]);
-    expect(searchCatalog(entries, { namespace: "p1." }).map((e) => e.path)).toEqual(["p1.count_books"]);
+  test("query matches path, description, and capability", () => {
     expect(searchCatalog(entries, { query: "count" }).map((e) => e.path)).toEqual(["p1.count_books"]);
     expect(searchCatalog(
       [{ path: "x", description: "y", admitted: true, capability: "chat" }],

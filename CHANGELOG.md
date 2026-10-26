@@ -6,7 +6,10 @@ until 1.0: deleted paths fail loud naming the replacement, never silently.
 
 ## Unreleased
 
-**Breaking:** `outputSchema` is now required in every `spec.json` (was
+**Breaking:** `skill` loses the `list` action — `search` with no query
+returns the grouped map instead (same shape). Codemode `search()`
+loses the `namespace` filter (sessions are already handle-scoped).
+`outputSchema` is now required in every `spec.json` (was
 optional). Old files without it fail as `bad-shape` naming the fix — add
 `{"type":"string", ...}` for text verbs or a closed object schema for
 `JSON.stringify`d data. All ten shipped verbs now declare it. `opencode.json`

@@ -135,7 +135,7 @@ plain JS, no harness-specific constructs — identical from opencode, pi,
 Claude Code, or anything speaking MCP. Discovery is `list` (per-session
 verbs + full schemas via `list tool:<name>`); composition is the
 `tools.NAME(args)` dialect, flat for one session, `tools.ALIAS.NAME` for several (one root object).
-In-dialect discovery: bare `search({query, namespace?, limit?})` filters
+In-dialect discovery: bare `search({query?, limit?})` filters
 the run's verbs mid-code, `catalog(path?)` renders TS signatures;
 `console.log/warn/error` returns as `logs` in the envelope.
 Page verbs live INSIDE this dialect, never as top-level harness tools:

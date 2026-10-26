@@ -61,11 +61,12 @@ export async function proveTool(
 }
 
 export async function reapplyOrigin(
-  conn: CdpConnection, sessionId: string, origin: string, timeoutMs: number
+  conn: CdpConnection, sessionId: string, origin: string, timeoutMs: number, only?: string
 ): Promise<{ reapplied: Array<string>; skipped: Array<AdmitSkipped> }> {
   const reapplied: Array<string> = [];
   const skipped: Array<AdmitSkipped> = [];
-  const names = listOriginTools(origin).map((t) => t.name);
+  const all = listOriginTools(origin);
+  const names = (only === undefined ? all : all.filter((t) => t.capability === only)).map((t) => t.name);
   if (names.length === 0) return { reapplied, skipped };
   const live = await liveNames(conn, sessionId, timeoutMs);
   for (const name of names) {
