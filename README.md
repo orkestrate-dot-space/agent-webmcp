@@ -9,20 +9,16 @@ Six verbs. One dependency. MIT licensed, runs local.
 
 ## Install
 
-```sh
-./install.sh   # builds dist/, installs ~/.local/bin/agent-webmcp + skills
+No commands. Paste this into your agent:
+
+```
+Set up agent-webmcp for me by following https://raw.githubusercontent.com/orkestrate-dot-space/agent-webmcp/main/docs/agent-setup.md
 ```
 
-You need [Bun](https://bunjs.com) (any recent 1.x) and a reachable browser: an agent-browser daemon, or any Chromium with `--remote-debugging-port` plus WebMCP flags. Desktop chat panels need `--window-size=1366,900`. Run `doctor` to verify.
-
-Wire it into your harness as an MCP server:
-
-```json
-{ "mcp": { "agent-webmcp": {
-  "type": "local",
-  "command": ["/home/you/.local/bin/agent-webmcp", "mcp", "serve"]
-} } }
-```
+The agent checks Bun, builds, installs, wires your harness, reaches a
+browser through your driver, and verifies with `doctor`. Full steps:
+`docs/agent-setup.md`. The script underneath (`install.sh`) is the
+engine the prompt drives, not the interface.
 
 Skill first, every session: `skill action=show`.
 

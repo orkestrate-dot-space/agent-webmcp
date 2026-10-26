@@ -23,7 +23,15 @@ echo "building agent-webmcp..."
 (cd "$SRC_DIR" && bun run compile)
 
 mkdir -p "$BIN_DIR" "$DATA_DIR/skills"
-cp "$SRC_DIR/dist/agent-webmcp" "$BIN_DIR/agent-webmcp"
+for i in 1 2 3 4 5 6; do
+  if cp "$SRC_DIR/dist/agent-webmcp" "$BIN_DIR/agent-webmcp" 2>/dev/null; then break; fi
+  # Live MCP servers hold the old binary (Text file busy): ask them to
+  # exit once, then the copy lands. They respawn on next use.
+  fuser -k "$BIN_DIR/agent-webmcp" >/dev/null 2>&1
+  sleep 2
+done
+cmp -s "$SRC_DIR/dist/agent-webmcp" "$BIN_DIR/agent-webmcp" \
+  || { echo "installed binary differs from dist (holders?) — retry install" >&2; exit 1; }
 chmod +x "$BIN_DIR/agent-webmcp"
 rm -rf "$DATA_DIR/skills/agent-webmcp"
 cp -r "$SRC_DIR/skills/." "$DATA_DIR/skills/"
@@ -31,3 +39,6 @@ cp -r "$SRC_DIR/skills/." "$DATA_DIR/skills/"
 "$BIN_DIR/agent-webmcp" --version
 echo "installed: $BIN_DIR/agent-webmcp + $DATA_DIR/skills"
 echo "skills served from: $DATA_DIR/skills (what the binary serves — reinstall after skill edits)"
+echo "wire your harness (opencode example):"
+echo "{ \"mcp\": { \"agent-webmcp\": { \"type\": \"local\", \"command\": [\"$BIN_DIR/agent-webmcp\", \"mcp\", \"serve\"] } } }"
+echo "then verify: $BIN_DIR/agent-webmcp doctor"
