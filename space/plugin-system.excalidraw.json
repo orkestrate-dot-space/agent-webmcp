@@ -1,0 +1,337 @@
+{
+ "checkpoint": "plugin-system-map-v1",
+ "elements": [
+  {
+   "fontFamily": 1,
+   "fontSize": 14,
+   "id": "lg1",
+   "strokeColor": "#1e1e1e",
+   "text": "green = exists \u00b7 amber = new \u00b7 purple = first instance",
+   "type": "text",
+   "x": 880,
+   "y": 36
+  },
+  {
+   "fontFamily": 1,
+   "fontSize": 14,
+   "id": "a1l",
+   "strokeColor": "#1e1e1e",
+   "text": "verbs",
+   "type": "text",
+   "x": 362,
+   "y": 261
+  },
+  {
+   "fontFamily": 1,
+   "fontSize": 14,
+   "id": "a2l",
+   "strokeColor": "#1e1e1e",
+   "text": "refs",
+   "type": "text",
+   "x": 1037,
+   "y": 261
+  },
+  {
+   "fontFamily": 1,
+   "fontSize": 14,
+   "id": "a3l",
+   "strokeColor": "#1e1e1e",
+   "text": "publish",
+   "type": "text",
+   "x": 362,
+   "y": 436
+  },
+  {
+   "fontFamily": 1,
+   "fontSize": 14,
+   "id": "a5l",
+   "strokeColor": "#1e1e1e",
+   "text": "lists",
+   "type": "text",
+   "x": 362,
+   "y": 611
+  },
+  {
+   "fontFamily": 1,
+   "fontSize": 14,
+   "id": "a6l",
+   "strokeColor": "#1e1e1e",
+   "text": "ships in",
+   "type": "text",
+   "x": 712,
+   "y": 786
+  },
+  {
+   "fontFamily": 1,
+   "fontSize": 24,
+   "id": "title",
+   "strokeColor": "#1e1e1e",
+   "text": "Plugin system: the whole scenario",
+   "type": "text",
+   "x": 40,
+   "y": 28
+  },
+  {
+   "fontFamily": 1,
+   "fontSize": 16,
+   "id": "sub",
+   "strokeColor": "#1e1e1e",
+   "text": "The plugin is not blocked on the system \u2014 it is the system's first instance.",
+   "type": "text",
+   "x": 40,
+   "y": 62
+  },
+  {
+   "height": 21,
+   "id": "a1",
+   "points": [
+    [
+     0,
+     0
+    ],
+    [
+     0,
+     21
+    ]
+   ],
+   "strokeWidth": 2,
+   "type": "arrow",
+   "width": 21,
+   "x": 350,
+   "y": 262
+  },
+  {
+   "height": 21,
+   "id": "a2",
+   "points": [
+    [
+     0,
+     0
+    ],
+    [
+     0,
+     21
+    ]
+   ],
+   "strokeWidth": 2,
+   "type": "arrow",
+   "width": 21,
+   "x": 1025,
+   "y": 262
+  },
+  {
+   "height": 21,
+   "id": "a3",
+   "points": [
+    [
+     0,
+     0
+    ],
+    [
+     0,
+     21
+    ]
+   ],
+   "strokeWidth": 2,
+   "type": "arrow",
+   "width": 21,
+   "x": 350,
+   "y": 437
+  },
+  {
+   "height": 21,
+   "id": "a5",
+   "points": [
+    [
+     0,
+     0
+    ],
+    [
+     0,
+     21
+    ]
+   ],
+   "strokeWidth": 2,
+   "type": "arrow",
+   "width": 21,
+   "x": 350,
+   "y": 612
+  },
+  {
+   "height": 21,
+   "id": "a6",
+   "points": [
+    [
+     0,
+     0
+    ],
+    [
+     0,
+     21
+    ]
+   ],
+   "strokeWidth": 2,
+   "type": "arrow",
+   "width": 21,
+   "x": 700,
+   "y": 787
+  },
+  {
+   "height": 150,
+   "id": "engine",
+   "label": {
+    "fontSize": 16,
+    "text": "ENGINE \u2014 exists\nopen \u00b7 list \u00b7 search \u00b7 register\nexecute \u00b7 close \u00b7 skill"
+   },
+   "type": "rectangle",
+   "width": 620,
+   "x": 40,
+   "y": 110,
+   "backgroundColor": "#b2f2bb",
+   "fillStyle": "solid",
+   "strokeColor": "#1e1e1e",
+   "roundness": {
+    "type": 3
+   }
+  },
+  {
+   "height": 150,
+   "id": "registry",
+   "label": {
+    "fontSize": 16,
+    "text": "REGISTRY \u2014 exists\norigin.txt + spec/body.js + fixture\nprove-or-quarantine on open"
+   },
+   "type": "rectangle",
+   "width": 670,
+   "x": 690,
+   "y": 110,
+   "backgroundColor": "#b2f2bb",
+   "fillStyle": "solid",
+   "strokeColor": "#1e1e1e",
+   "roundness": {
+    "type": 3
+   }
+  },
+  {
+   "height": 150,
+   "id": "plugin",
+   "label": {
+    "fontSize": 16,
+    "text": "PLUGIN \u2014 new, thin\npack + author \u00b7 ref \u00b7 license\ncapability tags"
+   },
+   "type": "rectangle",
+   "width": 620,
+   "x": 40,
+   "y": 285,
+   "backgroundColor": "#ffd8a8",
+   "fillStyle": "solid",
+   "strokeColor": "#1e1e1e",
+   "roundness": {
+    "type": 3
+   }
+  },
+  {
+   "height": 150,
+   "id": "skill",
+   "label": {
+    "fontSize": 16,
+    "text": "SKILL \u2014 knowledge\nSKILL.md + deps.json\nreferences tools, ships none"
+   },
+   "type": "rectangle",
+   "width": 670,
+   "x": 690,
+   "y": 285,
+   "backgroundColor": "#ffd8a8",
+   "fillStyle": "solid",
+   "strokeColor": "#1e1e1e",
+   "roundness": {
+    "type": 3
+   }
+  },
+  {
+   "height": 150,
+   "id": "index",
+   "label": {
+    "fontSize": 16,
+    "text": "INDEX \u2014 shape exists\ndomain \u00b7 capabilities\nproof \u00b7 pinned ref"
+   },
+   "type": "rectangle",
+   "width": 620,
+   "x": 40,
+   "y": 460,
+   "backgroundColor": "#b2f2bb",
+   "fillStyle": "solid",
+   "strokeColor": "#1e1e1e",
+   "roundness": {
+    "type": 3
+   }
+  },
+  {
+   "height": 150,
+   "id": "search",
+   "label": {
+    "fontSize": 16,
+    "text": "SEARCH \u2014 new\nintent \u2192 plugin + tool + ref\ncatalog first, sessions second"
+   },
+   "type": "rectangle",
+   "width": 670,
+   "x": 690,
+   "y": 460,
+   "backgroundColor": "#ffd8a8",
+   "fillStyle": "solid",
+   "strokeColor": "#1e1e1e",
+   "roundness": {
+    "type": 3
+   }
+  },
+  {
+   "height": 150,
+   "id": "gemini",
+   "label": {
+    "fontSize": 16,
+    "text": "GEMINI PLUGIN \u2014 first instance\nopenChat \u00b7 askChat \u00b7 closeChat + fixture \u00b7 auth = your profile\nreplies are untrusted data \u00b7 drift \u2192 quarantine"
+   },
+   "type": "rectangle",
+   "width": 1320,
+   "x": 40,
+   "y": 635,
+   "backgroundColor": "#d0bfff",
+   "fillStyle": "solid",
+   "strokeColor": "#1e1e1e",
+   "roundness": {
+    "type": 3
+   }
+  },
+  {
+   "height": 150,
+   "id": "launch",
+   "label": {
+    "fontSize": 16,
+    "text": "LAUNCH CUT\nengine + gemini pack + /plugins page + install path\ndefer: scores \u00b7 leaderboard \u00b7 payments"
+   },
+   "type": "rectangle",
+   "width": 1320,
+   "x": 40,
+   "y": 810,
+   "backgroundColor": "#a5d8ff",
+   "fillStyle": "solid",
+   "strokeColor": "#1e1e1e",
+   "roundness": {
+    "type": 3
+   }
+  },
+  {
+   "height": 1050,
+   "id": "cam1",
+   "type": "cameraUpdate",
+   "width": 1400,
+   "x": 0,
+   "y": 0
+  }
+ ],
+ "note": "System map: green boxes exist, amber is new-thin, purple is the first instance.",
+ "shareUrl": "",
+ "source": "agent-webmcp planning",
+ "type": "excalidraw",
+ "version": 2
+}

@@ -10,3 +10,6 @@ dist/
 skills-lock.json
 space/preview-*.png
 .cloudflare/
+next-env.d.ts
+*.tsbuildinfo
+space/*.png

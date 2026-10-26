@@ -1,0 +1,178 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "https://excalidraw.com",
+  "checkpoint": "",
+  "shareUrl": "",
+  "note": "Blind cubing memo cycle",
+  "elements": [
+    {
+      "type": "cameraUpdate",
+      "id": "cam",
+      "x": 0,
+      "y": 0,
+      "width": 800,
+      "height": 600
+    },
+    {
+      "type": "text",
+      "id": "title",
+      "x": 250,
+      "y": 30,
+      "text": "A corner cycle (how memo works)",
+      "fontSize": 24,
+      "strokeColor": "#1e1e1e",
+      "fontFamily": 1
+    },
+    {
+      "type": "text",
+      "id": "sub",
+      "x": 300,
+      "y": 70,
+      "text": "Buffer = Slot 1 (top-back-right corner)",
+      "fontSize": 16,
+      "strokeColor": "#495057",
+      "fontFamily": 1
+    },
+    {
+      "type": "rectangle",
+      "id": "s1",
+      "x": 80,
+      "y": 180,
+      "width": 130,
+      "height": 80,
+      "backgroundColor": "#ffd8a8",
+      "fillStyle": "solid",
+      "roundness": { "type": 3 },
+      "strokeColor": "#1e1e1e",
+      "label": { "text": "Slot 1\\n(buffer)", "fontSize": 16 }
+    },
+    {
+      "type": "rectangle",
+      "id": "s2",
+      "x": 250,
+      "y": 180,
+      "width": 130,
+      "height": 80,
+      "backgroundColor": "#a5d8ff",
+      "fillStyle": "solid",
+      "roundness": { "type": 3 },
+      "strokeColor": "#1e1e1e",
+      "label": { "text": "Slot 2", "fontSize": 16 }
+    },
+    {
+      "type": "rectangle",
+      "id": "s3",
+      "x": 420,
+      "y": 180,
+      "width": 130,
+      "height": 80,
+      "backgroundColor": "#a5d8ff",
+      "fillStyle": "solid",
+      "roundness": { "type": 3 },
+      "strokeColor": "#1e1e1e",
+      "label": { "text": "Slot 3", "fontSize": 16 }
+    },
+    {
+      "type": "rectangle",
+      "id": "s4",
+      "x": 590,
+      "y": 180,
+      "width": 130,
+      "height": 80,
+      "backgroundColor": "#a5d8ff",
+      "fillStyle": "solid",
+      "roundness": { "type": 3 },
+      "strokeColor": "#1e1e1e",
+      "label": { "text": "Slot 4", "fontSize": 16 }
+    },
+    {
+      "type": "arrow",
+      "id": "a12",
+      "x": 210,
+      "y": 220,
+      "width": 40,
+      "height": 0,
+      "points": [[0, 0], [40, 0]],
+      "strokeWidth": 2,
+      "endArrowhead": "arrow",
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "arrow",
+      "id": "a23",
+      "x": 380,
+      "y": 220,
+      "width": 40,
+      "height": 0,
+      "points": [[0, 0], [40, 0]],
+      "strokeWidth": 2,
+      "endArrowhead": "arrow",
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "arrow",
+      "id": "a34",
+      "x": 550,
+      "y": 220,
+      "width": 40,
+      "height": 0,
+      "points": [[0, 0], [40, 0]],
+      "strokeWidth": 2,
+      "endArrowhead": "arrow",
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "arrow",
+      "id": "a41",
+      "x": 720,
+      "y": 220,
+      "width": 0,
+      "height": 120,
+      "points": [[0, 0], [-640, 0]],
+      "strokeWidth": 2,
+      "endArrowhead": "arrow",
+      "strokeColor": "#e03131"
+    },
+    {
+      "type": "text",
+      "id": "rule",
+      "x": 120,
+      "y": 320,
+      "text": "Start at the buffer, follow where each piece belongs.",
+      "fontSize": 16,
+      "strokeColor": "#495057",
+      "fontFamily": 1
+    },
+    {
+      "type": "text",
+      "id": "cycle",
+      "x": 120,
+      "y": 360,
+      "text": "Cycle: 1 → 2 → 3 → 4 → 1",
+      "fontSize": 20,
+      "strokeColor": "#1e1e1e",
+      "fontFamily": 1
+    },
+    {
+      "type": "text",
+      "id": "memo",
+      "x": 120,
+      "y": 400,
+      "text": "Memo (stop before repeat): 2, 3, 4",
+      "fontSize": 20,
+      "strokeColor": "#2f9e44",
+      "fontFamily": 1
+    },
+    {
+      "type": "text",
+      "id": "note",
+      "x": 120,
+      "y": 460,
+      "text": "You don't memorize 4 corners — you memorize one 3-item string.",
+      "fontSize": 16,
+      "strokeColor": "#495057",
+      "fontFamily": 1
+    }
+  ]
+}
