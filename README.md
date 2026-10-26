@@ -3,24 +3,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Beta](https://img.shields.io/badge/channel-0.2.0--beta-orange.svg)](CHANGELOG.md)
 
-Connect-only authoring layer for the agentic web. Your agent teaches any page a verb, proves it, keeps it — as files. Six verbs, one skill, one dependency. MIT-licensed, local-first.
+**Give your agent verbs for any page.** Write each verb once as a TypeScript file. The engine proves it inside the page and keeps it. Your agent calls it forever over MCP.
 
-**Status:** `0.2.0-beta.1`. Breaking changes may ship in any beta (listed atop `CHANGELOG.md`); no migrations until 1.0; removed paths fail loud.
-
-## How it works
-
-The engine never launches a browser — it attaches tabs in a reachable one (your driver skill knows the endpoint: per-call `cdp` → daemon discovery → loopback 9222/9229). Page verbs live *inside* the `execute` dialect, never as flat harness tools. Native page verbs and your authored verbs are indistinguishable at call time: the same list, the same call shape.
-
-```
-skill → open → list → execute → close
-```
-
-```js
-// Compose over live page verbs. Calls resolve to the envelope;
-// unwrap content[0].text (JSON.parse when returns says object{...}).
-const out = await tools.eve_read({});
-const reply = JSON.parse(out.content[0].text);
-```
+Six verbs. One dependency. MIT licensed, runs local.
 
 ## Install
 
@@ -28,11 +13,7 @@ const reply = JSON.parse(out.content[0].text);
 ./install.sh   # builds dist/, installs ~/.local/bin/agent-webmcp + skills
 ```
 
-Requirements: [Bun](https://bun.sh) (any recent 1.x), plus a reachable
-browser — an agent-browser daemon, or any Chromium with
-`--remote-debugging-port` and WebMCP flags
-(`--enable-features=WebMCPTesting,DevToolsWebMCPSupport`). Desktop chat
-panels need `--window-size=1366,900`. `doctor` verifies reachability.
+You need [Bun](https://bunjs.com) (any recent 1.x) and a reachable browser: an agent-browser daemon, or any Chromium with `--remote-debugging-port` plus WebMCP flags. Desktop chat panels need `--window-size=1366,900`. Run `doctor` to verify.
 
 Wire it into your harness as an MCP server:
 
@@ -43,61 +24,66 @@ Wire it into your harness as an MCP server:
 } } }
 ```
 
-Then: `skill action=show` first, every session. `doctor` tells the truth about browser reachability and registry path.
+Skill first, every session: `skill action=show`.
 
-## Authoring (files, not verbs)
+## Use
 
-No register/unregister verbs — the agent writes two files with its own tools, the engine validates, injects, proves, and stamps:
+```js
+// Discover, then call. Calls resolve to the envelope.
+await search({ query: "read" });
+const out = await tools.eve_read({});
+const reply = JSON.parse(out.content[0].text);
+```
+
+`open` attaches a tab and returns a handle. `list` shows what that handle can call. `execute` runs your code over those verbs. `close` drops the tab. `skill` serves docs and finds agents. `doctor` tells the truth about the browser and the registry.
+
+The engine never launches a browser. It attaches tabs in one you already run and never kills it.
+
+## Author a verb
+
+No register verbs. Write two files with your own tools. The engine validates, injects, proves, and stamps them:
 
 ```
-~/.local/share/agent-webmcp/registry/
-  <origin-slug>/{SKILL.md, <capability>/{SKILL.md, <name>/{spec.json, body.ts, stamp.json}}}
+~/.local/share/agent-webmcp/registry/<origin-slug>/<agent>/{spec.json, body.ts}
 ```
 
-- `spec.json`: `{name, description, inputSchema, origin, outputSchema}` (+ `fixtureInput?`, `consequential?`, `annotations?`). `outputSchema` is required — the schema of the `text` payload, so codemode never guesses.
-- `body.ts`: typed TypeScript `(input: Input) => envelope`; transpiled at load, proved by fixture (or your confirmed call for consequential verbs), stamped on success.
-- A verb lives in exactly one capability; duplicates fail loud. Capabilities group an origin's verbs (chat, docs, page tools), each with its own `SKILL.md`, surfaced in `open`'s briefing and searchable via `skill search` / in-dialect `search()`.
+`spec.json` declares the input and output shapes. `body.ts` is a typed function that returns `{content: [{type: "text", text}]}`. First call admits the verb: validate, check against the live page catalog, run the fixture, stamp on success. Bad files never inject. The reason names the fix.
 
-First `execute` naming the verb admits it (validate → native-collision check → inject → prove → stamp). Bad files never inject; the reason names the fix.
+One origin holds one or more agents. Each agent has its own skill file, served on `open` and searchable by name, description, and capability.
 
-## Skills (progressive disclosure)
+## Skills
 
 | Layer | Loads | Answers |
 |---|---|---|
-| `SKILL.md` | always | drive → compose |
-| `show name=drivers` | before first recon | how to see/act (driver contract + your driver's own skill) |
-| `show name=author` | before authoring | files, schemas-as-types, body template, prove |
-| `show name=site-agents` | before chat agents | open → ask → read → close pattern |
-| per-origin / per-capability | auto on `open` briefing | how THIS place works |
+| `SKILL.md` | always | drive and compose |
+| `show name=drivers` | before first recon | how to see and act |
+| `show name=author` | before authoring | files, schemas, prove |
+| `show name=site-agents` | before chat agents | open, ask, read, close |
+| origin and capability skills | auto on `open` | how this place works |
 
-## Local + remote
+## Local and remote
 
-Both at once: two MCP entries, same six verbs. Local runs stdio keyless (the OS user is the auth) against your browsers and your filesystem registry. Remote runs streamable HTTP with a bearer key against shared browsers and vault-held logins. Same agents, same call shape — local for minting and daily driving, remote for unattended runs. The engine already abstracts the attach point (`open {url, cdp?}`).
+Two entries, same six verbs. Local runs over stdio with no key. Remote runs over HTTP with a bearer key against shared browsers and stored logins. Same agents, same call shape. Mint locally, run anywhere.
 
-## Neighbors (what each does, where we differ)
+## How it compares
 
-| Project | What it is | Difference |
+| Project | What it does | Where we differ |
 |---|---|---|
-| [browser-use](https://github.com/browser-use/browser-use) (119k★, MIT) | OSS agent library driving real browsers via CDP | They drive pixels per task; we author verbs once, call them cheaply forever |
-| [Pomerado](https://github.com/Pomerado/pomerado) (MIT) | Model-minted site integrations, open core + cloud | Their mint agent authors behind `mint`; our agent authors directly into files it owns |
-| [UsefulSoftwareCo/executor](https://github.com/UsefulSoftwareCo/executor) (4.3k★, MIT) | Integration layer: OpenAPI/MCP/GraphQL/custom JS in a secure env | They broker existing APIs; we author verbs where no API exists |
-| [Steel](https://github.com/steel-dev/steel-browser) (7.9k★, Apache-2.0) | Self-hostable browser API (sessions, stealth, proxies) | They're the browser fleet; we're the verb layer above any fleet |
-| [Playwright MCP](https://github.com/microsoft/playwright-mcp) (38k★) / [chrome-devtools-mcp](https://github.com/GoogleChromeLabs/chrome-devtools-mcp) (54k★) | Vendor tool servers: your agent calls browser actions | They expose *browser* actions; we expose *page* verbs, native + authored alike |
-| [Stagehand](https://github.com/browserbase/stagehand) (26k★) | act/extract/observe over Playwright, Browserbase-hosted | Natural-language acts per run; our acts compile to proven files |
-| [Skyvern](https://github.com/Skyvern-AI/skyvern) (23k★) | Agent + cloud for browser workflows | Workflow service; our unit is the versioned agent you keep |
+| [browser-use](https://github.com/browser-use/browser-use) (119k stars, MIT) | Drives real browsers from agent instructions | We author verbs once instead of driving pixels every run |
+| [Pomerado](https://github.com/Pomerado/pomerado) (MIT) | Model mints site integrations, open core plus cloud | Your agent authors directly into files it keeps |
+| [UsefulSoftwareCo/executor](https://github.com/UsefulSoftwareCo/executor) (4.3k stars, MIT) | Calls OpenAPI, MCP, GraphQL, and custom JS in a sandbox | We author verbs where no API exists |
+| [Steel](https://github.com/steel-dev/steel-browser) (7.9k stars, Apache-2.0) | Self-hostable browser API | They run browsers. We add the verb layer above any browser |
+| [Playwright MCP](https://github.com/microsoft/playwright-mcp) (38k stars) and [chrome-devtools-mcp](https://github.com/GoogleChromeLabs/chrome-devtools-mcp) (54k stars) | Expose browser actions as tools | We expose page verbs, native and authored alike |
+| [Stagehand](https://github.com/browserbase/stagehand) (26k stars) | Plain-language browser acts over Playwright | Our acts compile to proven files |
 
-The bet: pages ship verbs (13k+ sites on WebMCP and counting). Consume natives where they exist, author the gap as files, run anywhere. No owned browsers, no model key, no third party holding your logins.
+Pages increasingly ship their own verbs (13k+ sites expose WebMCP). Consume natives where they exist. Author the gap as files. Run it all the same way.
 
 ## Repo
 
-- `src/` — engine (server, sessions, transport, admission, catalog, registry, runner)
-- `skills/agent-webmcp/` — the other half of the product (core + references)
-- `scripts/gate.ts` — green gate: typecheck, unit tests, skill-shape, schema-object, desc-budget
-- `PLAN.md`, `LAUNCH.md`, `CHANGELOG.md` — build plan, launch checklist, beta log
-- `workers/sites-index` — directory API scaffold (Cloudflare)
+`src/` is the engine. `skills/agent-webmcp/` is the other half of the product. `scripts/gate.ts` is the green gate: typecheck, unit tests, skill shape, schema checks, description budget. `PLAN.md`, `LAUNCH.md`, and `CHANGELOG.md` hold the plan, the launch list, and the beta log.
 
-## Support
+Beta rules: breaking changes ship in any beta and are listed at the top of each changelog entry. No migrations until 1.0.
 
-Bug reports and site-agent proposals: use the issue templates. Security:
-see `SECURITY.md` — never paste secrets into issues. Contributing:
-`CONTRIBUTING.md`. Conduct: `CODE_OF_CONDUCT.md`.
+## Contributing
+
+Read `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, and `SECURITY.md` before your first PR. Never paste secrets into issues. License is MIT.
