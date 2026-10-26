@@ -7,7 +7,6 @@ dist/
 .agent-webmcp/
 .agents/
 .opencode/
-skills-lock.json
 space/preview-*.png
 .cloudflare/
 next-env.d.ts

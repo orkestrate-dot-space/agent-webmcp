@@ -25,8 +25,8 @@ Free ($0, 100 calls/day, 10 integrations/mo) · Premium ($50/mo, 1,000 calls/day
 Browser agents reason through every page (slow, expensive, non-deterministic). Pomerado mints a deterministic API once, then runs it in seconds. Claimed: 7× faster, 100× cheaper, 30% more accurate than Astra/Instinct/Muse computer use on a 30-task/25-business-app benchmark; customer case: onboarding 2 employees across HR/IT/courses/library in 8m16s for $0.03 vs Codex Computer Use 21m22s for $41.01.
 
 ### Founders
-- **Akshay Manglik** — Co-founder & CEO. Ex-Applied AI Engineer at Scale AI (frontier agents for Mayo Clinic, telecom/finance/healthcare); led Scale's agentic trace-analysis research; published ML research (Nature Communications, NeurIPS IAB). Ex-McKinsey.
-- **Alan Ma** — Co-founder & CTO. Ex-Business Analyst at McKinsey (Data & AI strategy for F500); Columbia Math & CS.
+- **Akshay Manglik** — Co-founder & CEO (ex-Scale AI).
+- **Alan Ma** — Co-founder & CTO.
 
 ### Exact category
 **"Web → Agent Tool" / minted deterministic API-MCP from any site (no site cooperation).** This is a sub-category of the broader "make websites agent-callable" space, distinct from (a) browser/computer-use agents, (b) web scraping/extraction APIs, (c) iPaaS/unified APIs (existing APIs only), (d) RPA, and (e) the emerging site-cooperative **WebMCP** standard.
