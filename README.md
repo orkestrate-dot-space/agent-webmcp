@@ -1,5 +1,8 @@
 # agent-webmcp
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Beta](https://img.shields.io/badge/channel-0.2.0--beta-orange.svg)](CHANGELOG.md)
+
 Connect-only authoring layer for the agentic web. Your agent teaches any page a verb, proves it, keeps it — as files. Six verbs, one skill, one dependency. MIT-licensed, local-first.
 
 **Status:** `0.2.0-beta.1`. Breaking changes may ship in any beta (listed atop `CHANGELOG.md`); no migrations until 1.0; removed paths fail loud.
@@ -24,6 +27,12 @@ const reply = JSON.parse(out.content[0].text);
 ```sh
 ./install.sh   # builds dist/, installs ~/.local/bin/agent-webmcp + skills
 ```
+
+Requirements: [Bun](https://bun.sh) (any recent 1.x), plus a reachable
+browser — an agent-browser daemon, or any Chromium with
+`--remote-debugging-port` and WebMCP flags
+(`--enable-features=WebMCPTesting,DevToolsWebMCPSupport`). Desktop chat
+panels need `--window-size=1366,900`. `doctor` verifies reachability.
 
 Wire it into your harness as an MCP server:
 
@@ -86,3 +95,9 @@ The bet: pages ship verbs (13k+ sites on WebMCP and counting). Consume natives w
 - `scripts/gate.ts` — green gate: typecheck, unit tests, skill-shape, schema-object, desc-budget
 - `PLAN.md`, `LAUNCH.md`, `CHANGELOG.md` — build plan, launch checklist, beta log
 - `workers/sites-index` — directory API scaffold (Cloudflare)
+
+## Support
+
+Bug reports and site-agent proposals: use the issue templates. Security:
+see `SECURITY.md` — never paste secrets into issues. Contributing:
+`CONTRIBUTING.md`. Conduct: `CODE_OF_CONDUCT.md`.
