@@ -13,3 +13,5 @@ space/preview-*.png
 next-env.d.ts
 *.tsbuildinfo
 space/*.png
+.vercel/
+.env.local
