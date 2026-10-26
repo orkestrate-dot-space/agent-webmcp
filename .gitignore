@@ -2,3 +2,10 @@ node_modules/
 dist/
 *.log
 .DS_Store
+
+# scratch: session + local-only dirs
+.agent-webmcp/
+.agents/
+.opencode/
+skills-lock.json
+space/preview-*.png
