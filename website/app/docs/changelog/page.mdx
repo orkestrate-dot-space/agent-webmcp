@@ -1,0 +1,119 @@
+# Changelog
+
+Beta channel: `0.1.0-beta.x`. Breaking changes ship in
+any beta release — each one is listed at the top of its
+entry below, with no migration scripts until 1.0. No
+silent breaks: removed verbs/flags fail loud naming the
+replacement.
+
+Engine v2. Seven verbs, file-backed memory, MCP-only
+composition. For the version-matched agent contract at
+any time: `agent-webmcp skill show`.
+
+## Unreleased (beta)
+
+**Breaking:** the config system is removed. No files,
+no schema, no served `/config.json`, no `config` key in
+`doctor`. The two launch options stay plain flags:
+`--consequential allow|ask|deny` (default `ask`, bad
+values exit 2) and `--registry DIR`. `doctor` reports
+`policy: {value, source: flag|default}`.
+
+**Breaking:** the config file system is dead. Deleted:
+`AGENT_WEBMCP_CONFIG`, `AGENT_WEBMCP_CONFIG_CONTENT`,
+project/global files, walk-up, substitution. Policy is
+one flag per invocation: `--consequential
+allow|ask|deny` (default `ask`), garbage fails loud at
+startup. Enforcement must live server-side — the gated
+agent supplies `confirm` itself and project files can't
+constrain a harness-controlled cwd. Gate logic
+untouched; `doctor` reports flag or default.
+
+**Breaking:** config shrinks to one key and the endpoint
+leaves it entirely. Deleted: `browser.cdp` (the driver
+feeds the endpoint per `open` call via `cdp`; discovery
+covers daemon → 9222/9229, else fail loud) and
+`index.enabled` (consult always, degrade on miss — the
+flag bought nothing). Remaining: `permissions.conse-
+quential` (`ask`|`allow`|`deny`, default `ask`), the
+safety catch on mutating page tools, opencode-shaped
+(same three effects; headless, so `ask` means the call
+must carry `confirm: true`). Old keys are ignored, not
+errors — no migration needed. Malformed files now warn
++ skip (opencode `parseInfo`) instead of failing loud
+on explicit paths; new `{file:path}` substitution for
+secrets.
+
+**Breaking:** registry env deleted, global-main confirmed.
+`AGENT_WEBMCP_REGISTRY` is gone — `mcp serve --registry DIR`
+pins the root, otherwise project `.agent-webmcp/registry/`
+overlays the user-global main store (reads merge, project
+wins). The double-append walk-up bug is fixed (production
+walk-up never hit; everything silently fell back to
+global). Malformed config files now warn + continue like
+opencode instead of failing loud on explicit paths; new
+`{file:path}` substitution for secrets (relative to the
+config file's dir).
+
+**Breaking:** the engine no longer launches or owns a browser.
+`open` needs a reachable one (flag `--cdp` → `browser.cdp`
+→ answering agent-browser daemon, else loopback 9222/9229, else fail loud naming the
+fix). `--headed` is rejected (display belongs to your browser);
+`browser.{engine,headed,idleTimeout,profile}` config keys are
+gone (unknown keys ignored, old files still parse); `open`
+output drops `headed`/`borrowed`; `close` closes its tab, never
+a browser. Install `agent-browser` (plus its Chrome) for the
+zero-setup path.
+
+- **Config file** (`~/.config/agent-webmcp/config.json`,
+  project `.agent-webmcp/config.json`): `browser.cdp`
+  (default endpoint; `{env:}` for tokens),
+  `index.enabled`, `permissions.consequential`
+  (`ask`|`allow`|`deny`, default `ask`; consequential
+  verbs need `execute {confirm: true}`).
+- **`find` verb**: indexed-site search splits out of
+  `search` (live verbs only again); `open` keeps its
+  advisory `index` record; both honor `index.enabled`.
+- **`upgrade` command**: source upgrade in place
+  (pull → gate → compile → reinstall with `.prev`
+  backup). Refuses dirty trees and bare-`bun` runs.
+- **Beta markers**: version `0.1.0-beta.x`, hero badge,
+  `doctor` reports `release: "beta"`.
+
+## 0.1.0
+
+- **Seven verbs**: `open list search register execute
+  close unregister`. Composition (`search`, `execute`)
+  is MCP-only; the CLI mirrors lifecycle plus `doctor`,
+  `mcp list/serve`, `skill show`.
+- **Sessions**: owned headless Chromium by default,
+  `--headed` opt-in, `--cdp` borrows a foreign tab (it
+  gets navigated — stated cost). `close` kills only
+  owned browsers (TERM→wait→KILL, profile removed every
+  path); foreign pids are never signaled.
+- **Custom tools**: spec plus plain-JS body, compiled
+  debugger-side (CSP-exempt), fixture-proved before
+  persisting (consequential tools hand-proved). Saved
+  as `<root>/<origin-slug>/<name>/{spec.json,body.js}`;
+  every `open` re-applies; rot surfaces as
+  `staleSuspect`; recovery is re-register.
+- **Codemode**: `search` ranks across sessions with
+  deterministic field weights; `execute` runs one
+  program over flat or namespaced (`sessions[]`) tools
+  with enforced budgets. Every envelope carries
+  `untrusted: true`.
+- **Honesty rules**: piped output is JSON, writes need
+  `--yes`, exits `0` ok / `2` usage / `1` failure with
+  the message on stderr.
+- **Install**: Bun toolchain, Chromium 152+, source
+  build (`bun run gate`, `bun run compile`);
+  per-OS release binaries attach from this version on.
+
+## How to read this log
+
+Entries name the verb or door they change and the
+evidence to expect (`reapplied[]`, `skipped[]`,
+`staleSuspect`, envelope fields). Behaviour strings
+quoted here match CLI and MCP output verbatim — if
+output and log ever disagree, the output wins and the
+log gets a correction entry.

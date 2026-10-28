@@ -1,0 +1,206 @@
+{
+ "/": [],
+ "/docs": [
+  {
+   "anchor": "how-it-works",
+   "heading": "How it works",
+   "level": 2
+  },
+  {
+   "anchor": "the-seven-verbs",
+   "heading": "The seven verbs",
+   "level": 2
+  },
+  {
+   "anchor": "works-with",
+   "heading": "Works with",
+   "level": 2
+  },
+  {
+   "anchor": "what-it-is-not",
+   "heading": "What it is not",
+   "level": 2
+  }
+ ],
+ "/sites": [],
+ "/docs/changelog": [
+  {
+   "anchor": "unreleased-beta",
+   "heading": "Unreleased (beta)",
+   "level": 2
+  },
+  {
+   "anchor": "0-1-0",
+   "heading": "0.1.0",
+   "level": 2
+  },
+  {
+   "anchor": "how-to-read-this-log",
+   "heading": "How to read this log",
+   "level": 2
+  }
+ ],
+ "/docs/codemode": [
+  {
+   "anchor": "search",
+   "heading": "Search",
+   "level": 2
+  },
+  {
+   "anchor": "execute",
+   "heading": "Execute",
+   "level": 2
+  },
+  {
+   "anchor": "budgets-and-envelopes",
+   "heading": "Budgets and envelopes",
+   "level": 2
+  },
+  {
+   "anchor": "failure-codes",
+   "heading": "Failure codes",
+   "level": 2
+  }
+ ],
+ "/docs/commands": [
+  {
+   "anchor": "lifecycle",
+   "heading": "Lifecycle",
+   "level": 2
+  },
+  {
+   "anchor": "authoring",
+   "heading": "Authoring",
+   "level": 2
+  },
+  {
+   "anchor": "composition-mcp-only",
+   "heading": "Composition (MCP only)",
+   "level": 2
+  },
+  {
+   "anchor": "utility-doors",
+   "heading": "Utility doors",
+   "level": 2
+  }
+ ],
+ "/docs/custom-tools": [
+  {
+   "anchor": "discovery-first",
+   "heading": "Discovery first",
+   "level": 2
+  },
+  {
+   "anchor": "the-spec-and-the-body",
+   "heading": "The spec and the body",
+   "level": 2
+  },
+  {
+   "anchor": "proving-and-persistence",
+   "heading": "Proving and persistence",
+   "level": 2
+  },
+  {
+   "anchor": "rot-and-recovery",
+   "heading": "Rot and recovery",
+   "level": 2
+  }
+ ],
+ "/docs/installation": [
+  {
+   "anchor": "prerequisites",
+   "heading": "Prerequisites",
+   "level": 2
+  },
+  {
+   "anchor": "install-from-source",
+   "heading": "Install from source",
+   "level": 2
+  },
+  {
+   "anchor": "staying-current-beta",
+   "heading": "Staying current (beta)",
+   "level": 2
+  },
+  {
+   "anchor": "verify-the-install",
+   "heading": "Verify the install",
+   "level": 2
+  },
+  {
+   "anchor": "add-it-as-an-mcp-server",
+   "heading": "Add it as an MCP server",
+   "level": 2
+  }
+ ],
+ "/docs/publishing": [
+  {
+   "anchor": "the-file",
+   "heading": "The file",
+   "level": 2
+  },
+  {
+   "anchor": "verify",
+   "heading": "Verify",
+   "level": 2
+  }
+ ],
+ "/docs/quick-start": [
+  {
+   "anchor": "open-and-list",
+   "heading": "Open and list",
+   "level": 2
+  },
+  {
+   "anchor": "author-your-first-tool",
+   "heading": "Author your first tool",
+   "level": 2
+  },
+  {
+   "anchor": "compose-and-close",
+   "heading": "Compose and close",
+   "level": 2
+  }
+ ],
+ "/docs/security": [
+  {
+   "anchor": "untrusted-page-data",
+   "heading": "Untrusted page data",
+   "level": 2
+  },
+  {
+   "anchor": "deliberate-writes",
+   "heading": "Deliberate writes",
+   "level": 2
+  },
+  {
+   "anchor": "process-and-file-guards",
+   "heading": "Process and file guards",
+   "level": 2
+  }
+ ],
+ "/docs/sessions": [
+  {
+   "anchor": "close-discipline",
+   "heading": "Close discipline",
+   "level": 2
+  }
+ ],
+ "/docs/troubleshooting": [
+  {
+   "anchor": "session-errors",
+   "heading": "Session errors",
+   "level": 2
+  },
+  {
+   "anchor": "authoring-errors",
+   "heading": "Authoring errors",
+   "level": 2
+  },
+  {
+   "anchor": "composition-errors",
+   "heading": "Composition errors",
+   "level": 2
+  }
+ ]
+}

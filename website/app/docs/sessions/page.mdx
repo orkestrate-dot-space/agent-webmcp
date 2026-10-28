@@ -1,0 +1,49 @@
+# Sessions
+
+One handle, one fresh tab, in a browser the engine never
+owns. `open` connects — per-call `--cdp` (your driver skill
+knows it), else an answering agent-browser daemon, else
+loopback 9222/9229 — and fails loud naming the fix when
+nothing answers. `close` drops the
+session and closes its tab; the browser itself is never
+touched.
+
+```bash
+agent-webmcp open https://example.com
+# {"handle":"s_…","url":"…","toolCount":0,
+#  "reapplied":[],"skipped":[]}
+```
+
+`toolCount` is point-in-time: pages expose tools as they
+load, so `0` means list again, not give up. Records live
+under the OS temp sessions dir and are stale-safe — a
+dead browser surfaces as a transport failure on the
+next verb, never as a corrupt store. Tabs the browser
+lost are pruned on the next open; records pinned to an
+explicit endpoint are left alone.
+
+Every `open` needs a reachable browser. Every open creates a fresh tab —
+never adopts an existing one — so parallel sessions never
+collide. `--cdp` aims per call; an answering agent-browser
+daemon is borrowed automatically. No endpoint is stored
+anywhere — the driver feeds it, discovery finds the rest.
+
+```bash
+agent-webmcp open --cdp http://127.0.0.1:9222 https://example.com
+# fresh tab in that browser, closed with the session
+```
+
+Nothing is ever signaled: no kills, no profile removal, no
+shutdown. The browser is not ours.
+
+## Close discipline
+
+```bash
+agent-webmcp close <handle> --yes   # {closed:[handle]}
+agent-webmcp close --all --yes      # {closed[], failed[]}
+```
+
+Close drops the record and closes its tab; the browser
+itself is untouched. `--all` never aborts on one dead
+browser; failures land in `failed[]` with per-handle
+reasons. Close what you open.

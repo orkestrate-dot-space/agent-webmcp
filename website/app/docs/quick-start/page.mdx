@@ -1,0 +1,81 @@
+# Quick start
+
+> Beta software (`0.1.0-beta.x`): breaking changes ship
+> per release and are listed in the changelog. Keep
+> current with `agent-webmcp upgrade --yes`.
+
+The golden path: `open` → `list` → `register` →
+`execute` → `close`. Every step prints evidence.
+
+```bash
+H=$(agent-webmcp open --json https://example.com \
+  | python3 -c "import json,sys; print(json.load(sys.stdin)['handle'])")
+agent-webmcp list $H
+agent-webmcp close $H --yes
+```
+
+## Open and list
+
+`open` attaches the page and prints a handle plus a
+`toolCount`. That count is point-in-time: pages expose
+tools as they load, so `0` means list again, not give up.
+
+```bash
+agent-webmcp open --json https://example.com
+# {"handle":"s_…","url":"…","toolCount":0,
+#  "reapplied":[],"skipped":[]}
+agent-webmcp list $H
+# name — description rows on a TTY, JSON when piped
+```
+
+**Never call a tool you have not listed.** An empty `list`
+means the page exposes nothing — say so instead of
+guessing. Fetch one tool's full record (schema included)
+before calling it:
+
+```bash
+agent-webmcp list $H <tool-name>
+```
+
+## Author your first tool
+
+Pages that expose nothing still take authored tools. This
+one answers `pong`; the fixture proves it before
+anything persists:
+
+```bash
+agent-webmcp register $H \
+  '{"name":"ping","description":"Ping fixture tool",
+    "inputSchema":{"type":"object","properties":{}},
+    "fixtureInput":{}}' \
+  '(async () => { return { content: [
+    { type: "text", text: "pong" }] }; })' \
+  --yes
+agent-webmcp list $H   # ping reads authored:true
+```
+
+Writes need `--yes`. Piped output is JSON. See
+[Custom tools](/docs/custom-tools) before authoring
+against a real page — authoring blind is forbidden.
+
+## Compose and close
+
+`search` and `execute` live on MCP only. Over MCP the
+same session reads:
+
+```json
+{ "handle": "s_…", "code": "return await tools.ping();" }
+```
+
+`execute` returns `{value, spilled, toolCalls,
+perSession, origins, untrusted:true}` — `untrusted` is
+always true. Then release what you opened:
+
+```bash
+agent-webmcp close $H --yes
+agent-webmcp open --json https://example.com
+# reapplied:["ping"] — memory works
+```
+
+Close what you open. `close` kills only browsers the
+engine launched, never foreign ones.

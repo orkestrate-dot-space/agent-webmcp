@@ -1,0 +1,109 @@
+# Installation
+
+Install from source with Bun. You need Bun plus a reachable
+browser: an agent-browser daemon (the installer sets one
+up), any Chrome with a debug port, or a remote CDP endpoint
+your driver skill knows.
+
+## Prerequisites
+
+- **Bun** — the toolchain. Get it at
+  [bun.sh](https://bun.sh).
+- **agent-browser** — the browser the engine connects
+  to: `npm i -g agent-browser`, then `agent-browser
+  install` (downloads Chromium). Any CDP endpoint works,
+  but this is the zero-setup path the installer uses.
+- No account, no registry service, nothing hosted.
+
+## Install from source
+
+```bash
+git clone <repo> agent-webmcp && cd agent-webmcp
+bun install
+bun run gate        # deterministic checks — green or stop
+bun run compile     # dist/agent-webmcp, standalone binary
+```
+
+Release binaries (per-OS, no registry) attach to GitHub
+releases from 1.0 on — beta installs are source-only
+(see Staying current above). Until then, the binary you
+just compiled *is* the install: put `dist/agent-webmcp`
+on your `PATH`.
+
+```bash
+export PATH="$PWD/dist:$PATH"
+agent-webmcp --version   # expect 0.1.0-beta.x
+```
+
+## Staying current (beta)
+
+Beta means breaking changes can ship in any release —
+each one is listed at the top of its changelog entry,
+with no migration scripts until 1.0. To update a source
+install in place (pull, gate, compile, reinstall, with a
+`.prev` backup of your old binary):
+
+```bash
+agent-webmcp upgrade --yes                 # uses your checkout (walks up to .git)
+agent-webmcp upgrade --repo ~/agent-webmcp --yes
+```
+
+No checkout on this machine (binary-only install)?
+Re-run the installer instead:
+
+```bash
+curl -fsSL https://agent-webmcp.vercel.app/install.sh | bash
+```
+
+Per-release binaries attach to GitHub releases from 1.0
+on; until then source builds plus `upgrade` are the
+distribution.
+
+## Verify the install
+
+```bash
+agent-webmcp doctor      # environment report
+agent-webmcp mcp list    # the 9 served tools
+```
+
+`doctor` prints a JSON environment report (Bun version,
+platform, Effect version, browser reachability, resolved
+config). If `open` later fails with `no browser
+reachable`, start an agent-browser daemon or pass
+`--cdp` (your driver skill knows the endpoint).
+
+## Add it as an MCP server
+
+```json
+{
+  "mcp": {
+    "agent-webmcp": {
+      "command": ["agent-webmcp", "mcp", "serve"]
+    }
+  }
+}
+```
+
+Pin the registry root in the server entry so every
+spawned server resolves identically (some harnesses spawn
+per-call servers with varying working directories):
+
+```json
+{
+  "mcp": {
+    "agent-webmcp": {
+      "command": [
+        "agent-webmcp",
+        "mcp",
+        "serve",
+        "--registry",
+        "/abs/path/.agent-webmcp/registry"
+      ]
+    }
+  }
+}
+```
+
+Then read the version-matched contract with
+`agent-webmcp skill show`. See [Commands](/docs/commands)
+for serve flags and root pinning.

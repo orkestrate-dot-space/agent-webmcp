@@ -1,0 +1,6 @@
+{
+  "$schema": "https://agent-webmcp.vercel.app/schemas/agent-webmcp.json",
+  "version": 1,
+  "domain": "agent-webmcp.vercel.app",
+  "description": "Turn live web pages into an agent toolkit. Use for browser verbs, page tools, and site proof."
+}
