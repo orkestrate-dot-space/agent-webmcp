@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-webmcp.vercel.app/schemas/agent-webmcp.json",
+  "title": "agent-webmcp site declaration",
+  "description": "What a site declares about itself. Presence is the claim; everything an agent can use is probed live, never declared here.",
+  "type": "object",
+  "required": ["version", "domain"],
+  "properties": {
+    "version": { "const": 1 },
+    "domain": { "type": "string" },
+    "description": { "type": "string", "maxLength": 140 }
+  }
+}

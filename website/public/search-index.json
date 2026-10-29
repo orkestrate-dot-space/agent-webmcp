@@ -1,0 +1,374 @@
+[
+ {
+  "url": "/",
+  "title": "/",
+  "description": "",
+  "sections": [
+   {
+    "anchor": "",
+    "heading": "",
+    "text": "const REPO = \"https://github.com/system1970/agent-webmcp\"; export default function Home() { return ( Skip to content Turn the web into your agent's toolkit. Connect your agent to the tools, assistants, and workflows inside websites. Use native website capabilities or turn existing browser interactions into custom tools, so your agent can work with your software, not just read about it. Beta · v0.1.0-beta.1 · Chromium 152 or newer · Linux-first (Windows, macOS untested) MIT license · llms.txt © 2026 system1970 ); }"
+   }
+  ]
+ },
+ {
+  "url": "/docs",
+  "title": "Docs · agent-webmcp",
+  "description": "agent-webmcp turns live pages into an agent's toolkit: seven verbs, authored tools, MCP-only composition.",
+  "sections": [
+   {
+    "anchor": "",
+    "heading": "",
+    "text": "# Introduction The web as your toolkit. agent-webmcp turns any live page into callable tools: open a page, use the tools it exposes, author the ones it lacks, chain tools across sites in code, close when done. agent-webmcp open https://example.com # a session handle agent-webmcp list <handle> # the page's tools agent-webmcp close <handle> --yes # release it"
+   },
+   {
+    "anchor": "how-it-works",
+    "heading": "How it works",
+    "text": "- Sessions hold pages. `open` attaches a page and returns a handle. Every later verb names that handle. See Quick start. - Pages expose tools. `list` shows what the page offers. Never call a tool you have not listed. - You author what is missing. `register` adds a custom tool to the page, proves it with a fixture, and saves it as files. See Custom tools. - Code joins pages. `execute` runs one program over session tools, including cross-site joins. MCP only. See Codemode. The engine cannot inspect pages itself. Bring a discovery bundle from your browser driver (snapshot, eval, network, page source) and the agent carries that context across. Run engine plus driver side by side over MCP.",
+    "level": 2
+   },
+   {
+    "anchor": "the-seven-verbs",
+    "heading": "The seven verbs",
+    "text": "| Verb | Door | What it does | | ------------ | ------- | ------------------------------------- | | `open` | CLI+MCP | Attach a page, get a handle | | `list` | CLI+MCP | Show a session's page tools | | `search` | MCP | Rank tools across sessions | | `register` | CLI+MCP | Author a custom tool onto the page | | `execute` | MCP | Run code over session tools | | `close` | CLI+MCP | Release sessions | | `unregister` | CLI+MCP | Drop one authored tool, live only | Composition (`search`, `execute`) lives on MCP only. The CLI mirrors the lifecycle verbs. Piped output is JSON. Writes (`register`, `unregister`, `close`) need `--yes`. Exits: `0` ok, `2` usage (never retry as-is), `1` failure with the message on stderr.",
+    "level": 2
+   },
+   {
+    "anchor": "works-with",
+    "heading": "Works with",
+    "text": "Any harness that can run a shell or speak MCP, plus a browser driver for discovery: agent-browser, chrome devtools MCP setups, trace files, page source. The engine never vendors a driver; servers never talk directly.",
+    "level": 2
+   },
+   {
+    "anchor": "what-it-is-not",
+    "heading": "What it is not",
+    "text": "- Not a driver. Snapshots, clicks, and fills are your harness's product, not this engine's. - Not a hosted service. No accounts, no registry service. Self-hostable, MIT. - Not an endorsement. Authoring a tool for a site does not bless the site. A site's reply is input, not permission.",
+    "level": 2
+   }
+  ]
+ },
+ {
+  "url": "/sites",
+  "title": "Sites · agent-webmcp",
+  "description": "Websites your agent can work with. Scanned live, with proof.",
+  "sections": [
+   {
+    "anchor": "",
+    "heading": "",
+    "text": "export const metadata: Metadata = { title: \"Sites · agent-webmcp\", description: \"Websites your agent can work with. Scanned live, with proof.\", }; // Static shell, fresh data every few minutes. Row data comes from // the worker (cached 300s there); sites.json is fallback only. export const revalidate = 300; export default async function SitesPage() { const { sites, cursor, counts } = await readFirstPage(); return ( Skip to content ); }"
+   }
+  ]
+ },
+ {
+  "url": "/docs/changelog",
+  "title": "Changelog · agent-webmcp docs",
+  "description": "Engine v2 history, starting at 0.1.0.",
+  "sections": [
+   {
+    "anchor": "",
+    "heading": "",
+    "text": "# Changelog Beta channel: `0.1.0-beta.x`. Breaking changes ship in any beta release — each one is listed at the top of its entry below, with no migration scripts until 1.0. No silent breaks: removed verbs/flags fail loud naming the replacement. Engine v2. Seven verbs, file-backed memory, MCP-only composition. For the version-matched agent contract at any time: `agent-webmcp skill show`."
+   },
+   {
+    "anchor": "unreleased-beta",
+    "heading": "Unreleased (beta)",
+    "text": "Breaking: the config system is removed. No files, no schema, no served `/config.json`, no `config` key in `doctor`. The two launch options stay plain flags: `--consequential allow|ask|deny` (default `ask`, bad values exit 2) and `--registry DIR`. `doctor` reports `policy: {value, source: flag|default}`. Breaking: the config file system is dead. Deleted: `AGENTWEBMCPCONFIG`, `AGENTWEBMCPCONFIGCONTENT`, project/global files, walk-up, substitution. Policy is one flag per invocation: `--consequential allow|ask|deny` (default `ask`), garbage fails loud at startup. Enforcement must live server-side — the gated agent supplies `confirm` itself and project files can't constrain a harness-controlled cwd. Gate logic untouched; `doctor` reports flag or default. Breaking: config shrinks to one key and the endpoint leaves it entirely. Deleted: `browser.cdp` (the driver feeds the endpoint per `open` call via `cdp`; discovery covers daemon → 9222/9229, else fail loud) and `index.enabled` (consult always, degrade on miss — the flag bought nothing). Remaining: `permissions.conse- quential` (`ask`|`allow`|`deny`, default `ask`), the safety catch on mutating page tools, opencode-shaped (same three effects; headless, so `ask` means the call must carry `confirm: true`). Old keys are ignored, not errors — no migration needed. Malformed files now warn + skip (opencode `parseInfo`) instead of failing loud on explicit paths; new `{file:path}` substitution for secrets. Breaking: registry env deleted, global-main confirmed. `AGENTWEBMCPREGISTRY` is gone — `mcp serve --registry DIR` pins the root, otherwise project `.agent-webmcp/registry/` overlays the user-global main store (reads merge, project wins). The double-append walk-up bug is fixed (production walk-up never hit; everything silently fell back to global). Malformed config files now warn + continue like opencode instead of failing loud on explicit paths; new `{file:path}` substitution for secrets (relative to the config file's dir). Breaking: the engine no longer launches or owns a browser. `open` needs a reachable one (flag `--cdp` → `browser.cdp` → answering agent-browser daemon, else loopback 9222/9229, else fail loud naming the fix). `--headed` is rejected (display belongs to your browser); `browser.{engine,headed,idleTimeout,profile}` config keys are gone (unknown keys ignored, old files still parse); `open` output drops `headed`/`borrowed`; `close` closes its tab, never a browser. Install `agent-browser` (plus its Chrome) for the zero-setup path. - Config file (`/.config/agent-webmcp/config.json`, project `.agent-webmcp/config.json`): `browser.cdp` (default endpoint; `{env:}` for tokens), `index.enabled`, `permissions.consequential` (`ask`|`allow`|`deny`, default `ask`; consequential verbs need `execute {confirm: true}`). - `find` verb: indexed-site search splits out of `search` (live verbs only again); `open` keeps its advisory `index` record; both honor `index.enabled`. - `upgrade` command: source upgrade in place (pull → gate → compile → reinstall with `.prev` backup). Refuses dirty trees and bare-`bun` runs. - Beta markers: version `0.1.0-beta.x`, hero badge, `doctor` reports `release: \"beta\"`.",
+    "level": 2
+   },
+   {
+    "anchor": "0-1-0",
+    "heading": "0.1.0",
+    "text": "- Seven verbs: `open list search register execute close unregister`. Composition (`search`, `execute`) is MCP-only; the CLI mirrors lifecycle plus `doctor`, `mcp list/serve`, `skill show`. - Sessions: owned headless Chromium by default, `--headed` opt-in, `--cdp` borrows a foreign tab (it gets navigated — stated cost). `close` kills only owned browsers (TERM→wait→KILL, profile removed every path); foreign pids are never signaled. - Custom tools: spec plus plain-JS body, compiled debugger-side (CSP-exempt), fixture-proved before persisting (consequential tools hand-proved). Saved as `<root>/<origin-slug>/<name>/{spec.json,body.js}`; every `open` re-applies; rot surfaces as `staleSuspect`; recovery is re-register. - Codemode: `search` ranks across sessions with deterministic field weights; `execute` runs one program over flat or namespaced (`sessions[]`) tools with enforced budgets. Every envelope carries `untrusted: true`. - Honesty rules: piped output is JSON, writes need `--yes`, exits `0` ok / `2` usage / `1` failure with the message on stderr. - Install: Bun toolchain, Chromium 152+, source build (`bun run gate`, `bun run compile`); per-OS release binaries attach from this version on.",
+    "level": 2
+   },
+   {
+    "anchor": "how-to-read-this-log",
+    "heading": "How to read this log",
+    "text": "Entries name the verb or door they change and the evidence to expect (`reapplied[]`, `skipped[]`, `staleSuspect`, envelope fields). Behaviour strings quoted here match CLI and MCP output verbatim — if output and log ever disagree, the output wins and the log gets a correction entry.",
+    "level": 2
+   }
+  ]
+ },
+ {
+  "url": "/docs/codemode",
+  "title": "Codemode · agent-webmcp docs",
+  "description": "Compose page tools across sessions with search and execute: shapes, budgets, envelopes, failure codes.",
+  "sections": [
+   {
+    "anchor": "",
+    "heading": "",
+    "text": "# Codemode Composition lives on MCP only: `search` ranks page tools across sessions, `execute` runs one JS program over them. The CLI has no `search` or `execute` — wire the MCP server (see Installation) and call them as tools."
+   },
+   {
+    "anchor": "search",
+    "heading": "Search",
+    "text": "One query across sessions. Name handles to fail loud on an unknown session; omit them to sweep every session best-effort, with misses recorded in `skipped`. { \"query\": \"price\", \"handles\": [\"sabc123\"] } { \"query\": \"price\", \"tools\": [ { \"session\": \"sabc123\", \"tool\": {}, \"score\": 12 } ], \"skipped\": [] } Ranking is deterministic and field-weighted: name exact match outranks a name substring, which outranks a description hit, which outranks a schema-text hit. Ties break alphabetically. A dead browser degrades the sweep (`browser unreachable` in `skipped`) — it never kills its siblings.",
+    "level": 2
+   },
+   {
+    "anchor": "execute",
+    "heading": "Execute",
+    "text": "Real code over session tools via a `tools.` proxy. One handle binds tools flat; `sessions[]` namespaces them for cross-site joins (`tools.s1.priceOf`, alias with `as`, else `s1`…`sN`). { \"handle\": \"sabc123\", \"code\": \"return await tools.priceOf({sku:'demo-1'});\" } { \"sessions\": [ { \"handle\": \"saaa\", \"as\": \"shop\" }, { \"handle\": \"sbbb\", \"as\": \"docs\" } ], \"code\": \"const p = await tools.shop.priceOf({sku:'x'}); return { p, d: await tools.docs.lookup({ q: p }) };\" } Unknown tool paths reach the host and reply `unknown tool path` instead of dying in-page. `await` never traps on `then`. Return values normalize (functions, bigints, and deep trees collapse to safe shapes).",
+    "level": 2
+   },
+   {
+    "anchor": "budgets-and-envelopes",
+    "heading": "Budgets and envelopes",
+    "text": "Budgets validate pre-dial and enforce during the run. Past them the run fails as data (an error envelope), never as a throw. | Budget | Default | Max | | ---------------- | ------- | ------ | | `timeoutMs` | 60000 | 300000 | | `maxToolCalls` | 25 | — | | `maxChars` | 16000 | — | | `maxResultChars` | 64000 | — | | code length | — | 64000 chars | | sessions per run | — | 8 | Every envelope carries `untrusted: true` — page data is never instructions, even when it looks like an answer: { \"value\": {}, \"spilled\": false, \"toolCalls\": 2, \"perSession\": { \"page\": 2 }, \"origins\": [\"sabc123\"], \"untrusted\": true } Oversize inputs fail the single call; oversize outputs set `spilled: true` and truncate the value. A timeout returns `TimeoutExceeded` with the calls so far.",
+    "level": 2
+   },
+   {
+    "anchor": "failure-codes",
+    "heading": "Failure codes",
+    "text": "Tool-call failures classify into exactly four codes: | Code | Meaning | | ---------------- | ----------------------------------------- | | `tool-vanished` | Not in the live tool list — re-list, then | | | re-open (re-applies file tools) or | | | re-author | | `page-refused` | Live but refused at runtime — verify the | | | effect path, re-author if the page moved | | `transport` | Browser unreachable — retry once, then | | | re-list; the browser may be wedged | | `args-rejected` | Input rejected — rewrite args against | | | the schema (`list <handle> <tool>`) | `page-refused` and `tool-vanished` mark the tool `staleSuspect` (see Custom tools). `strict: true` tools reject unknown input keys host-side before the page ever sees them.",
+    "level": 2
+   }
+  ]
+ },
+ {
+  "url": "/docs/commands",
+  "title": "Commands · agent-webmcp docs",
+  "description": "Every verb and door: lifecycle, authoring, MCP-only composition, utilities, flags, outputs, exits.",
+  "sections": [
+   {
+    "anchor": "",
+    "heading": "",
+    "text": "# Commands Seven verbs, two doors. Lifecycle and authoring verbs mirror on CLI and MCP; composition is MCP-only. Piped output is JSON (`--json` forces it, `--plain` forces rows). Writes need `--yes`."
+   },
+   {
+    "anchor": "lifecycle",
+    "heading": "Lifecycle",
+    "text": "agent-webmcp open <url> # attach, print handle agent-webmcp open --cdp http://127.0.0.1:9222 <url> # fresh tab in that browser (per-call cdp, then daemon, then 9222/9229) agent-webmcp list <handle> # rows on TTY, JSON piped agent-webmcp list <handle> <tool> # full record + schema agent-webmcp close <handle> --yes # release one session agent-webmcp close --all --yes # sweep best-effort | Command | Output | | -------------------- | ----------------------------------------- | | `open` | `{handle, url, toolCount, reapplied,` | | | `skipped}` — `toolCount` is point-in-time | | `list` | name/description rows, or one full record | | `close <handle>` | `{closed:[handle]}` | | `close --all` | `{closed[], failed[]}` per handle | `open` needs an absolute http(s) URL. `toolCount: 0` means list again — pages expose tools as they load. `--all` never aborts on one dead browser; failures land in `failed[]` with per-handle reasons. Close kills only browsers the engine launched, never foreign ones.",
+    "level": 2
+   },
+   {
+    "anchor": "authoring",
+    "heading": "Authoring",
+    "text": "agent-webmcp register <handle> '<json-tool>' '<js-body>' \\ --yes # author + fixture-prove + save agent-webmcp register <handle> '<json-tool>' '<js-body>' \\ --timeout 10000 --yes # custom proof budget (ms) agent-webmcp unregister <handle> <name> --yes # drop one live authored tool (files stay) | Result | Meaning | | ------------ | ----------------------------------------- | | `{registered, handle, persisted:true}` | proved and saved | | `fixture failed (…) — tool rolled back,` | live tool removed, | | `nothing persisted.` | files never written | | `{unregistered, handle}` | live tool dropped, files kept | `register` rejects pre-dial (bad names, empty descriptions, non-object schemas, empty bodies) and fails loud on page refusals. `unregister` refuses page-native tools — only session-authored names qualify. See Custom tools for the spec shape and the five rules.",
+    "level": 2
+   },
+   {
+    "anchor": "composition-mcp-only",
+    "heading": "Composition (MCP only)",
+    "text": "agent-webmcp mcp serve # serve the 7 tools agent-webmcp mcp serve --registry DIR # pin the tool root (stable across proxy harnesses) agent-webmcp mcp serve --consequential allow # trusted loop: mutating tools run free (default ask # needs confirm:true per call, deny blocks them) agent-webmcp mcp list # inspect the surface `search {query, handles?}` and `execute {handle?, sessions?, code, timeoutMs?, maxToolCalls?, maxChars?, maxResultChars?}` have no CLI mirror. See Codemode for shapes, budgets, and failure codes.",
+    "level": 2
+   },
+   {
+    "anchor": "utility-doors",
+    "heading": "Utility doors",
+    "text": "agent-webmcp doctor # environment report agent-webmcp skill show # version-matched contract agent-webmcp --version # expect 0.1.0 agent-webmcp --help # usage Exits: `0` ok, `2` usage — unknown commands, missing args, missing `--yes` (never retry as-is), `1` failure with the message on stderr. Unknown MCP tool names fail as `isError` results, never as throws.",
+    "level": 2
+   }
+  ]
+ },
+ {
+  "url": "/docs/custom-tools",
+  "title": "Custom tools · agent-webmcp docs",
+  "description": "Author page tools with register: discovery first, spec plus plain-JS body, fixture proof, file memory, rot recovery.",
+  "sections": [
+   {
+    "anchor": "",
+    "heading": "",
+    "text": "# Custom tools `register` authors a spec plus a plain-JS body onto the session page. The engine compiles the body debugger-side (CSP-exempt), proves it with a fixture, then persists it as files. Every later `open` on that origin re-applies them. agent-webmcp register $H '<json-tool>' '<js-body>' --yes # {\"registered\":\"<name>\",\"handle\":\"s…\",\"persisted\":true}"
+   },
+   {
+    "anchor": "discovery-first",
+    "heading": "Discovery first",
+    "text": "The engine cannot inspect pages. Before any `register`, bring a discovery bundle from your driver (harness browser tools, snapshot plus eval, trace file, page source). Sufficient: - `url`, `title`, scoped snapshot, target-subtree excerpts - `candidatehooks`: window functions, forms, fetch endpoints, plus the full schema for the chosen tool - `consoleerrors[]`, `flowsteps[]` Ranked best to worst: live snapshot plus eval plus network, then snapshot plus markdown plus bodies, then trace-derived API shapes. Snapshot or text alone is insufficient — no hooks, no schemas, do not author from it. Binding order matters. Capture in order: 1. Viewport width (`window.innerWidth`) — responsive layouts hide entire UIs below breakpoints. 2. Responsive variants — query every candidate root; note which layout is live (desktop aside vs mobile panel vs none). 3. Visibility primitives — rect-based (`getBoundingClientRect` plus computed style). Never `offsetParent`: fixed elements always read null. 4. Only then draft spec plus body: prefer page APIs over DOM, feature-detect, fail naming what moved.",
+    "level": 2
+   },
+   {
+    "anchor": "the-spec-and-the-body",
+    "heading": "The spec and the body",
+    "text": "The spec is the standard shape — no `title` field: <CodeBlock lang=\"json\" title=\"spec.json\" code={`{ \"name\": \"priceOf\", \"description\": \"What it changes plus what it returns.\", \"inputSchema\": { \"type\": \"object\", \"properties\": { \"sku\": { \"type\": \"string\" } }, \"required\": [\"sku\"], \"additionalProperties\": false }, \"fixtureInput\": { \"sku\": \"demo-1\" } }`} /> Optional keys: `annotations`, `fixtureInput`, `strict`, `consequential`. Names match `^[A-Za-z0-9.-]{1,128}$`. Duplicates, empty names, empty descriptions, non-object schemas, and empty bodies fail pre-dial. The body is a plain-JS function expression. No imports, no Effect, no `eval`, no driver idioms. Five rules for strong tools: - Describe effects, not hopes — what it changes plus what it returns. - Closed schemas — `additionalProperties: false` with a real `required[]`. - Always include `fixtureInput` — a tool without one is a rumor (consequential tools excepted: hand-prove those, never auto-run). - Verify effects, not echoes — read back the changed state; never trust `{saved: true}`. - Mark consequential tools — `consequential: true` needs host confirmation; `readOnlyHint` never bypasses it.",
+    "level": 2
+   },
+   {
+    "anchor": "proving-and-persistence",
+    "heading": "Proving and persistence",
+    "text": "Registration succeeding proves nothing — one fixture invoke proves. For stateful tools, prove both transitions (closed→open and open→open): fixtures that pass on one branch are luck, not coverage. For chat-like widgets, gate the fixture read on a settled signal (the reply landed, the typing indicator cleared) — an early read asserts against a loading skeleton. # variant handling: probe every candidate root, # record which layout answered, fail loud otherwise agent-webmcp register $H \\ '{\"name\":\"chatSend\",\"description\":\"Send a chat message and return the settled reply text.\", \"inputSchema\":{\"type\":\"object\",\"properties\": {\"text\":{\"type\":\"string\"}},\"required\":[\"text\"], \"additionalProperties\":false}, \"fixtureInput\":{\"text\":\"hello\"}}' \\ '(async ({ text }) => { … })' --yes A failed fixture rolls back the live tool and persists nothing: `fixture failed (…) — tool rolled back, nothing persisted.` Consequential tools skip auto-proof entirely — hand-prove those. Every success persists to `<root>/<origin-slug>/<name>/{spec.json,body.js}`. Next `open` on that origin re-applies them (`reapplied[]` in the output). Collisions lose loudly to page-native tools; refused tools land in `skipped[]` with reasons, files kept. `list` marks live authored tools (`authored: true`, file age, `staleSuspect` when a call rotted).",
+    "level": 2
+   },
+   {
+    "anchor": "rot-and-recovery",
+    "heading": "Rot and recovery",
+    "text": "Pages move under you. `execute` failures that smell like rot mark the tool `staleSuspect` (visible in `list`): the page refused at runtime, or the tool vanished from the live tool list. Recovery is re-register: refresh discovery, author again, the new files overwrite the old. agent-webmcp unregister $H <name> --yes # live only rm -r <root>/<origin-slug>/<name> # files stay # …until you delete them. Deletion is rm, your call. `unregister` refuses page-native tools — only session-authored names unregister. Dropping the live tool never deletes the files; `close` drops everything live but the library outlives the page.",
+    "level": 2
+   }
+  ]
+ },
+ {
+  "url": "/docs/installation",
+  "title": "Installation · agent-webmcp docs",
+  "description": "Build the engine from source, put it on PATH, verify the version.",
+  "sections": [
+   {
+    "anchor": "",
+    "heading": "",
+    "text": "# Installation Install from source with Bun. You need Bun plus a reachable browser: an agent-browser daemon (the installer sets one up), any Chrome with a debug port, or a remote CDP endpoint your driver skill knows."
+   },
+   {
+    "anchor": "prerequisites",
+    "heading": "Prerequisites",
+    "text": "- Bun — the toolchain. Get it at bun.sh. - agent-browser — the browser the engine connects to: `npm i -g agent-browser`, then `agent-browser install` (downloads Chromium). Any CDP endpoint works, but this is the zero-setup path the installer uses. - No account, no registry service, nothing hosted.",
+    "level": 2
+   },
+   {
+    "anchor": "install-from-source",
+    "heading": "Install from source",
+    "text": "git clone <repo> agent-webmcp && cd agent-webmcp bun install bun run gate # deterministic checks — green or stop bun run compile # dist/agent-webmcp, standalone binary Release binaries (per-OS, no registry) attach to GitHub releases from 1.0 on — beta installs are source-only (see Staying current above). Until then, the binary you just compiled is the install: put `dist/agent-webmcp` on your `PATH`. export PATH=\"$PWD/dist:$PATH\" agent-webmcp --version # expect 0.1.0-beta.x",
+    "level": 2
+   },
+   {
+    "anchor": "staying-current-beta",
+    "heading": "Staying current (beta)",
+    "text": "Beta means breaking changes can ship in any release — each one is listed at the top of its changelog entry, with no migration scripts until 1.0. To update a source install in place (pull, gate, compile, reinstall, with a `.prev` backup of your old binary): agent-webmcp upgrade --yes # uses your checkout (walks up to .git) agent-webmcp upgrade --repo /agent-webmcp --yes No checkout on this machine (binary-only install)? Re-run the installer instead: curl -fsSL https://agent-webmcp.vercel.app/install.sh | bash Per-release binaries attach to GitHub releases from 1.0 on; until then source builds plus `upgrade` are the distribution.",
+    "level": 2
+   },
+   {
+    "anchor": "verify-the-install",
+    "heading": "Verify the install",
+    "text": "agent-webmcp doctor # environment report agent-webmcp mcp list # the 9 served tools `doctor` prints a JSON environment report (Bun version, platform, Effect version, browser reachability, resolved config). If `open` later fails with `no browser reachable`, start an agent-browser daemon or pass `--cdp` (your driver skill knows the endpoint).",
+    "level": 2
+   },
+   {
+    "anchor": "add-it-as-an-mcp-server",
+    "heading": "Add it as an MCP server",
+    "text": "{ \"mcp\": { \"agent-webmcp\": { \"command\": [\"agent-webmcp\", \"mcp\", \"serve\"] } } } Pin the registry root in the server entry so every spawned server resolves identically (some harnesses spawn per-call servers with varying working directories): { \"mcp\": { \"agent-webmcp\": { \"command\": [ \"agent-webmcp\", \"mcp\", \"serve\", \"--registry\", \"/abs/path/.agent-webmcp/registry\" ] } } } Then read the version-matched contract with `agent-webmcp skill show`. See Commands for serve flags and root pinning.",
+    "level": 2
+   }
+  ]
+ },
+ {
+  "url": "/docs/publishing",
+  "title": "Publishing your site · agent-webmcp docs",
+  "description": "Serve agent-webmcp.json on your domain: skills, agents, hooks. Verify, then list.",
+  "sections": [
+   {
+    "anchor": "",
+    "heading": "",
+    "text": "# Publishing your site Serve one file on your domain and agents can find, drive, and delegate to your site. Presence is the claim: only you can serve it, so nothing stands between you and a listing except the scan. curl -sS https://yourdomain.com/.well-known/agent-webmcp.json | jq ."
+   },
+   {
+    "anchor": "the-file",
+    "heading": "The file",
+    "text": "Serve `/.well-known/agent-webmcp.json` as `application/json`, publicly cacheable. Strict JSON. Three fields: { \"version\": 1, \"domain\": \"example.com\", \"description\": \"Book trains, buses and flights. Use for quotes and checkout.\" } - `version` must be `1`. Unknown versions warn; known fields still serve. - `domain` must equal the serving host, or the file drops. This is the whole claim — nothing else proves ownership. - `description` is trigger text (≤140 chars, plain words). It tells an agent whether to open the page, and doubles as the task the prover checks. Write what the site is for, not marketing. Everything else an agent can use is probed, never declared: publish an agent-skills index, `llms.txt`, API or MCP cards, and the scan finds them on its own. Never declare verbs (live enumeration is truth), auth mechanics, credentials, or endpoints — unknown fields are ignored.",
+    "level": 2
+   },
+   {
+    "anchor": "verify",
+    "heading": "Verify",
+    "text": "Check the file resolves with the right content type: curl -sS -D- -o/dev/null https://yourdomain.com/.well-known/agent-webmcp.json curl -sS https://yourdomain.com/.well-known/agent-webmcp.json | jq . Then open `https://agent-webmcp.vercel.app/sites/yourdomain` — the page scans the domain and the row appears, with whatever the scan found. Re-open any time to re-scan; `proof.verified` always shows the last scan. See custom tools for how verbs prove, and security for what never ships.",
+    "level": 2
+   }
+  ]
+ },
+ {
+  "url": "/docs/quick-start",
+  "title": "Quick start · agent-webmcp docs",
+  "description": "The golden path — open, list, register, execute, close — with copy-paste evidence at every step.",
+  "sections": [
+   {
+    "anchor": "",
+    "heading": "",
+    "text": "# Quick start > Beta software (`0.1.0-beta.x`): breaking changes ship > per release and are listed in the changelog. Keep > current with `agent-webmcp upgrade --yes`. The golden path: `open` → `list` → `register` → `execute` → `close`. Every step prints evidence. H=$(agent-webmcp open --json https://example.com \\ | python3 -c \"import json,sys; print(json.load(sys.stdin)['handle'])\") agent-webmcp list $H agent-webmcp close $H --yes"
+   },
+   {
+    "anchor": "open-and-list",
+    "heading": "Open and list",
+    "text": "`open` attaches the page and prints a handle plus a `toolCount`. That count is point-in-time: pages expose tools as they load, so `0` means list again, not give up. agent-webmcp open --json https://example.com # {\"handle\":\"s…\",\"url\":\"…\",\"toolCount\":0, # \"reapplied\":[],\"skipped\":[]} agent-webmcp list $H # name — description rows on a TTY, JSON when piped Never call a tool you have not listed. An empty `list` means the page exposes nothing — say so instead of guessing. Fetch one tool's full record (schema included) before calling it: agent-webmcp list $H <tool-name>",
+    "level": 2
+   },
+   {
+    "anchor": "author-your-first-tool",
+    "heading": "Author your first tool",
+    "text": "Pages that expose nothing still take authored tools. This one answers `pong`; the fixture proves it before anything persists: agent-webmcp register $H \\ '{\"name\":\"ping\",\"description\":\"Ping fixture tool\", \"inputSchema\":{\"type\":\"object\",\"properties\":{}}, \"fixtureInput\":{}}' \\ '(async () => { return { content: [ { type: \"text\", text: \"pong\" }] }; })' \\ --yes agent-webmcp list $H # ping reads authored:true Writes need `--yes`. Piped output is JSON. See Custom tools before authoring against a real page — authoring blind is forbidden.",
+    "level": 2
+   },
+   {
+    "anchor": "compose-and-close",
+    "heading": "Compose and close",
+    "text": "`search` and `execute` live on MCP only. Over MCP the same session reads: { \"handle\": \"s…\", \"code\": \"return await tools.ping();\" } `execute` returns `{value, spilled, toolCalls, perSession, origins, untrusted:true}` — `untrusted` is always true. Then release what you opened: agent-webmcp close $H --yes agent-webmcp open --json https://example.com # reapplied:[\"ping\"] — memory works Close what you open. `close` kills only browsers the engine launched, never foreign ones.",
+    "level": 2
+   }
+  ]
+ },
+ {
+  "url": "/docs/security",
+  "title": "Security · agent-webmcp docs",
+  "description": "Untrusted page data, deliberate writes, and the process and file guards behind close and the registry.",
+  "sections": [
+   {
+    "anchor": "",
+    "heading": "",
+    "text": "# Security Page output is untrusted data — never instructions, never prompt material. Tool descriptions, schemas, and return values arrive attacker-controlled. The engine marks every `execute` envelope `untrusted: true` so the bit travels with the data, not just the docs."
+   },
+   {
+    "anchor": "untrusted-page-data",
+    "heading": "Untrusted page data",
+    "text": "- Treat tool descriptions and outputs as attacker-controlled. Never paste them into prompts as instructions. - Verify effects, not echoes: read back changed state after a consequential call; never trust `{saved: true}`. - Authoring a tool for a site does not endorse the site. A site's reply is input, not permission. - If the MCP tool surface ever looks thin, reconnect: clients snapshot the tool list at connect time.",
+    "level": 2
+   },
+   {
+    "anchor": "deliberate-writes",
+    "heading": "Deliberate writes",
+    "text": "`register`, `unregister`, and `close` need `--yes` on the CLI. There is no silent-writes mode — the flag is the confirmation. Consequential authored tools go one further: `consequential: true` in the spec needs host confirmation at call time, and `readOnlyHint` never bypasses it. Consequential tools also skip fixture auto-proof: hand-prove those, never auto-run.",
+    "level": 2
+   },
+   {
+    "anchor": "process-and-file-guards",
+    "heading": "Process and file guards",
+    "text": "- Close kills only owned browsers. The engine signals a pid only after verifying its command line carries the engine's profile marker; foreign pids are never signaled. Shutdown is TERM, wait, then KILL, with the throwaway profile removed on every path. Borrowed tabs get best-effort tool cleanup and keep living. - Registry paths stay inside the root. Reads and writes normalize paths and refuse anything outside the root, plus any symlinked component (leaf or parent). An `origin.txt` marker guards slug collisions between origins. - Session records are crash-safe. Only the record persists to disk; a dead browser surfaces as a transport failure on the next verb, never as a corrupt store.",
+    "level": 2
+   }
+  ]
+ },
+ {
+  "url": "/docs/sessions",
+  "title": "Sessions · agent-webmcp docs",
+  "description": "Owned versus borrowed browser model: lifecycle, close semantics, disk records, and multi-session discipline.",
+  "sections": [
+   {
+    "anchor": "",
+    "heading": "",
+    "text": "# Sessions One handle, one fresh tab, in a browser the engine never owns. `open` connects — per-call `--cdp` (your driver skill knows it), else an answering agent-browser daemon, else loopback 9222/9229 — and fails loud naming the fix when nothing answers. `close` drops the session and closes its tab; the browser itself is never touched. agent-webmcp open https://example.com # {\"handle\":\"s…\",\"url\":\"…\",\"toolCount\":0, # \"reapplied\":[],\"skipped\":[]} `toolCount` is point-in-time: pages expose tools as they load, so `0` means list again, not give up. Records live under the OS temp sessions dir and are stale-safe — a dead browser surfaces as a transport failure on the next verb, never as a corrupt store. Tabs the browser lost are pruned on the next open; records pinned to an explicit endpoint are left alone. Every `open` needs a reachable browser. Every open creates a fresh tab — never adopts an existing one — so parallel sessions never collide. `--cdp` aims per call; an answering agent-browser daemon is borrowed automatically. No endpoint is stored anywhere — the driver feeds it, discovery finds the rest. agent-webmcp open --cdp http://127.0.0.1:9222 https://example.com # fresh tab in that browser, closed with the session Nothing is ever signaled: no kills, no profile removal, no shutdown. The browser is not ours."
+   },
+   {
+    "anchor": "close-discipline",
+    "heading": "Close discipline",
+    "text": "agent-webmcp close <handle> --yes # {closed:[handle]} agent-webmcp close --all --yes # {closed[], failed[]} Close drops the record and closes its tab; the browser itself is untouched. `--all` never aborts on one dead browser; failures land in `failed[]` with per-handle reasons. Close what you open.",
+    "level": 2
+   }
+  ]
+ },
+ {
+  "url": "/docs/troubleshooting",
+  "title": "Troubleshooting · agent-webmcp docs",
+  "description": "Exact error strings and fixes for sessions, authoring, and composition.",
+  "sections": [
+   {
+    "anchor": "",
+    "heading": "",
+    "text": "# Troubleshooting Errors arrive as `{tool}: {detail}` messages — catchable and retryable. Stack traces and crashes are engine bugs: report the expression, do not retry blind."
+   },
+   {
+    "anchor": "session-errors",
+    "heading": "Session errors",
+    "text": "| Message | Fix | | ------- | --- | | `no such session` (`open again — tabs never come back.`) | `open` again; the tab is gone | | `record is unparseable` (`close the handle and open again.`) | `close` the handle, `open` fresh | | `no debugger at <endpoint>` | Start an agent-browser daemon or pass `--cdp` (your driver skill knows it) | | `no browser reachable` | Same as above — the engine launches nothing itself | | `tab closed since open` | `open` again for a fresh tab | | `browser unreachable (record … kept)` | Start the browser back up; the record is kept | | `close needs <handle\\|--all>`, `open needs <url>` | Pass the missing arg (exit 2, usage) | | `<verb> needs --yes (deliberate writes only)` | Add `--yes` to `register`, `unregister`, `close` | A thin MCP tool surface is usually a stale client snapshot, not a server fault: reconnect the MCP session and the nine tools re-list.",
+    "level": 2
+   },
+   {
+    "anchor": "authoring-errors",
+    "heading": "Authoring errors",
+    "text": "| Message | Fix | | ------- | --- | | `bad tool name '…'` | Match `^[A-Za-z0-9.-]{1,128}$` | | `description is empty` / `code is empty` | Fill the missing field | | `inputSchema must be a JSON Schema object` | Pass an object schema, not an array or scalar | | `(spec rejects, pre-dial).` | The spec never reached the page — fix shape and retry | | `page refused: …` | The page rejected registration — refresh discovery (viewport, variants, hooks) and re-author | | `registered but absent from the list — page dropped it, nothing persisted.` | The page took then dropped the tool — re-author against fresh discovery | | `fixture failed (…) — tool rolled back, nothing persisted.` | The body failed its own fixture — fix the body, keep the spec; nothing was saved | | `'…' is not session-authored (native or unknown) — refusing` | `unregister` only drops authored tools; native tools stay | | `'…' still listed after unregister — page refused silently.` | Page kept the tool — record and page disagree, investigate before retrying | | `no controller (page navigated or never registered here)` | The page navigated away (tools die with navigation) — re-open to re-apply, then retry | Rot signal in `list`: `staleSuspect` means a call recently failed as `page-refused` or `tool-vanished`. Recovery is re-register against fresh discovery.",
+    "level": 2
+   },
+   {
+    "anchor": "composition-errors",
+    "heading": "Composition errors",
+    "text": "| Message | Fix | | ------- | --- | | `pass handle or sessions.` | Pass one `handle` or a `sessions[]` array | | `at most 8 sessions per run: close something first.` | Drop to 8 or fewer sessions | | `bad timeoutMs: want 1-300000 ms` | Pick a timeout in range (default 60000) | | `bad maxToolCalls/maxChars/maxResultChars: want an integer ≥ 1` | Fix the named budget | | `code is … chars (max 64000): chunk it.` | Split the program | | `unknown tool path: …` | Re-list the session; the path is stale or namespaced wrong | | `TimeoutExceeded` / `ToolCallLimitExceeded` | Results so far travel with the diagnostic — narrow scope, raise the budget, rerun | | `no such session: <handle>` (search with handles) | Drop the dead handle or re-open it | | `browser unreachable` (search `skipped[]`) | One session died mid-sweep — the rest still ranked |",
+    "level": 2
+   }
+  ]
+ }
+]

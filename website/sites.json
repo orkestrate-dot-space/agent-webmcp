@@ -1,0 +1,4811 @@
+{
+  "version": 1,
+  "sites": [
+    {
+      "origin": "https://vercel.com",
+      "slug": "vercel.com",
+      "description": "Build and deploy web apps and APIs.",
+      "has": {
+        "webmcp": true,
+        "skills": true,
+        "api": true,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-18",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": true
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": true
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": true
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://developers.cloudflare.com",
+      "slug": "developers.cloudflare.com",
+      "description": "Cloudflare developer docs, APIs, and MCP servers.",
+      "has": {
+        "webmcp": true,
+        "skills": true,
+        "api": true,
+        "mcp": true,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-18",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": true
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": true
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": true
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": true
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://zoom.us",
+      "slug": "zoom.us",
+      "description": "Video meetings, phone, and chat.",
+      "has": {
+        "webmcp": false,
+        "skills": true,
+        "api": false,
+        "mcp": true,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-18",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": false
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": true
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": true
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://shopify.dev",
+      "slug": "shopify.dev",
+      "description": "Shopify developer docs and references.",
+      "has": {
+        "webmcp": false,
+        "skills": true,
+        "api": false,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-18",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": false
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": true
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://beacon.host",
+      "slug": "beacon.host",
+      "description": "Publish websites to a live URL. Use for hosting and skill-shaped publishing.",
+      "has": {
+        "webmcp": false,
+        "skills": true,
+        "api": true,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-18",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": true
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": true
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": true
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": true
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://developers.openai.com",
+      "slug": "developers.openai.com",
+      "description": "OpenAI API docs, models, and developer references.",
+      "has": {
+        "webmcp": true,
+        "skills": false,
+        "api": false,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-18",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": true
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://supabase.com",
+      "slug": "supabase.com",
+      "description": "Host Postgres, auth, and storage with instant APIs.",
+      "has": {
+        "webmcp": false,
+        "skills": true,
+        "api": true,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": true
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": true
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://netlify.com",
+      "slug": "netlify.com",
+      "description": "Deploy web apps with serverless functions and edge.",
+      "has": {
+        "webmcp": false,
+        "skills": true,
+        "api": true,
+        "mcp": true,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": true
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": true
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": true
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://nextjs.org",
+      "slug": "nextjs.org",
+      "description": "React framework docs, routing, and rendering guides.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": true,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": true
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://stripe.dev",
+      "slug": "stripe.dev",
+      "description": "Stripe developer docs, APIs, and checkout references.",
+      "has": {
+        "webmcp": true,
+        "skills": false,
+        "api": true,
+        "mcp": true,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": true
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": true
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": true
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://omio.com",
+      "slug": "omio.com",
+      "description": "Compare and book trains, buses, and flights.",
+      "has": {
+        "webmcp": true,
+        "skills": false,
+        "api": false,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": false
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": true
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://target.com",
+      "slug": "target.com",
+      "description": "Shop clothing, home goods, electronics, and groceries.",
+      "has": {
+        "webmcp": true,
+        "skills": false,
+        "api": false,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": true
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://developers.notion.com",
+      "slug": "developers.notion.com",
+      "description": "Notion API docs and integration guides.",
+      "has": {
+        "webmcp": false,
+        "skills": true,
+        "api": false,
+        "mcp": true,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": true
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": true
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": true
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": true
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://algolia.com",
+      "slug": "algolia.com",
+      "description": "Search API docs for sites and product discovery.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": false,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://api.slack.com",
+      "slug": "api.slack.com",
+      "description": "Slack API docs, events, and bot building.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": false,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://appwrite.io",
+      "slug": "appwrite.io",
+      "description": "Backend APIs for auth, databases, and storage.",
+      "has": {
+        "webmcp": false,
+        "skills": true,
+        "api": false,
+        "mcp": true,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": true
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": true
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": true
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://auth0.com",
+      "slug": "auth0.com",
+      "description": "Identity docs for login, tokens, and access control.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": false,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://bun.sh",
+      "slug": "bun.sh",
+      "description": "Fast JavaScript runtime, bundler, and package manager.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": false,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://clerk.com",
+      "slug": "clerk.com",
+      "description": "Add sign-in, sign-up, and user management to apps.",
+      "has": {
+        "webmcp": true,
+        "skills": true,
+        "api": true,
+        "mcp": true,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": true
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": true
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": true
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": true
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": true
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://cloud.google.com",
+      "slug": "cloud.google.com",
+      "description": "Google Cloud docs, APIs, and console references.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": true,
+        "mcp": false,
+        "auth": true,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": false
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": true
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": true
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://deno.com",
+      "slug": "deno.com",
+      "description": "JavaScript runtime docs, deploy, and KV storage.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": true,
+        "mcp": false,
+        "auth": true,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": false
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": true
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": true
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://docs.github.com",
+      "slug": "docs.github.com",
+      "description": "GitHub docs for Actions, APIs, and workflows.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": false,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://expressjs.com",
+      "slug": "expressjs.com",
+      "description": "Minimal Node web framework routing and middleware.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": false,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://fly.io",
+      "slug": "fly.io",
+      "description": "Deploy apps on edge servers close to users.",
+      "has": {
+        "webmcp": true,
+        "skills": true,
+        "api": true,
+        "mcp": true,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": true
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": true
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": true
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": true
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": true
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://framer.com",
+      "slug": "framer.com",
+      "description": "Design and publish sites with live pages.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": false,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://gitbook.com",
+      "slug": "gitbook.com",
+      "description": "Publish docs with AI search and integrations.",
+      "has": {
+        "webmcp": true,
+        "skills": true,
+        "api": true,
+        "mcp": true,
+        "auth": true,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": true
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": true
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": true
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": true
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": true
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://github.com",
+      "slug": "github.com",
+      "description": "Host code, review pull requests, and automate with Actions.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": false,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://gitlab.com",
+      "slug": "gitlab.com",
+      "description": "Host code and run CI/CD pipelines with built-in DevOps.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": false,
+        "mcp": false,
+        "auth": true,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": false
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": true
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://graphql.org",
+      "slug": "graphql.org",
+      "description": "GraphQL spec, queries, and schema guides.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": false,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://huggingface.co",
+      "slug": "huggingface.co",
+      "description": "Models, datasets, and inference APIs for ML.",
+      "has": {
+        "webmcp": false,
+        "skills": true,
+        "api": true,
+        "mcp": false,
+        "auth": true,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": false
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": true
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": true
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": true
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://indeed.com",
+      "slug": "indeed.com",
+      "description": "Search jobs and post openings for hiring.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": false,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://kotlinlang.org",
+      "slug": "kotlinlang.org",
+      "description": "Kotlin language docs for JVM and Android.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": false,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://linkedin.com",
+      "slug": "linkedin.com",
+      "description": "Professional profiles, jobs, and hiring tools.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": true,
+        "mcp": false,
+        "auth": true,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": false
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": true
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": true
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://neon.tech",
+      "slug": "neon.tech",
+      "description": "Serverless Postgres with branching and autoscaling.",
+      "has": {
+        "webmcp": false,
+        "skills": true,
+        "api": true,
+        "mcp": true,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": true
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": true
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": true
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": true
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://nodejs.org",
+      "slug": "nodejs.org",
+      "description": "JavaScript runtime docs, APIs, and release guides.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": false,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://nuxt.com",
+      "slug": "nuxt.com",
+      "description": "Vue framework docs for SSR and static sites.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": true,
+        "mcp": true,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": true
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": true
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": true
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://posthog.com",
+      "slug": "posthog.com",
+      "description": "Product analytics, flags, and session replay.",
+      "has": {
+        "webmcp": true,
+        "skills": false,
+        "api": false,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": true
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://prettier.io",
+      "slug": "prettier.io",
+      "description": "Code formatter options and editor setup.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": false,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://prisma.io",
+      "slug": "prisma.io",
+      "description": "ORM and database toolkit docs for Node and Bun.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": false,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": false
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://react.dev",
+      "slug": "react.dev",
+      "description": "React docs, hooks reference, and UI patterns.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": false,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://readme.com",
+      "slug": "readme.com",
+      "description": "Interactive API docs and developer hubs.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": false,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://render.com",
+      "slug": "render.com",
+      "description": "Host web services, databases, and static sites.",
+      "has": {
+        "webmcp": true,
+        "skills": true,
+        "api": true,
+        "mcp": true,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": true
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": true
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": true
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": true
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": true
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://replicate.com",
+      "slug": "replicate.com",
+      "description": "Run open-source AI models through one API.",
+      "has": {
+        "webmcp": true,
+        "skills": true,
+        "api": true,
+        "mcp": true,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": true
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": true
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": true
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": true
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://resend.com",
+      "slug": "resend.com",
+      "description": "Send transactional email through a developer API.",
+      "has": {
+        "webmcp": false,
+        "skills": true,
+        "api": true,
+        "mcp": true,
+        "auth": true,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": true
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": true
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": true
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": true
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": true
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://sanity.io",
+      "slug": "sanity.io",
+      "description": "Structured content APIs and studio authoring.",
+      "has": {
+        "webmcp": false,
+        "skills": true,
+        "api": true,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": true
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": true
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://sentry.io",
+      "slug": "sentry.io",
+      "description": "Error tracking and performance monitoring for apps.",
+      "has": {
+        "webmcp": true,
+        "skills": true,
+        "api": false,
+        "mcp": true,
+        "auth": true,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": true
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": true
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": true
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": true
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://vitejs.dev",
+      "slug": "vitejs.dev",
+      "description": "Build tool docs for fast frontend bundling.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": false,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://zapier.com",
+      "slug": "zapier.com",
+      "description": "Connect apps and automate workflows without code.",
+      "has": {
+        "webmcp": true,
+        "skills": true,
+        "api": true,
+        "mcp": true,
+        "auth": false,
+        "ask": false
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": true
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": true
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": true
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": true
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "origin": "https://context7.com",
+      "slug": "context7.com",
+      "description": "Fresh library docs with an API, MCP server, and queryable answers.",
+      "has": {
+        "webmcp": false,
+        "skills": true,
+        "api": true,
+        "mcp": true,
+        "auth": false,
+        "ask": true
+      },
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": "",
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": true
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": true
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": true
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": true
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "origin": "https://cursor.com",
+      "slug": "cursor.com",
+      "description": "AI code editor docs, features, and setup guides.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": true,
+        "mcp": false,
+        "auth": true,
+        "ask": false
+      },
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": true
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": true
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ],
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": ""
+    },
+    {
+      "origin": "https://replit.com",
+      "slug": "replit.com",
+      "description": "Build and host apps in the browser with AI help.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": false,
+        "mcp": false,
+        "auth": false,
+        "ask": false
+      },
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ],
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": ""
+    },
+    {
+      "origin": "https://mintlify.com",
+      "slug": "mintlify.com",
+      "description": "Beautiful docs hosting with AI search and APIs.",
+      "has": {
+        "webmcp": true,
+        "skills": true,
+        "api": false,
+        "mcp": false,
+        "auth": true,
+        "ask": false
+      },
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": true
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": false
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": true
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": true
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ],
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": ""
+    },
+    {
+      "origin": "https://openrouter.ai",
+      "slug": "openrouter.ai",
+      "description": "One API for hundreds of AI models.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": true,
+        "mcp": true,
+        "auth": false,
+        "ask": false
+      },
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": true
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": true
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": false
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ],
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": ""
+    },
+    {
+      "origin": "https://logto.io",
+      "slug": "logto.io",
+      "description": "Open-source auth with docs and SDKs.",
+      "has": {
+        "webmcp": false,
+        "skills": false,
+        "api": true,
+        "mcp": false,
+        "auth": true,
+        "ask": false
+      },
+      "signals": [
+        {
+          "key": "file",
+          "label": "site file",
+          "blurb": "owner claim + trigger text",
+          "ok": false
+        },
+        {
+          "key": "llms",
+          "label": "llms.txt",
+          "blurb": "docs index for agents",
+          "ok": true
+        },
+        {
+          "key": "skillsIndex",
+          "label": "agent skills",
+          "blurb": "skill inventory",
+          "ok": false
+        },
+        {
+          "key": "skillMd",
+          "label": "skill.md",
+          "blurb": "skill instructions",
+          "ok": false
+        },
+        {
+          "key": "apiCatalog",
+          "label": "api catalog",
+          "blurb": "service catalog",
+          "ok": true
+        },
+        {
+          "key": "openapi",
+          "label": "openapi.json",
+          "blurb": "HTTP API spec",
+          "ok": false
+        },
+        {
+          "key": "mcp",
+          "label": "MCP server card",
+          "blurb": "MCP endpoint",
+          "ok": false
+        },
+        {
+          "key": "oauth",
+          "label": "oauth resource",
+          "blurb": "OAuth metadata",
+          "ok": true
+        },
+        {
+          "key": "agentCard",
+          "label": "agent card",
+          "blurb": "agent identity",
+          "ok": false
+        },
+        {
+          "key": "native",
+          "label": "native verbs",
+          "blurb": "callable page tools",
+          "ok": false
+        },
+        {
+          "key": "ask",
+          "label": "ask endpoint",
+          "blurb": "queryable docs",
+          "ok": false
+        }
+      ],
+      "state": "listed",
+      "reason": "",
+      "proof": {
+        "verified": "2026-10-19",
+        "ref": ""
+      },
+      "repo": "",
+      "path": ""
+    }
+  ]
+}

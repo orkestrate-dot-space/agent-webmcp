@@ -1,0 +1,89 @@
+# Commands
+
+Seven verbs, two doors. Lifecycle and authoring verbs
+mirror on CLI and MCP; composition is MCP-only. Piped
+output is JSON (`--json` forces it, `--plain` forces
+rows). Writes need `--yes`.
+
+## Lifecycle
+
+```bash
+agent-webmcp open <url>                  # attach, print handle
+agent-webmcp open --cdp http://127.0.0.1:9222 <url>
+# fresh tab in that browser (per-call cdp, then daemon, then 9222/9229)
+agent-webmcp list <handle>               # rows on TTY, JSON piped
+agent-webmcp list <handle> <tool>        # full record + schema
+agent-webmcp close <handle> --yes        # release one session
+agent-webmcp close --all --yes           # sweep best-effort
+```
+
+| Command              | Output                                    |
+| -------------------- | ----------------------------------------- |
+| `open`               | `{handle, url, toolCount, reapplied,`     |
+|                      | `skipped}` — `toolCount` is point-in-time |
+| `list`               | name/description rows, or one full record |
+| `close <handle>`     | `{closed:[handle]}`                       |
+| `close --all`        | `{closed[], failed[]}` per handle         |
+
+`open` needs an absolute http(s) URL. `toolCount: 0`
+means list again — pages expose tools as they load.
+`--all` never aborts on one dead browser; failures land
+in `failed[]` with per-handle reasons. Close kills only
+browsers the engine launched, never foreign ones.
+
+## Authoring
+
+```bash
+agent-webmcp register <handle> '<json-tool>' '<js-body>' \
+  --yes                          # author + fixture-prove + save
+agent-webmcp register <handle> '<json-tool>' '<js-body>' \
+  --timeout 10000 --yes          # custom proof budget (ms)
+agent-webmcp unregister <handle> <name> --yes
+# drop one live authored tool (files stay)
+```
+
+| Result       | Meaning                                   |
+| ------------ | ----------------------------------------- |
+| `{registered, handle, persisted:true}` | proved and saved |
+| `fixture failed (…) — tool rolled back,` | live tool removed, |
+| `nothing persisted.` | files never written            |
+| `{unregistered, handle}` | live tool dropped, files kept |
+
+`register` rejects pre-dial (bad names, empty
+descriptions, non-object schemas, empty bodies) and
+fails loud on page refusals. `unregister` refuses
+page-native tools — only session-authored names qualify.
+See [Custom tools](/docs/custom-tools) for the spec
+shape and the five rules.
+
+## Composition (MCP only)
+
+```bash
+agent-webmcp mcp serve               # serve the 7 tools
+agent-webmcp mcp serve --registry DIR
+# pin the tool root (stable across proxy harnesses)
+agent-webmcp mcp serve --consequential allow
+# trusted loop: mutating tools run free (default ask
+# needs confirm:true per call, deny blocks them)
+agent-webmcp mcp list                # inspect the surface
+```
+
+`search {query, handles?}` and
+`execute {handle?, sessions?, code, timeoutMs?,
+maxToolCalls?, maxChars?, maxResultChars?}` have no CLI
+mirror. See [Codemode](/docs/codemode) for shapes,
+budgets, and failure codes.
+
+## Utility doors
+
+```bash
+agent-webmcp doctor                  # environment report
+agent-webmcp skill show              # version-matched contract
+agent-webmcp --version               # expect 0.1.0
+agent-webmcp --help                  # usage
+```
+
+Exits: `0` ok, `2` usage — unknown commands, missing
+args, missing `--yes` (never retry as-is), `1` failure
+with the message on stderr. Unknown MCP tool names fail
+as `isError` results, never as throws.

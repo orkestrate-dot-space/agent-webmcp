@@ -1,0 +1,56 @@
+import { CodeBlock } from "../code-block";
+
+# Publishing your site
+
+Serve one file on your domain and agents can find, drive,
+and delegate to your site. Presence is the claim: only you
+can serve it, so nothing stands between you and a listing
+except the scan.
+
+```bash
+curl -sS https://yourdomain.com/.well-known/agent-webmcp.json | jq .
+```
+
+## The file
+
+Serve `/.well-known/agent-webmcp.json` as `application/json`,
+publicly cacheable. Strict JSON. Three fields:
+
+```json
+{
+  "version": 1,
+  "domain": "example.com",
+  "description": "Book trains, buses and flights. Use for quotes and checkout."
+}
+```
+
+- `version` must be `1`. Unknown versions warn; known fields
+  still serve.
+- `domain` must equal the serving host, or the file drops.
+  This is the whole claim — nothing else proves ownership.
+- `description` is trigger text (≤140 chars, plain words).
+  It tells an agent whether to open the page, and doubles as
+  the task the prover checks. Write what the site is for, not
+  marketing.
+
+Everything else an agent can use is probed, never declared:
+publish an agent-skills index, `llms.txt`, API or MCP cards,
+and the scan finds them on its own. Never declare verbs
+(live enumeration is truth), auth mechanics, credentials,
+or endpoints — unknown fields are ignored.
+
+## Verify
+
+Check the file resolves with the right content type:
+
+```bash
+curl -sS -D- -o/dev/null https://yourdomain.com/.well-known/agent-webmcp.json
+curl -sS https://yourdomain.com/.well-known/agent-webmcp.json | jq .
+```
+
+Then open `https://agent-webmcp.vercel.app/sites/yourdomain`
+— the page scans the domain and the row appears, with
+whatever the scan found. Re-open any time to re-scan;
+`proof.verified` always shows the last scan. See
+[custom tools](/docs/custom-tools) for how verbs prove, and
+[security](/docs/security) for what never ships.

@@ -1,0 +1,147 @@
+import { CodeBlock } from "../code-block";
+
+# Custom tools
+
+`register` authors a spec plus a plain-JS body onto the
+session page. The engine compiles the body debugger-side
+(CSP-exempt), proves it with a fixture, then persists it
+as files. Every later `open` on that origin re-applies
+them.
+
+```bash
+agent-webmcp register $H '<json-tool>' '<js-body>' --yes
+# {"registered":"<name>","handle":"s_…","persisted":true}
+```
+
+## Discovery first
+
+The engine cannot inspect pages. Before any `register`,
+bring a discovery bundle from your driver (harness
+browser tools, snapshot plus eval, trace file, page
+source). Sufficient:
+
+- `url`, `title`, scoped snapshot, target-subtree
+  excerpts
+- `candidate_hooks`: window functions, forms, fetch
+  endpoints, plus the full schema for the chosen tool
+- `console_errors[]`, `flow_steps[]`
+
+Ranked best to worst: live snapshot plus eval plus
+network, then snapshot plus markdown plus bodies, then
+trace-derived API shapes. Snapshot or text alone is
+**insufficient** — no hooks, no schemas, do not author
+from it.
+
+Binding order matters. Capture in order:
+
+1. **Viewport width** (`window.innerWidth`) — responsive
+   layouts hide entire UIs below breakpoints.
+2. **Responsive variants** — query every candidate root;
+   note which layout is live (desktop aside vs mobile
+   panel vs none).
+3. **Visibility primitives** — rect-based
+   (`getBoundingClientRect` plus computed style). Never
+   `offsetParent`: fixed elements always read null.
+4. Only then draft spec plus body: prefer page APIs over
+   DOM, feature-detect, fail naming what moved.
+
+## The spec and the body
+
+The spec is the standard shape — no `title` field:
+
+<CodeBlock
+  lang="json"
+  title="spec.json"
+  code={`{
+  "name": "priceOf",
+  "description": "What it changes plus what it returns.",
+  "inputSchema": {
+    "type": "object",
+    "properties": { "sku": { "type": "string" } },
+    "required": ["sku"],
+    "additionalProperties": false
+  },
+  "fixtureInput": { "sku": "demo-1" }
+}`}
+/>
+
+Optional keys: `annotations`, `fixtureInput`, `strict`,
+`consequential`. Names match
+`^[A-Za-z0-9_.-]{1,128}$`. Duplicates, empty names,
+empty descriptions, non-object schemas, and empty
+bodies fail pre-dial.
+
+The body is a plain-JS function expression. No imports,
+no Effect, no `eval`, no driver idioms. Five rules for
+strong tools:
+
+- **Describe effects, not hopes** — what it changes
+  plus what it returns.
+- **Closed schemas** — `additionalProperties: false`
+  with a real `required[]`.
+- **Always include `fixtureInput`** — a tool without
+  one is a rumor (consequential tools excepted:
+  hand-prove those, never auto-run).
+- **Verify effects, not echoes** — read back the
+  changed state; never trust `{saved: true}`.
+- **Mark consequential tools** — `consequential: true`
+  needs host confirmation; `readOnlyHint` never
+  bypasses it.
+
+## Proving and persistence
+
+Registration succeeding proves nothing — one fixture
+invoke proves. For stateful tools, prove **both**
+transitions (closed→open *and* open→open): fixtures
+that pass on one branch are luck, not coverage. For
+chat-like widgets, gate the fixture read on a settled
+signal (the reply landed, the typing indicator
+cleared) — an early read asserts against a loading
+skeleton.
+
+```bash
+# variant handling: probe every candidate root,
+# record which layout answered, fail loud otherwise
+agent-webmcp register $H \
+  '{"name":"chatSend","description":"Send a chat message
+    and return the settled reply text.",
+    "inputSchema":{"type":"object","properties":
+      {"text":{"type":"string"}},"required":["text"],
+      "additionalProperties":false},
+    "fixtureInput":{"text":"hello"}}' \
+  '(async ({ text }) => { … })' --yes
+```
+
+A failed fixture rolls back the live tool and persists
+nothing: `fixture failed (…) — tool rolled back,
+nothing persisted.` Consequential tools skip auto-proof
+entirely — hand-prove those.
+
+Every success persists to
+`<root>/<origin-slug>/<name>/{spec.json,body.js}`.
+Next `open` on that origin re-applies them
+(`reapplied[]` in the output). Collisions lose loudly
+to page-native tools; refused tools land in `skipped[]`
+with reasons, files kept. `list` marks live authored
+tools (`authored: true`, file age, `staleSuspect` when
+a call rotted).
+
+## Rot and recovery
+
+Pages move under you. `execute` failures that smell
+like rot mark the tool `staleSuspect` (visible in
+`list`): the page refused at runtime, or the tool
+vanished from the live tool list. Recovery is
+re-register: refresh discovery, author again, the new
+files overwrite the old.
+
+```bash
+agent-webmcp unregister $H <name> --yes   # live only
+rm -r <root>/<origin-slug>/<name>         # files stay
+# …until you delete them. Deletion is rm, your call.
+```
+
+`unregister` refuses page-native tools — only
+session-authored names unregister. Dropping the live
+tool never deletes the files; `close` drops everything
+live but the library outlives the page.

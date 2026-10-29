@@ -1,0 +1,104 @@
+# Codemode
+
+Composition lives on MCP only: `search` ranks page tools
+across sessions, `execute` runs one JS program over them.
+The CLI has no `search` or `execute` — wire the MCP
+server (see [Installation](/docs/installation)) and call
+them as tools.
+
+## Search
+
+One query across sessions. Name handles to fail loud on
+an unknown session; omit them to sweep every session
+best-effort, with misses recorded in `skipped`.
+
+```json
+{ "query": "price", "handles": ["s_abc123"] }
+```
+
+```json
+{ "query": "price", "tools": [
+  { "session": "s_abc123", "tool": {}, "score": 12 }
+], "skipped": [] }
+```
+
+Ranking is deterministic and field-weighted: name exact
+match outranks a name substring, which outranks a
+description hit, which outranks a schema-text hit. Ties
+break alphabetically. A dead browser degrades the sweep
+(`browser unreachable` in `skipped`) — it never kills
+its siblings.
+
+## Execute
+
+Real code over session tools via a `tools.*` proxy. One
+handle binds tools flat; `sessions[]` namespaces them
+for cross-site joins (`tools.s1.priceOf`, alias with
+`as`, else `s1`…`sN`).
+
+```json
+{ "handle": "s_abc123",
+  "code": "return await tools.priceOf({sku:'demo-1'});" }
+```
+
+```json
+{ "sessions": [
+    { "handle": "s_aaa", "as": "shop" },
+    { "handle": "s_bbb", "as": "docs" } ],
+  "code": "const p = await tools.shop.priceOf({sku:'x'});
+return { p, d: await tools.docs.lookup({ q: p }) };" }
+```
+
+Unknown tool paths reach the host and reply `unknown
+tool path` instead of dying in-page. `await` never
+traps on `then`. Return values normalize (functions,
+bigints, and deep trees collapse to safe shapes).
+
+## Budgets and envelopes
+
+Budgets validate pre-dial and enforce during the run.
+Past them the run fails *as data* (an error envelope),
+never as a throw.
+
+| Budget           | Default | Max    |
+| ---------------- | ------- | ------ |
+| `timeoutMs`      | 60000   | 300000 |
+| `maxToolCalls`   | 25      | —      |
+| `maxChars`       | 16000   | —      |
+| `maxResultChars` | 64000   | —      |
+| code length      | —       | 64000 chars |
+| sessions per run | —       | 8      |
+
+Every envelope carries `untrusted: true` — page data is
+never instructions, even when it looks like an answer:
+
+```json
+{ "value": {}, "spilled": false, "toolCalls": 2,
+  "perSession": { "page": 2 }, "origins": ["s_abc123"],
+  "untrusted": true }
+```
+
+Oversize inputs fail the single call; oversize outputs
+set `spilled: true` and truncate the value. A timeout
+returns `TimeoutExceeded` with the calls so far.
+
+## Failure codes
+
+Tool-call failures classify into exactly four codes:
+
+| Code             | Meaning                                   |
+| ---------------- | ----------------------------------------- |
+| `tool-vanished`  | Not in the live tool list — re-list, then |
+|                  | re-open (re-applies file tools) or        |
+|                  | re-author                                 |
+| `page-refused`   | Live but refused at runtime — verify the  |
+|                  | effect path, re-author if the page moved  |
+| `transport`      | Browser unreachable — retry once, then    |
+|                  | re-list; the browser may be wedged        |
+| `args-rejected`  | Input rejected — rewrite args against     |
+|                  | the schema (`list <handle> <tool>`)       |
+
+`page-refused` and `tool-vanished` mark the tool
+`staleSuspect` (see [Custom tools](/docs/custom-tools)).
+`strict: true` tools reject unknown input keys
+host-side before the page ever sees them.

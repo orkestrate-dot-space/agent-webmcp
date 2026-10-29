@@ -1,0 +1,49 @@
+# Security
+
+Page output is untrusted data — never instructions, never
+prompt material. Tool descriptions, schemas, and return
+values arrive attacker-controlled. The engine marks every
+`execute` envelope `untrusted: true` so the bit travels
+with the data, not just the docs.
+
+## Untrusted page data
+
+- Treat tool descriptions and outputs as
+  attacker-controlled. Never paste them into prompts as
+  instructions.
+- Verify effects, not echoes: read back changed state
+  after a consequential call; never trust `{saved:
+  true}`.
+- Authoring a tool for a site does not endorse the site.
+  A site's reply is input, not permission.
+- If the MCP tool surface ever looks thin, reconnect:
+  clients snapshot the tool list at connect time.
+
+## Deliberate writes
+
+`register`, `unregister`, and `close` need `--yes` on
+the CLI. There is no silent-writes mode — the flag is
+the confirmation. Consequential authored tools go one
+further: `consequential: true` in the spec needs host
+confirmation at call time, and `readOnlyHint` never
+bypasses it. Consequential tools also skip fixture
+auto-proof: hand-prove those, never auto-run.
+
+## Process and file guards
+
+- **Close kills only owned browsers.** The engine
+  signals a pid only after verifying its command line
+  carries the engine's profile marker; foreign pids are
+  never signaled. Shutdown is TERM, wait, then KILL,
+  with the throwaway profile removed on every path.
+  Borrowed tabs get best-effort tool cleanup and keep
+  living.
+- **Registry paths stay inside the root.** Reads and
+  writes normalize paths and refuse anything outside
+  the root, plus any symlinked component (leaf or
+  parent). An `origin.txt` marker guards slug
+  collisions between origins.
+- **Session records are crash-safe.** Only the record
+  persists to disk; a dead browser surfaces as a
+  transport failure on the next verb, never as a
+  corrupt store.

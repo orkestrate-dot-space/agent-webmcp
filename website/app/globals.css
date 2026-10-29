@@ -1,0 +1,383 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* Design tokens after vercel.com/design.md (VBG): exact oklch values,
+   implicit light/dark through light-dark(), Geist type roles. */
+
+:root {
+  color-scheme: light dark;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+
+  --aw-bg: light-dark(oklch(1 0 0), oklch(0 0 0));
+  --aw-raised: light-dark(oklch(0.984 0 0), oklch(0.027 0 0));
+  --aw-ink: light-dark(oklch(0.205 0 0), oklch(0.946 0 0));
+  --aw-ink-2: light-dark(oklch(0.42 0 0), oklch(0.706 0 0));
+  --aw-line: light-dark(oklch(0 0 0 / 0.1), oklch(1 0 0 / 0.13));
+  --aw-line-2: light-dark(oklch(0 0 0 / 0.081), oklch(1 0 0 / 0.09));
+  --aw-line-strong: light-dark(oklch(0 0 0 / 0.44), oklch(1 0 0 / 0.54));
+  --aw-hover: light-dark(oklch(0 0 0 / 0.05), oklch(1 0 0 / 0.07));
+  --aw-focus: light-dark(oklch(0.5761 0.2508 258.23), oklch(0.717 0.1648 250.794));
+
+  /* Terminal palette: Vercel docs light/dark theme values verbatim,
+     mapped onto our tokenizer classes (their TextMate scopes → ours):
+     keys/keywords pink, strings and flags green, functions violet,
+     numbers blue, variables plain. */
+  --term-key: light-dark(#D6409F, #FF4D8D);
+  --term-str: light-dark(#067A6E, #00CA50);
+  --term-flag: light-dark(#067A6E, #00CA50);
+  --term-kw: light-dark(#D6409F, #FF4D8D);
+  --term-fn: light-dark(#6E56CF, #C472FB);
+  --term-num: light-dark(#0070C0, #47A8FF);
+  --term-plain: light-dark(#171717, #EDEDED);
+  --term-dim: light-dark(#6B7280, #A1A1A1);
+
+  --aw-sans: var(--font-geist-sans), "Geist", ui-sans-serif, system-ui,
+    "Segoe UI", Roboto, sans-serif;
+  --aw-mono: var(--font-geist-mono), "Geist Mono", ui-monospace, SFMono-Regular,
+    Menlo, Consolas, monospace;
+  /* shadcn bridge: shadcn vars point at our tokens (which already carry
+     both modes via light-dark()), so shadcn components follow the site
+     theme with no .dark class needed. Source of truth stays above. */
+  --background: var(--aw-bg);
+  --foreground: var(--aw-ink);
+  --card: var(--aw-raised);
+  --card-foreground: var(--aw-ink);
+  --popover: var(--aw-bg);
+  --popover-foreground: var(--aw-ink);
+  --primary: var(--aw-ink);
+  --primary-foreground: var(--aw-bg);
+  --secondary: var(--aw-raised);
+  --secondary-foreground: var(--aw-ink);
+  --muted: var(--aw-raised);
+  --muted-foreground: var(--aw-ink-2);
+  --accent: var(--aw-hover);
+  --accent-foreground: var(--aw-ink);
+  --destructive: light-dark(oklch(0.577 0.245 27.325), oklch(0.704 0.191 22.216));
+  --border: var(--aw-line);
+  --input: var(--aw-line);
+  --ring: var(--aw-focus);
+  --radius: 0.625rem;
+}
+
+@theme inline {
+  --color-canvas: var(--aw-bg);
+  --color-raised: var(--aw-raised);
+  --color-ink: var(--aw-ink);
+  --color-ink-2: var(--aw-ink-2);
+  --color-line: var(--aw-line);
+  --color-line-2: var(--aw-line-2);
+  --color-line-strong: var(--aw-line-strong);
+  --color-hover: var(--aw-hover);
+  --color-focus: var(--aw-focus);
+
+  --font-sans: var(--aw-sans);
+  --font-mono: var(--aw-mono);
+
+  --text-display: 3rem;
+  --text-display--line-height: 56px;
+  --text-display--letter-spacing: -0.06em;
+  --text-display-sm: 2.5rem;
+  --text-display-sm--line-height: 48px;
+  --text-display-sm--letter-spacing: -0.06em;
+  --text-lede: 1.125rem;
+  --text-lede--line-height: 28px;
+  --text-meta: 0.8125rem;
+  --text-meta--line-height: 18px;
+  --font-heading: var(--font-sans);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+  --shadow-pop: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px rgb(0 0 0 / 0.35);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-padding-block-start: 32px;
+    /* Paint the overscroll region the page color so any residual
+       system bounce is invisible, and stop the document itself from
+       rubber-banding: the sticky header is in-flow, so a document
+       bounce drags it down with the content (the fixed sidebar stays,
+       which is why only nav + main visibly shift). Inner scrollers
+       keep their own bounce via overscroll-contain. */
+    background: var(--aw-bg);
+    overscroll-behavior: none;
+    @apply font-sans;
+  }  body {
+    font-family: var(--aw-sans);
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 24px;
+    font-feature-settings: "rlig" 1, "calt" 0, "ss11" 1;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    overscroll-behavior: none;
+    @apply bg-background text-foreground;
+  }
+
+  h1 {
+    margin: 0;
+    font-weight: 450;
+    text-wrap: balance;
+  }
+
+  p {
+    margin: 0;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: var(--aw-line-strong);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 4px;
+    transition: text-decoration-color 150ms ease;
+  }
+
+  a:hover {
+    text-decoration-color: currentColor;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--aw-focus);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  code {
+    font-family: var(--aw-mono);
+    font-size: 0.9em;
+    letter-spacing: -0.01em;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+  * {
+    @apply border-border outline-ring/50;
+  }
+}
+
+/* Docs reading hierarchy (studied against geistdocs): display-size titles,
+   16px body, airier section rhythm. Unlayered on purpose — must beat the
+   per-page text-[...] utilities until docs move to MDX. */
+#docs-main h1 {
+  font-size: 2.75rem;
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+}
+
+#docs-main h2 {
+  font-size: 1.5rem;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+  margin-top: 2.75rem;
+}
+
+#docs-main article > p,
+#docs-main > p {
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+#docs-main article li,
+#docs-main > ul li,
+#docs-main > ol li {
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+/* MDX pages render bare elements (no <article> wrapper like JSX pages),
+   so vertical rhythm lives here — MDX prose carries no margin classes.
+   Scoped to main's direct children: JSX content and the TOC rail are
+   never matched. */
+#docs-main > h1 {
+  margin-bottom: 1.5rem;
+}
+
+#docs-main > p,
+#docs-main > ul,
+#docs-main > ol,
+#docs-main > div {
+  margin-top: 1rem;
+}
+
+#docs-main > blockquote {
+  margin-top: 1rem;
+  border-left: 2px solid var(--aw-line-strong);
+  padding-left: 1rem;
+  color: var(--aw-ink-2);
+}
+
+/* Tables (after geistdocs: horizontal rules only, flush edges,
+   generous cells — never boxed grids). Bare <table> output from
+   remark-gfm; block-scrolls on narrow screens. */
+#docs-main table {
+  margin: 2em 0;
+  width: 100%;
+  max-width: 100%;
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+#docs-main thead {
+  border-bottom: 1px solid var(--aw-line);
+}
+
+#docs-main thead th {
+  padding: 0 0.6em 0.8em;
+  text-align: left;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--aw-ink);
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+#docs-main tbody tr {
+  border-bottom: 1px solid var(--aw-line);
+}
+
+#docs-main tbody tr:last-child {
+  border-bottom: 0;
+}
+
+#docs-main tbody td {
+  padding: 0.8em 0.6em;
+  vertical-align: baseline;
+}
+
+#docs-main th:first-child,
+#docs-main td:first-child {
+  padding-left: 0;
+}
+
+#docs-main th:last-child,
+#docs-main td:last-child {
+  padding-right: 0;
+}
+
+/* Copy-prompt button motion (animate skill: Feedback purpose, rare-use
+   tier). Transitions retarget cleanly under rapid clicks; hover lift is
+   gated to fine pointers; reduced motion keeps state legible. */
+.copy-prompt-btn {
+  transition: transform 160ms var(--ease-out);
+}
+
+.copy-prompt-btn:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .copy-prompt-btn:hover {
+    transform: translateY(-1px);
+  }
+
+  .copy-prompt-btn:hover:active {
+    transform: scale(0.97);
+  }
+}
+
+.copy-pop {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  opacity: 1;
+  transform: scale(1);
+  transition:
+    opacity 180ms var(--ease-out),
+    transform 180ms var(--ease-out);
+
+  @starting-style {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .copy-prompt-btn,
+  .copy-prompt-btn:hover,
+  .copy-prompt-btn:active {
+    transform: none;
+  }
+
+  .copy-pop {
+    transform: none;
+    transition: opacity 180ms ease;
+
+    @starting-style {
+      opacity: 0;
+    }
+  }
+}
+/* Rise entrance for fetched-in content (scan results): opacity +
+   a 4px settle, 200ms ease-out. Purpose is anti-jank only — the
+   content arrives after a fetch; reduced motion keeps the fade. */
+.rise {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 200ms var(--ease-out),
+    transform 200ms var(--ease-out);
+
+  @starting-style {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise {
+    transform: none;
+    transition: opacity 200ms ease;
+
+    @starting-style {
+      opacity: 0;
+    }
+  }
+}
+
+#docs-main p > code,
+#docs-main li > code,
+#docs-main td > code,
+#docs-main blockquote > code {
+  border: 1px solid var(--aw-line);
+  background-color: var(--aw-raised);
+  border-radius: 6px;
+  padding: 0.1em 0.35em;
+  white-space: nowrap;
+}
+

@@ -1,0 +1,55 @@
+# Troubleshooting
+
+Errors arrive as `{tool}: {detail}` messages — catchable
+and retryable. Stack traces and crashes are engine bugs:
+report the expression, do not retry blind.
+
+## Session errors
+
+| Message | Fix |
+| ------- | --- |
+| `no such session` (`open again — tabs never come back.`) | `open` again; the tab is gone |
+| `record is unparseable` (`close the handle and open again.`) | `close` the handle, `open` fresh |
+| `no debugger at <endpoint>` | Start an agent-browser daemon or pass `--cdp` (your driver skill knows it) |
+| `no browser reachable` | Same as above — the engine launches nothing itself |
+| `tab closed since open` | `open` again for a fresh tab |
+| `browser unreachable (record … kept)` | Start the browser back up; the record is kept |
+| `close needs <handle\|--all>`, `open needs <url>` | Pass the missing arg (exit 2, usage) |
+| `<verb> needs --yes (deliberate writes only)` | Add `--yes` to `register`, `unregister`, `close` |
+
+A thin MCP tool surface is usually a stale client
+snapshot, not a server fault: reconnect the MCP session
+and the nine tools re-list.
+
+## Authoring errors
+
+| Message | Fix |
+| ------- | --- |
+| `bad tool name '…'` | Match `^[A-Za-z0-9_.-]{1,128}$` |
+| `description is empty` / `code is empty` | Fill the missing field |
+| `inputSchema must be a JSON Schema object` | Pass an object schema, not an array or scalar |
+| `(spec rejects, pre-dial).` | The spec never reached the page — fix shape and retry |
+| `page refused: …` | The page rejected registration — refresh discovery (viewport, variants, hooks) and re-author |
+| `registered but absent from the list — page dropped it, nothing persisted.` | The page took then dropped the tool — re-author against fresh discovery |
+| `fixture failed (…) — tool rolled back, nothing persisted.` | The body failed its own fixture — fix the body, keep the spec; nothing was saved |
+| `'…' is not session-authored (native or unknown) — refusing` | `unregister` only drops authored tools; native tools stay |
+| `'…' still listed after unregister — page refused silently.` | Page kept the tool — record and page disagree, investigate before retrying |
+| `no controller (page navigated or never registered here)` | The page navigated away (tools die with navigation) — re-open to re-apply, then retry |
+
+Rot signal in `list`: `staleSuspect` means a call
+recently failed as `page-refused` or `tool-vanished`.
+Recovery is re-register against fresh discovery.
+
+## Composition errors
+
+| Message | Fix |
+| ------- | --- |
+| `pass handle or sessions.` | Pass one `handle` or a `sessions[]` array |
+| `at most 8 sessions per run: close something first.` | Drop to 8 or fewer sessions |
+| `bad timeoutMs: want 1-300000 ms` | Pick a timeout in range (default 60000) |
+| `bad maxToolCalls/maxChars/maxResultChars: want an integer ≥ 1` | Fix the named budget |
+| `code is … chars (max 64000): chunk it.` | Split the program |
+| `unknown tool path: …` | Re-list the session; the path is stale or namespaced wrong |
+| `TimeoutExceeded` / `ToolCallLimitExceeded` | Results so far travel with the diagnostic — narrow scope, raise the budget, rerun |
+| `no such session: <handle>` (search with handles) | Drop the dead handle or re-open it |
+| `browser unreachable` (search `skipped[]`) | One session died mid-sweep — the rest still ranked |

@@ -1,0 +1,66 @@
+# Introduction
+
+The web as your toolkit. agent-webmcp turns any live page
+into callable tools: open a page, use the tools it exposes,
+author the ones it lacks, chain tools across sites in code,
+close when done.
+
+```bash
+agent-webmcp open https://example.com   # a session handle
+agent-webmcp list <handle>              # the page's tools
+agent-webmcp close <handle> --yes       # release it
+```
+
+## How it works
+
+- **Sessions hold pages.** `open` attaches a page and returns
+  a handle. Every later verb names that handle. See
+  [Quick start](/docs/quick-start).
+- **Pages expose tools.** `list` shows what the page offers.
+  Never call a tool you have not listed.
+- **You author what is missing.** `register` adds a custom
+  tool to the page, proves it with a fixture, and saves it
+  as files. See [Custom tools](/docs/custom-tools).
+- **Code joins pages.** `execute` runs one program over
+  session tools, including cross-site joins. MCP only.
+  See [Codemode](/docs/codemode).
+
+The engine cannot inspect pages itself. Bring a discovery
+bundle from your browser driver (snapshot, eval, network,
+page source) and the agent carries that context across.
+Run engine plus driver side by side over MCP.
+
+## The seven verbs
+
+| Verb         | Door    | What it does                          |
+| ------------ | ------- | ------------------------------------- |
+| `open`       | CLI+MCP | Attach a page, get a handle           |
+| `list`       | CLI+MCP | Show a session's page tools           |
+| `search`     | MCP     | Rank tools across sessions            |
+| `register`   | CLI+MCP | Author a custom tool onto the page    |
+| `execute`    | MCP     | Run code over session tools           |
+| `close`      | CLI+MCP | Release sessions                      |
+| `unregister` | CLI+MCP | Drop one authored tool, live only     |
+
+Composition (`search`, `execute`) lives on MCP only. The
+CLI mirrors the lifecycle verbs. Piped output is JSON.
+Writes (`register`, `unregister`, `close`) need `--yes`.
+Exits: `0` ok, `2` usage (never retry as-is), `1` failure
+with the message on stderr.
+
+## Works with
+
+Any harness that can run a shell or speak MCP, plus a
+browser driver for discovery: agent-browser, chrome
+devtools MCP setups, trace files, page source. The engine
+never vendors a driver; servers never talk directly.
+
+## What it is not
+
+- **Not a driver.** Snapshots, clicks, and fills are your
+  harness's product, not this engine's.
+- **Not a hosted service.** No accounts, no registry
+  service. Self-hostable, MIT.
+- **Not an endorsement.** Authoring a tool for a site does
+  not bless the site. A site's reply is input, not
+  permission.
