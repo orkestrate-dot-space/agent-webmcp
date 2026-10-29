@@ -21,6 +21,12 @@ const nextConfig = {
   turbopack: {
     root: dirname(fileURLToPath(import.meta.url)),
   },
+  async redirects() {
+    return [
+      { source: '/sites', destination: '/agents', permanent: true },
+      { source: '/sites/:slug*', destination: '/agents/:slug*', permanent: true },
+    ];
+  },
 };
 
 export default withMDX(nextConfig);
