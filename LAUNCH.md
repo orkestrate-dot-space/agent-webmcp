@@ -23,7 +23,9 @@ Sequenced. Each step starts only when the previous is green. Steps marked
 ## 4. Docs (after the stranger passes)
 - README: real usage/install/verbs section (describe what was proven).
 - CHANGELOG: confirm the beta entry matches the shipped behavior.
-- Website: explicitly deferred to post-beta (no site on `main`).
+- Website: on `main` since e691b13 (docs site + Vercel Analytics),
+  deployed with `vercel deploy --prod` from the repo root
+  (Root Directory `website`; no remote branch builds it — CLI only).
 
 ## 5. Final vetting
 - Secrets scan across the branch; scratch cleanup.
