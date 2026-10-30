@@ -15,14 +15,12 @@ harness tools.
 
 ## Layout
 
-- `src/` — engine (server, sessions, transport, admission, catalog,
-  registry, runner)
-- `skills/agent-webmcp/` — the skill half (core + references)
+- `src/` — engine (server, sessions, transport, catalog, runner)
+- `skills/agent-webmcp/` — the skill half (core loop + reference)
 - `scripts/gate.ts` — the gate · `workers/sites-index` — directory API
 - `docs/` research · `specs/` launch spec · `space/` boards (previews ignored)
 
 ## Never commit
 
-Authored verbs (`spec.json`/`body.ts`/`body.js`/`stamp.json` — they live in
-the local registry, not here), secrets or credentials, `.env*` files,
+Legacy authored-tool files (`spec.json`/`body.ts`/`body.js`/`stamp.json` — the engine resolves verbs live-only; never create these), secrets or credentials, `.env*` files,
 build output (`dist/`, `.cloudflare/`), screenshots.

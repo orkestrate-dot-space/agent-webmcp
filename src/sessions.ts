@@ -1,7 +1,7 @@
 // Sessions: open/close over disk handles against a browser we
 // don't own. open mints a fresh tab ({url}) or borrows a live one
 // ({targetId}); close reaps ours, never theirs. Records live here,
-// nothing else does — no registry, no stamps.
+// nothing else does.
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { connect, discoverDaemonBrowser, discoverWs, type CdpConnection } from "./transport.ts";
@@ -18,7 +18,7 @@ const sessionRoot = (): string => `${tmpdir()}/agent-webmcp-sessions`;
 const HANDLE_RE = /^s_[0-9a-f]{12}$/;
 
 const recordPath = (handle: string): string => {
-  // Handles are engine-minted (open/attach); anything else shaped is a
+  // Handles are engine-minted (every open mints or borrows one);
   // traversal attempt, not a lookup miss — refuse before touching the fs.
   if (!HANDLE_RE.test(handle)) throw fail("bad-handle", `bad session handle '${handle.slice(0, 32)}'`, "handles come from open — pass one back unchanged.");
   return `${sessionRoot()}/${handle}.json`;
@@ -152,11 +152,11 @@ interface TargetInfo { readonly targetId: string; readonly type: string; readonl
 
 // Borrow a live tab the browser already owns. Some debuggers (Electron
 // app windows) refuse Target.createTarget, so open can never mint there —
-// attach meets the tab where it lives. The record is owned:false: close
-// detaches, never closes the tab.
+// it borrows the tab where it lives instead. The record is owned:false:
+// close detaches, never closes the tab.
 export async function attachSession(sel: AttachSelector, endpoint?: string): Promise<{ conn: CdpConnection; sessionId: string; opened: Opened }> {
   const { targetId, url } = sel;
-  if (targetId === undefined && url === undefined) throw fail("bad-args", "attach needs {targetId} or {url}.", "point at a live tab the browser already owns.");
+  if (targetId === undefined && url === undefined) throw fail("bad-args", "open needs exactly one of {url} or {targetId}.", "point at a live tab the browser already owns.");
   if (url !== undefined) {
     try { void new URL(url); } catch { throw fail("bad-url", `not a URL: ${url.slice(0, 120)}`, "pass an absolute http(s) URL."); }
   }
@@ -177,8 +177,8 @@ export async function attachSession(sel: AttachSelector, endpoint?: string): Pro
     }
     const attached = (await conn.send("Target.attachToTarget", { targetId: match.targetId, flatten: true })) as { sessionId: string };
     let parsed: URL;
-    try { parsed = new URL(match.url); } catch { throw fail("page", `attached tab has no usable URL: '${match.url.slice(0, 120)}'`, "attach a tab on an http(s) page."); }
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw fail("page", `attached tab is not a web page: '${match.url.slice(0, 120)}'`, "attach a tab on an http(s) page.");
+    try { parsed = new URL(match.url); } catch { throw fail("page", `borrowed tab has no usable URL: '${match.url.slice(0, 120)}'`, "borrow a live tab on an http(s) page."); }
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw fail("page", `borrowed tab is not a web page: '${match.url.slice(0, 120)}'`, "borrow a live tab on an http(s) page.");
     const handle = `s_${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
     const rec: SessionRecord = {
       handle, url: match.url, origin: parsed.origin, targetId: match.targetId, createdAt: Date.now(), owned: false,
@@ -206,8 +206,8 @@ export async function reattach(record: SessionRecord): Promise<{ conn: CdpConnec
     const alive = await discoverWs(httpEndpoint, 3000).then(() => true, () => false);
     if (!alive) throw fail("connect", `browser unreachable (record ${record.handle} kept) — start it again.`, "start an agent-browser daemon, or point --cdp at the browser.");
     dropRecord(record.handle);
-    const again = record.owned ? "open again." : "attach again.";
-    throw fail("page", `tab closed since ${record.owned ? "open" : "attach"} (record ${record.handle} dropped) — ${again}`, "open the url again for a fresh tab, or attach a live one.");
+    const again = record.owned ? "open again with {url}." : "open again with {targetId}.";
+    throw fail("page", `tab closed since ${record.owned ? "mint" : "borrow"} (record ${record.handle} dropped) — ${again}`, "open the url again for a fresh tab, or open again with {targetId} to borrow a live one.");
   }
 }
 
