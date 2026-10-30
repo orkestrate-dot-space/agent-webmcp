@@ -9,7 +9,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { catalogDetail, searchCatalog, type CatalogEntry } from "./catalog.ts";
 import { EngineFailed, fail } from "./result.ts";
-import { discoverDaemonBrowser, invokePageTool, listPageTools } from "./transport.ts";
+import { discoverDaemonBrowser, discoverWs, invokePageTool, listPageTools } from "./transport.ts";
 import { attachSession, closeSession, loadRecord, openSession, reattach, acquireTabLock, releaseTabLock } from "./sessions.ts";
 import { runCode, type CallFn, type PartialCall } from "./runner.ts";
 import { VERSION } from "./version.ts";
@@ -295,7 +295,15 @@ const handlers: Record<string, VerbHandler> = {
   },
 
   doctor: async () => {
-    const endpoint = await discoverDaemonBrowser();
+    // Same precedence as open: explicit env wins, then discovery.
+    // Never throws: an unanswered env endpoint reports unreachable.
+    const env = (process.env.AGENT_WEBMCP_CDP ?? "").trim();
+    let endpoint: string | undefined;
+    if (env !== "") {
+      try { await discoverWs(env, 5000); endpoint = env; } catch { endpoint = undefined; }
+    } else {
+      endpoint = await discoverDaemonBrowser();
+    }
     return {
       content: JSON.stringify({
         release: "beta", version: VERSION,
