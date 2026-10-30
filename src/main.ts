@@ -1,5 +1,4 @@
-// main: argument parse, one dispatch. piped=JSON, writes need --yes.
-// Exits 0 ok / 2 usage / 1 defect.
+// main: argument parse, one dispatch. Exits 0 ok / 2 usage / 1 defect.
 import { serveStdio } from "./server.ts";
 import { VERSION } from "./version.ts";
 
