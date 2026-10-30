@@ -166,24 +166,17 @@ export interface PageTool {
   readonly description: string;
   readonly inputSchema: Record<string, unknown>;
   readonly frameId: string;
-  readonly annotations: { readonly readOnly?: boolean; readonly untrustedContent?: boolean; readonly consequential?: boolean };
 }
 
 function toPageTool(t: {
-  name: unknown; description: unknown; inputSchema?: unknown; frameId: unknown; annotations?: unknown;
+  name: unknown; description: unknown; inputSchema?: unknown; frameId: unknown;
 }): PageTool {
   if (typeof t.name !== "string" || typeof t.frameId !== "string") throw fail("decode", "tool burst shape broke", "the page's tool catalog is malformed.");
-  const ann = (t.annotations ?? {}) as { readOnly?: unknown; readOnlyHint?: unknown; untrustedContent?: unknown; consequential?: unknown };
   return {
     name: t.name,
     description: typeof t.description === "string" ? t.description : "",
     inputSchema: typeof t.inputSchema === "object" && t.inputSchema !== null && !Array.isArray(t.inputSchema) ? t.inputSchema as Record<string, unknown> : { type: "object" },
     frameId: t.frameId,
-    annotations: {
-      ...(typeof ann.readOnly === "boolean" ? { readOnly: ann.readOnly } : typeof ann.readOnlyHint === "boolean" ? { readOnly: ann.readOnlyHint } : {}),
-      ...(typeof ann.untrustedContent === "boolean" ? { untrustedContent: ann.untrustedContent } : {}),
-      ...(typeof ann.consequential === "boolean" ? { consequential: ann.consequential } : {}),
-    },
   };
 }
 
