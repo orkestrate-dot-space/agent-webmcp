@@ -26,11 +26,10 @@ async function main(): Promise<void> {
   const [cmd, sub] = args;
   if (cmd === "--version" || cmd === "-V") { console.log(VERSION); return; }
   if (cmd === "doctor") {
-    const { discoverDaemonBrowser } = await import("./transport.ts");
-    const cdp = flag("--cdp");
+    const { discoverDaemonBrowser, discoverWs } = await import("./transport.ts");
+    const cdp = flag("--cdp") ?? ((process.env.AGENT_WEBMCP_CDP ?? "").trim() || undefined);
     let endpoint: string | undefined;
     try {
-      const { discoverWs } = await import("./transport.ts");
       if (cdp !== undefined) { await discoverWs(cdp, 5000); endpoint = cdp; }
       else endpoint = await discoverDaemonBrowser();
     } catch { endpoint = undefined; }
