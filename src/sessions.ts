@@ -111,6 +111,10 @@ export function releaseTabLock(targetId: string, handle: string): void {
 
 async function browserEndpoint(explicit?: string): Promise<string> {
   if (explicit !== undefined) return explicit;
+  // Ambient default for driver-managed browsers on a fixed port
+  // (desktop app, custom daemons). Explicit cdp always wins.
+  const env = (process.env.AGENT_WEBMCP_CDP ?? "").trim();
+  if (env !== "") return env;
   const found = await discoverDaemonBrowser();
   if (found === undefined) {
     throw fail("connect", "no browser reachable: start an agent-browser daemon or pass --cdp URL (your driver skill knows it).", "agent-browser open about:blank (daemon), or point --cdp at any CDP endpoint.");
