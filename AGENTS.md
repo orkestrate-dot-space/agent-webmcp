@@ -1,7 +1,7 @@
 # agent-webmcp
 
-Connect-only authoring layer for the agentic web (Bun + TypeScript, MIT).
-Six MCP verbs; page verbs live inside the `execute` dialect, never as flat
+Connect-only layer for the agentic web (Bun + TypeScript, MIT).
+Seven MCP verbs (open, list, execute, poll, close, skill, doctor); page verbs live inside the `execute` dialect, never as flat
 harness tools.
 
 ## Rules

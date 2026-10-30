@@ -21,17 +21,14 @@ const run = async (cmd: Array<string>): Promise<{ code: number; out: string }> =
   if (r.code !== 0) { console.error(r.out); fail("unit tests"); }
   pass("unit tests");
 }
-// 3. skill shape: SKILL.md + refs exist, frontmatter name matches dirname
+// 3. skill shape: SKILL.md exists, frontmatter name matches dirname
 {
-  const { readdirSync, readFileSync, existsSync } = await import("node:fs");
+  const { readFileSync, existsSync } = await import("node:fs");
   const root = import.meta.dir + "/../skills/agent-webmcp";
-  for (const rel of ["SKILL.md", "references/author.md", "references/drivers.md"]) {
-    if (!existsSync(`${root}/${rel}`)) fail(`skill-shape (missing ${rel})`);
-  }
+  if (!existsSync(`${root}/SKILL.md`)) fail("skill-shape (missing SKILL.md)");
   const core = readFileSync(`${root}/SKILL.md`, "utf8");
   const name = /^name:\s*(\S+)/m.exec(core)?.[1];
   if (name !== "agent-webmcp") fail("skill-shape (core name mismatch)");
-  void readdirSync;
   pass("skill-shape");
 }
 // 4. schema-object: every served inputSchema is a top-level object

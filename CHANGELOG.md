@@ -6,6 +6,19 @@ until 1.0: deleted paths fail loud naming the replacement, never silently.
 
 ## Unreleased
 
+**Breaking:** the registry is gone. No `registry/` reads or writes anywhere:
+`src/registry.ts`, `src/admission.ts`, `src/snippet.ts` (and their tests)
+deleted; verbs resolve live-only. `open` absorbs `attach` (`{url}` mints,
+`{targetId}` borrows — one verb, `owned` in the response). `skill` loses
+`search` and all `name`/`origin`/`capability` scoping: `skill` with no args
+returns the core loop, that is the whole skill surface. New verb `poll`
+reads back `execute {background:true}` runs (`{runId}` → running|done);
+long jobs no longer die on timeouts and never need polling loops. `doctor`
+drops the `registry` field. `list` output is name-sorted for cache
+stability. Session handles are allowlisted (`s_[0-9a-f]{12}`) — yesterday's
+traversal shape now fails as `bad-handle`.
+Old registry files on disk are inert (never read); delete them.
+
 **Breaking:** `skill` loses the `list` action — `search` with no query
 returns the grouped map instead (same shape). Codemode `search()`
 loses the `namespace` filter (sessions are already handle-scoped).

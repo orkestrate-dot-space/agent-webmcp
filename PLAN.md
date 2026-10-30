@@ -1,5 +1,12 @@
 # agent-webmcp slim-core build plan
 
+> Superseded in working tree (2026-10-30): registry/admission/proof
+> removed — engine serves live page verbs only, no authored verbs, no
+> stamps. `open` absorbs `attach`; new `poll` reads back
+> `execute {background:true}` runs; `skill` is show-core-only. See
+> CHANGELOG Unreleased. This file stays as the record of what shipped
+> in 0.2.0-beta.1, not as direction.
+
 ## 0. Objective
 
 A connect-only authoring layer for the agentic web, rebuilt clean-room on
