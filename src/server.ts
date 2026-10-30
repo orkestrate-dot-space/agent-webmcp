@@ -9,7 +9,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { catalogDetail, searchCatalog, type CatalogEntry } from "./catalog.ts";
 import { EngineFailed, fail } from "./result.ts";
-import { discoverDaemonBrowser, discoverWs, invokePageTool, listPageTools } from "./transport.ts";
+import { discoverDaemonBrowser, discoverWs, invokePageTool, listPageTools, pageApiPresent, webmcpSupported, type CdpConnection, type PageTool } from "./transport.ts";
 import { attachSession, closeSession, loadRecord, openSession, reattach, acquireTabLock, releaseTabLock } from "./sessions.ts";
 import { runCode, type CallFn, type PartialCall } from "./runner.ts";
 import { VERSION } from "./version.ts";
@@ -64,6 +64,45 @@ interface Prepared {
   release(): void;
 }
 
+// Live verbs with the WebMCP-less trap removed. A verbless page resolves
+// [] (nothing to call); a browser whose pages can never register tools
+// fails loud — otherwise open would report toolCount 0 and the skill
+// would blame the page. The page-API verdict is cached per endpoint:
+// the 4s probe runs once per browser, never per call.
+const webmcpCache = new Map<string, boolean>();
+async function pageApiCached(conn: CdpConnection, sessionId: string, endpoint: string | undefined): Promise<boolean> {
+  if (endpoint !== undefined) {
+    const known = webmcpCache.get(endpoint);
+    if (known !== undefined) return known;
+  }
+  const present = await pageApiPresent(conn, 3000, sessionId).catch(() => true);
+  if (endpoint !== undefined) webmcpCache.set(endpoint, present);
+  return present;
+}
+async function liveTools(conn: CdpConnection, sessionId: string, endpoint?: string): Promise<Array<PageTool>> {
+  let tools: Array<PageTool> | null = null;
+  try {
+    tools = await listPageTools(conn, 10000, sessionId);
+  } catch {
+    tools = null;
+  }
+  if (tools !== null && tools.length > 0) return tools;
+  if (tools === null) {
+    const supported = await webmcpSupported(conn, 5000, sessionId).catch(() => true);
+    if (!supported) {
+      throw fail("webmcp", "browser serves no WebMCP domain — its pages can never offer verbs.", "use a browser that serves page verbs (agent-browser manages this for you).");
+    }
+  }
+  // Empty burst here: either a verbless page, or a browser whose pages
+  // can never register verbs (stock Chromium: CDP domain present, page
+  // API absent). The probe tells them apart; cached per endpoint.
+  const present = await pageApiCached(conn, sessionId, endpoint);
+  if (!present) {
+    throw fail("webmcp", "pages in this browser cannot register verbs (page API absent — stock Chromium without --enable-features=WebMCP).", "relaunch with --enable-features=WebMCP, or use a browser that serves page verbs (agent-browser manages this for you).");
+  }
+  return [];
+}
+
 // Dial every ref's tab, burst its live verbs, wire one flat call map.
 // Nothing is read from or written to disk: what the page serves now
 // is the whole catalog, in a deterministic order for cache stability.
@@ -86,7 +125,7 @@ async function prepareRun(refs: Array<RunRef>, flat: boolean, perCallTimeoutMs: 
       }
       const { conn, sessionId } = await reattach(record);
       conns.push(conn);
-      const live = await listPageTools(conn, 10000, sessionId).catch(() => []);
+      const live = await liveTools(conn, sessionId, record.cdpEndpoint);
       for (const tool of [...live].sort((a, b) => a.name.localeCompare(b.name))) {
         const path = flat ? tool.name : `${ref.as}.${tool.name}`;
         entries.push({ path, description: tool.description, inputSchema: tool.inputSchema });
@@ -160,7 +199,7 @@ const handlers: Record<string, VerbHandler> = {
       : await openSession(url as string, cdp);
     const { conn, sessionId, opened } = started;
     try {
-      const native = await listPageTools(conn, 10000, sessionId).catch(() => []);
+      const native = await liveTools(conn, sessionId, opened.cdpUrl);
       return {
         content: JSON.stringify({
           handle: opened.handle, url: opened.url, toolCount: native.length,
@@ -178,7 +217,7 @@ const handlers: Record<string, VerbHandler> = {
     try {
       // Deterministic order: same verbs, same rows, every call —
       // keeps prompt caches warm across turns.
-      const tools = (await listPageTools(conn, 10000, sessionId).catch(() => [])).sort((a, b) => a.name.localeCompare(b.name));
+      const tools = (await liveTools(conn, sessionId, record.cdpEndpoint)).sort((a, b) => a.name.localeCompare(b.name));
       const only = str(args.tool);
       if (only !== undefined) {
         const found = tools.find((t) => t.name === only);

@@ -6,6 +6,11 @@ until 1.0: deleted paths fail loud naming the replacement, never silently.
 
 ## Unreleased
 
+**Breaking:** `open`/`list` fail loud on browsers without the WebMCP
+domain (`webmcp: browser serves no WebMCP domain…`) instead of reporting
+no verbs. `toolCount: 0` and empty `list` now mean the page serves
+nothing — the skill's claim is enforced by the engine.
+
 **Breaking:** the `--consequential` policy is gone (`policy.ts` deleted,
 `confirm` arg removed from `execute`). Page verbs call free — the gate
 was a leftover from authored/stamped tools, and with live-only verbs
