@@ -17,10 +17,13 @@ describe("runner", () => {
       expect(r.toolCalls).toBe(1);
     }
   });
-  test("unknown tool path fails the run, not the worker", async () => {
+  test("unknown tool path fails the run and names the fix", async () => {
     const r = await runCode({ code: "return await tools.nope({});", calls: {}, budgets });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error.message).toMatch(/unknown tool path/);
+    if (!r.ok) {
+      expect(r.error.message).toMatch(/unknown tool path/);
+      expect(r.error.message).toMatch(/unknown tool path: nope/);
+    }
   });
   test("call budget ends the run", async () => {
     const r = await runCode({
@@ -89,11 +92,5 @@ describe("runner", () => {
       expect(r.value).toEqual({ hits: [{ path: "add_book", description: 'hit for {"query":"book"}' }], det: { detail: "add_book" } });
       expect(r.calls).toEqual(["search", "catalog"]);
     }
-  });
-
-  test("unknown tool path names the fix", async () => {
-    const r = await runCode({ code: "return await tools.nope({});", calls: {}, budgets });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error.message).toMatch(/unknown tool path: nope/);
   });
 });

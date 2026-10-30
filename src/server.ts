@@ -89,7 +89,7 @@ async function prepareRun(refs: Array<RunRef>, flat: boolean, perCallTimeoutMs: 
       const live = await listPageTools(conn, 10000, sessionId).catch(() => []);
       for (const tool of [...live].sort((a, b) => a.name.localeCompare(b.name))) {
         const path = flat ? tool.name : `${ref.as}.${tool.name}`;
-        entries.push({ path, description: tool.description, inputSchema: tool.inputSchema, admitted: true });
+        entries.push({ path, description: tool.description, inputSchema: tool.inputSchema });
         calls[path] = async (input: unknown) => {
           const toolArgs = (input ?? {}) as Record<string, unknown>;
           try {
