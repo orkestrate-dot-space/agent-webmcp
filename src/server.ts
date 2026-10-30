@@ -125,7 +125,7 @@ async function prepareRun(refs: Array<RunRef>, flat: boolean, perCallTimeoutMs: 
 
 type RunOutcome =
   | { readonly settled: false }
-  | { readonly settled: true; readonly ok: boolean; readonly value: unknown; readonly error: { kind: string; message: string } | null; readonly toolCalls: number; readonly calls: ReadonlyArray<string>; readonly logs: ReadonlyArray<string>; readonly partial: ReadonlyArray<PartialCall> };
+  | { readonly settled: true; readonly ok: boolean; readonly value: unknown; readonly error: { kind: string; message: string } | null; readonly toolCalls: number; readonly calls: ReadonlyArray<string>; readonly logs: ReadonlyArray<string>; readonly partial: ReadonlyArray<PartialCall>; readonly spilled: boolean };
 
 interface BgRun { refs: Array<string>; aliases: Array<string>; outcome: RunOutcome }
 
@@ -143,8 +143,8 @@ function newRunId(): string {
   return id;
 }
 
-function formatResult(value: unknown, error: { kind: string; message: string } | null, toolCalls: number, logs: ReadonlyArray<string>, perSession: Record<string, number>, origins: Array<string>, partial: ReadonlyArray<PartialCall>): string {
-  return JSON.stringify({ value, spilled: false, toolCalls, perSession, origins, untrusted: true, ...(error !== null ? { error } : {}), ...(logs.length > 0 ? { logs } : {}), ...(partial.length > 0 ? { partial } : {}) });
+function formatResult(value: unknown, error: { kind: string; message: string } | null, toolCalls: number, logs: ReadonlyArray<string>, perSession: Record<string, number>, origins: Array<string>, partial: ReadonlyArray<PartialCall>, spilled: boolean): string {
+  return JSON.stringify({ value, spilled, toolCalls, perSession, origins, untrusted: true, ...(error !== null ? { error } : {}), ...(logs.length > 0 ? { logs } : {}), ...(partial.length > 0 ? { partial } : {}) });
 }
 
 const handlers: Record<string, VerbHandler> = {
@@ -211,7 +211,7 @@ const handlers: Record<string, VerbHandler> = {
     const prepared = await prepareRun(refs, flat, timeoutMs);
     const perSession: Record<string, number> = {};
     const origins = refs.map((r) => r.handle);
-    const finish = (value: unknown, ok: boolean, error: { kind: string; message: string } | null, toolCalls: number, calls: ReadonlyArray<string>, logs: ReadonlyArray<string>, partial: ReadonlyArray<PartialCall>): string => {
+    const finish = (value: unknown, ok: boolean, error: { kind: string; message: string } | null, toolCalls: number, calls: ReadonlyArray<string>, logs: ReadonlyArray<string>, partial: ReadonlyArray<PartialCall>, spilled: boolean): string => {
       const counts: Record<string, number> = {};
       for (const c of calls) {
         const alias = flat ? (refs[0] as RunRef).as : (c.split(".")[0] ?? "?");
@@ -222,7 +222,7 @@ const handlers: Record<string, VerbHandler> = {
       if (!ok && error !== null && error.kind === "ToolFailure" && error.message.startsWith("unknown tool path")) {
         result = { ...result, error: { ...error, message: `[UNKNOWN_TOOL] ${error.message} — call search() to discover verbs, or list first.` } };
       }
-      return formatResult(result.value, result.error, toolCalls, logs, perSession, origins, partial);
+      return formatResult(result.value, result.error, toolCalls, logs, perSession, origins, partial, spilled);
     };
     if (background) {
       const runId = newRunId();
@@ -232,10 +232,10 @@ const handlers: Record<string, VerbHandler> = {
         try {
           const result = await runCode({ code, calls: prepared.calls, budgets: { timeoutMs, maxToolCalls, maxChars, maxResultChars } });
           rec.outcome = result.ok
-            ? { settled: true, ok: true, value: result.value, error: null, toolCalls: result.toolCalls, calls: [...result.calls], logs: [...result.logs], partial: [] }
-            : { settled: true, ok: false, value: null, error: { kind: result.error.kind, message: result.error.message }, toolCalls: result.toolCalls, calls: [...result.calls], logs: [...result.logs], partial: [...result.partial] };
+            ? { settled: true, ok: true, value: result.value, error: null, toolCalls: result.toolCalls, calls: [...result.calls], logs: [...result.logs], partial: [], spilled: result.spilled }
+            : { settled: true, ok: false, value: null, error: { kind: result.error.kind, message: result.error.message }, toolCalls: result.toolCalls, calls: [...result.calls], logs: [...result.logs], partial: [...result.partial], spilled: false };
         } catch (e) {
-          rec.outcome = { settled: true, ok: false, value: null, error: { kind: "ToolFailure", message: e instanceof Error ? e.message.slice(0, 500) : String(e).slice(0, 500) }, toolCalls: 0, calls: [], logs: [], partial: [] };
+          rec.outcome = { settled: true, ok: false, value: null, error: { kind: "ToolFailure", message: e instanceof Error ? e.message.slice(0, 500) : String(e).slice(0, 500) }, toolCalls: 0, calls: [], logs: [], partial: [], spilled: false };
         } finally {
           prepared.release();
         }
@@ -244,8 +244,8 @@ const handlers: Record<string, VerbHandler> = {
     }
     try {
       const result = await runCode({ code, calls: prepared.calls, budgets: { timeoutMs, maxToolCalls, maxChars, maxResultChars } });
-      if (!result.ok) return { content: finish(null, false, { kind: result.error.kind, message: result.error.message }, result.toolCalls, [...result.calls], [...result.logs], [...result.partial]) };
-      return { content: finish(result.value, true, null, result.toolCalls, [...result.calls], [...result.logs], []) };
+      if (!result.ok) return { content: finish(null, false, { kind: result.error.kind, message: result.error.message }, result.toolCalls, [...result.calls], [...result.logs], [...result.partial], false) };
+      return { content: finish(result.value, true, null, result.toolCalls, [...result.calls], [...result.logs], [], result.spilled) };
     } finally {
       prepared.release();
     }
@@ -273,6 +273,7 @@ const handlers: Record<string, VerbHandler> = {
       content: JSON.stringify({
         runId, status: "done",
         value: rec.outcome.ok ? rec.outcome.value : null,
+        spilled: rec.outcome.spilled,
         ...(rec.outcome.ok ? {} : { error: rec.outcome.error }),
         toolCalls: rec.outcome.toolCalls, calls: rec.outcome.calls, perSession: counts,
         ...(rec.outcome.logs.length > 0 ? { logs: rec.outcome.logs } : {}),
