@@ -5,10 +5,8 @@ description: Expose a live web page as callable tools, then call them from code.
 
 # agent-webmcp: pages as tools, code as the loop
 
-The engine owns no browsers and keeps no tools. It borrows tabs
-(open mints one, or borrows a live one by targetId) and serves
-whatever verbs the page serves right now — native WebMCP verbs,
-nothing authored, nothing stored.
+It serves whatever verbs the page serves right now — native WebMCP
+verbs, nothing authored, nothing stored.
 
 ## The loop
 
@@ -22,10 +20,12 @@ skill (this file) -> open {url|targetId} -> list {handle} -> execute {code} -> c
 2. **Open one tab.** `{url}` mints a fresh tab; `{targetId}` borrows a
    live one (browsers that refuse minting — the id comes from your
    browser driver, not from these verbs). Omit `cdp` unless your
-   driver gave you one. You get a `handle`. If it fails to connect,
+   driver gave you one. You get a `handle`. `open` returns
+   `{"handle":"s_…","url":…,"toolCount":N}` — `toolCount:0` means skip
+   `list`, the page serves nothing. If it fails to connect,
    run `doctor` before retrying.
 3. **List before calling.** `list {handle}` returns the only names
-   `execute` may call, in stable order. `list {handle, tool}` for one
+   `execute` may call. `list {handle, tool}` for one
    verb's full schema. Empty is not an error — the page serves nothing.
 4. **Execute code, not calls.** Reason the whole workflow first, then
    write one program — one `execute` beats five small ones. One handle
