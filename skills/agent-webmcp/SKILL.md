@@ -20,8 +20,10 @@ skill (this file) -> open {url|targetId} -> list {handle} -> execute {code} -> c
    descriptions. Read this before any other verb; re-fetch it after
    compaction.
 2. **Open one tab.** `{url}` mints a fresh tab; `{targetId}` borrows a
-   live one (browsers that refuse minting). Omit `cdp` unless your
-   driver gave you one. You get a `handle`.
+   live one (browsers that refuse minting — the id comes from your
+   browser driver, not from these verbs). Omit `cdp` unless your
+   driver gave you one. You get a `handle`. If it fails to connect,
+   run `doctor` before retrying.
 3. **List before calling.** `list {handle}` returns the only names
    `execute` may call, in stable order. `list {handle, tool}` for one
    verb's full schema. Empty is not an error — the page serves nothing.
