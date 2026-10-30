@@ -17,7 +17,10 @@ skill (this file) -> open {url|targetId} -> list {handle} -> execute {code} -> c
 1. **Show first.** Procedure lives here, reference lives in verb
    descriptions. Read this before any other verb; re-fetch it after
    compaction.
-2. **Open one tab.** `{url}` mints a fresh tab; `{targetId}` borrows a
+2. **Open one tab.** Get a browser in this order: one you were told
+   to use; your driver's managed browser (agent-browser daemon by
+   default); any local Chromium you launch yourself with remote
+   debugging. `{url}` mints a fresh tab; `{targetId}` borrows a
    live one (browsers that refuse minting — the id comes from your
    browser driver, not from these verbs). Omit `cdp` unless your
    driver gave you one. You get a `handle`. `open` returns
