@@ -130,7 +130,7 @@ type RunOutcome =
   | { readonly settled: false }
   | { readonly settled: true; readonly ok: boolean; readonly value: unknown; readonly error: { kind: string; message: string } | null; readonly toolCalls: number; readonly calls: ReadonlyArray<string>; readonly logs: ReadonlyArray<string>; readonly partial: ReadonlyArray<PartialCall> };
 
-interface BgRun { refs: Array<string>; outcome: RunOutcome }
+interface BgRun { refs: Array<string>; aliases: Array<string>; outcome: RunOutcome }
 
 const runs = new Map<string, BgRun>();
 
@@ -230,7 +230,7 @@ const handlers: Record<string, VerbHandler> = {
     };
     if (background) {
       const runId = newRunId();
-      const rec: BgRun = { refs: origins, outcome: { settled: false } };
+      const rec: BgRun = { refs: origins, aliases: refs.map((r) => r.as), outcome: { settled: false } };
       runs.set(runId, rec);
       void (async () => {
         try {
@@ -268,6 +268,7 @@ const handlers: Record<string, VerbHandler> = {
     }
     const counts: Record<string, number> = {};
     if (!rec.outcome.settled) return { content: JSON.stringify({ runId, status: "running", origins: rec.refs, untrusted: true }) };
+    for (const a of rec.aliases) counts[a] = 0;
     for (const c of rec.outcome.calls) {
       const alias = c.includes(".") ? (c.split(".")[0] as string) : "page";
       counts[alias] = (counts[alias] ?? 0) + 1;
