@@ -12,7 +12,7 @@ import { EngineFailed, fail } from "./result.ts";
 import { discoverDaemonBrowser, invokePageTool, listPageTools } from "./transport.ts";
 import { attachSession, closeSession, loadRecord, openSession, reattach, acquireTabLock, releaseTabLock } from "./sessions.ts";
 import { consequentialGate, type Policy } from "./policy.ts";
-import { runCode, type CallFn } from "./runner.ts";
+import { runCode, type CallFn, type PartialCall } from "./runner.ts";
 import { VERSION } from "./version.ts";
 
 const TIMEOUT_DEFAULT_MS = 60000;
@@ -128,7 +128,7 @@ async function prepareRun(refs: Array<RunRef>, flat: boolean, confirmed: boolean
 
 type RunOutcome =
   | { readonly settled: false }
-  | { readonly settled: true; readonly ok: boolean; readonly value: unknown; readonly error: { kind: string; message: string } | null; readonly toolCalls: number; readonly calls: ReadonlyArray<string>; readonly logs: ReadonlyArray<string> };
+  | { readonly settled: true; readonly ok: boolean; readonly value: unknown; readonly error: { kind: string; message: string } | null; readonly toolCalls: number; readonly calls: ReadonlyArray<string>; readonly logs: ReadonlyArray<string>; readonly partial: ReadonlyArray<PartialCall> };
 
 interface BgRun { refs: Array<string>; outcome: RunOutcome }
 
@@ -146,8 +146,8 @@ function newRunId(): string {
   return id;
 }
 
-function formatResult(value: unknown, error: { kind: string; message: string } | null, toolCalls: number, logs: ReadonlyArray<string>, perSession: Record<string, number>, origins: Array<string>): string {
-  return JSON.stringify({ value, spilled: false, toolCalls, perSession, origins, untrusted: true, ...(error !== null ? { error } : {}), ...(logs.length > 0 ? { logs } : {}) });
+function formatResult(value: unknown, error: { kind: string; message: string } | null, toolCalls: number, logs: ReadonlyArray<string>, perSession: Record<string, number>, origins: Array<string>, partial: ReadonlyArray<PartialCall>): string {
+  return JSON.stringify({ value, spilled: false, toolCalls, perSession, origins, untrusted: true, ...(error !== null ? { error } : {}), ...(logs.length > 0 ? { logs } : {}), ...(partial.length > 0 ? { partial } : {}) });
 }
 
 const handlers: Record<string, VerbHandler> = {
@@ -215,7 +215,7 @@ const handlers: Record<string, VerbHandler> = {
     const prepared = await prepareRun(refs, flat, confirmed, ctx, timeoutMs);
     const perSession: Record<string, number> = {};
     const origins = refs.map((r) => r.handle);
-    const finish = (value: unknown, ok: boolean, error: { kind: string; message: string } | null, toolCalls: number, calls: ReadonlyArray<string>, logs: ReadonlyArray<string>): string => {
+    const finish = (value: unknown, ok: boolean, error: { kind: string; message: string } | null, toolCalls: number, calls: ReadonlyArray<string>, logs: ReadonlyArray<string>, partial: ReadonlyArray<PartialCall>): string => {
       const counts: Record<string, number> = {};
       for (const c of calls) {
         const alias = flat ? (refs[0] as RunRef).as : (c.split(".")[0] ?? "?");
@@ -226,7 +226,7 @@ const handlers: Record<string, VerbHandler> = {
       if (!ok && error !== null && error.kind === "ToolFailure" && error.message.startsWith("unknown tool path")) {
         result = { ...result, error: { ...error, message: `[UNKNOWN_TOOL] ${error.message} — call search() to discover verbs, or list first.` } };
       }
-      return formatResult(result.value, result.error, toolCalls, logs, perSession, origins);
+      return formatResult(result.value, result.error, toolCalls, logs, perSession, origins, partial);
     };
     if (background) {
       const runId = newRunId();
@@ -236,10 +236,10 @@ const handlers: Record<string, VerbHandler> = {
         try {
           const result = await runCode({ code, calls: prepared.calls, budgets: { timeoutMs, maxToolCalls, maxChars, maxResultChars } });
           rec.outcome = result.ok
-            ? { settled: true, ok: true, value: result.value, error: null, toolCalls: result.toolCalls, calls: [...result.calls], logs: [...result.logs] }
-            : { settled: true, ok: false, value: null, error: { kind: result.error.kind, message: result.error.message }, toolCalls: result.toolCalls, calls: [...result.calls], logs: [...result.logs] };
+            ? { settled: true, ok: true, value: result.value, error: null, toolCalls: result.toolCalls, calls: [...result.calls], logs: [...result.logs], partial: [] }
+            : { settled: true, ok: false, value: null, error: { kind: result.error.kind, message: result.error.message }, toolCalls: result.toolCalls, calls: [...result.calls], logs: [...result.logs], partial: [...result.partial] };
         } catch (e) {
-          rec.outcome = { settled: true, ok: false, value: null, error: { kind: "ToolFailure", message: e instanceof Error ? e.message.slice(0, 500) : String(e).slice(0, 500) }, toolCalls: 0, calls: [], logs: [] };
+          rec.outcome = { settled: true, ok: false, value: null, error: { kind: "ToolFailure", message: e instanceof Error ? e.message.slice(0, 500) : String(e).slice(0, 500) }, toolCalls: 0, calls: [], logs: [], partial: [] };
         } finally {
           prepared.release();
         }
@@ -248,8 +248,8 @@ const handlers: Record<string, VerbHandler> = {
     }
     try {
       const result = await runCode({ code, calls: prepared.calls, budgets: { timeoutMs, maxToolCalls, maxChars, maxResultChars } });
-      if (!result.ok) return { content: finish(null, false, { kind: result.error.kind, message: result.error.message }, result.toolCalls, [...result.calls], [...result.logs]) };
-      return { content: finish(result.value, true, null, result.toolCalls, [...result.calls], [...result.logs]) };
+      if (!result.ok) return { content: finish(null, false, { kind: result.error.kind, message: result.error.message }, result.toolCalls, [...result.calls], [...result.logs], [...result.partial]) };
+      return { content: finish(result.value, true, null, result.toolCalls, [...result.calls], [...result.logs], []) };
     } finally {
       prepared.release();
     }
@@ -279,6 +279,7 @@ const handlers: Record<string, VerbHandler> = {
         ...(rec.outcome.ok ? {} : { error: rec.outcome.error }),
         toolCalls: rec.outcome.toolCalls, calls: rec.outcome.calls, perSession: counts,
         ...(rec.outcome.logs.length > 0 ? { logs: rec.outcome.logs } : {}),
+        ...(rec.outcome.partial.length > 0 ? { partial: rec.outcome.partial } : {}),
         origins: rec.refs, untrusted: true,
       }),
     };

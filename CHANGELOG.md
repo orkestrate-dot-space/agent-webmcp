@@ -6,6 +6,14 @@ until 1.0: deleted paths fail loud naming the replacement, never silently.
 
 ## Unreleased
 
+**Fundamentals (non-breaking):** failed runs keep a `partial` ledger —
+the last 20 completed calls with 200-char output heads — on timeout,
+call-budget, and mid-run throws, in `execute` and `poll` alike.
+Timeouts stop discarding work: continue from the ledger, never redo it.
+Base-prompt budget gated: skill text + all served descriptions ≤ 8000
+chars (~2k tokens; currently ~4.7k). Skill loop now states plan-up-front
+(one program over many calls, `Promise.all` for independent awaits).
+
 **Breaking:** the registry is gone. No `registry/` reads or writes anywhere:
 `src/registry.ts`, `src/admission.ts`, `src/snippet.ts` (and their tests)
 deleted; verbs resolve live-only. `open` absorbs `attach` (`{url}` mints,

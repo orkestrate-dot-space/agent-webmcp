@@ -33,12 +33,24 @@ describe("runner", () => {
   });
   test("timeout ends the run", async () => {
     const r = await runCode({
-      code: "await tools.hang({}); return 1;",
-      calls: { hang: async () => new Promise(() => {}) },
+      code: "await tools.fast({}); await tools.hang({}); return 1;",
+      calls: { fast: async () => ({ n: 1 }), hang: async () => new Promise(() => {}) },
       budgets: { ...budgets, timeoutMs: 300 },
     });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error.kind).toBe("TimeoutExceeded");
+    if (!r.ok) {
+      expect(r.error.kind).toBe("TimeoutExceeded");
+      expect(r.partial).toEqual([{ path: "fast", head: "{\"n\":1}" }]);
+    }
+  });
+  test("mid-run throw keeps the completed-call ledger", async () => {
+    const r = await runCode({
+      code: "await tools.a({}); await tools.b({}); return 1;",
+      calls: { a: async () => ({ n: 1 }), b: async () => { throw new Error("boom"); } },
+      budgets,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.partial).toEqual([{ path: "a", head: "{\"n\":1}" }]);
   });
   test("result cap truncates with spilled flag", async () => {
     const r = await runCode({
