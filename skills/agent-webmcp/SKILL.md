@@ -46,5 +46,4 @@ skill (this file) -> open {url|targetId} -> list {handle} -> execute {code} -> c
 
 Budgets: `timeoutMs` ≤ 300000 (foreground and background runs alike),
 `maxToolCalls/maxChars/maxResultChars` bound each run; at most 8
-sessions per run; at most 20 live background runs. Consequential verbs
-(page-marked) need `confirm:true` under the default ask policy.
+sessions per run; at most 20 live background runs.

@@ -6,6 +6,14 @@ until 1.0: deleted paths fail loud naming the replacement, never silently.
 
 ## Unreleased
 
+**Breaking:** the `--consequential` policy is gone (`policy.ts` deleted,
+`confirm` arg removed from `execute`). Page verbs call free — the gate
+was a leftover from authored/stamped tools, and with live-only verbs
+there is no wall behind it to guard. `mcp serve` takes no flags;
+`doctor` drops the `policy` field. A passed `confirm:true` is inert
+(extra args are ignored, never errors). The calling harness owns
+approval now — that was always true in practice.
+
 **Fundamentals (non-breaking):** failed runs keep a `partial` ledger —
 the last 20 completed calls with 200-char output heads — on timeout,
 call-budget, and mid-run throws, in `execute` and `poll` alike.

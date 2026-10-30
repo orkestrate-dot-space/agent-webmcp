@@ -1,16 +1,15 @@
 // main: argument parse, one dispatch. piped=JSON, writes need --yes.
 // Exits 0 ok / 2 usage / 1 defect.
 import { serveStdio } from "./server.ts";
-import { parsePolicy } from "./policy.ts";
 import { VERSION } from "./version.ts";
 
 function usage(): string {
   return [
     "agent-webmcp <command> [options]",
     "",
-    "  mcp serve [--consequential allow|ask|deny]   serve tools over stdio",
-    "  doctor [--cdp URL]                           reachability + release report",
-    "  --version                                    print version",
+    "  mcp serve              serve tools over stdio",
+    "  doctor [--cdp URL]     reachability + release report",
+    "  --version              print version",
   ].join("\n");
 }
 
@@ -43,11 +42,7 @@ async function main(): Promise<void> {
     return;
   }
   if (cmd === "mcp" && sub === "serve") {
-    let policy;
-    try { policy = parsePolicy(flag("--consequential")); }
-    catch (e) { console.error(e instanceof Error ? e.message : String(e)); process.exit(2); }
-    const source = flag("--consequential") === undefined ? "default" as const : "flag" as const;
-    await serveStdio({ policy: policy as ReturnType<typeof parsePolicy>, policySource: source });
+    await serveStdio();
     return;
   }
   console.error(usage());

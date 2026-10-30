@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { EngineFailed, err, fail, ok, tryOp } from "./result.ts";
-import { consequentialGate, parsePolicy } from "./policy.ts";
 
 describe("result kit", () => {
   test("ok/err wrap", () => {
@@ -21,19 +20,3 @@ describe("result kit", () => {
   });
 });
 
-describe("policy", () => {
-  test("parse matrix", () => {
-    expect(parsePolicy(undefined)).toBe("ask");
-    expect(parsePolicy("")).toBe("ask");
-    expect(parsePolicy("allow")).toBe("allow");
-    expect(parsePolicy("deny")).toBe("deny");
-    expect(() => parsePolicy("sometimes")).toThrow(/consequential/);
-  });
-  test("gate matrix", () => {
-    expect(consequentialGate("allow", false, "w", true)).toBeNull();
-    expect(consequentialGate("ask", false, "w", false)).toBeNull();
-    expect(consequentialGate("ask", true, "w", true)).toBeNull();
-    expect(consequentialGate("deny", true, "w", true)).toMatch(/deny/);
-    expect(consequentialGate("ask", false, "w", true)).toMatch(/confirm:true/);
-  });
-});
