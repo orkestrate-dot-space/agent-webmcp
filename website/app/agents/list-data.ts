@@ -1,5 +1,5 @@
 import data from "../../sites.json";
-import type { AgentRecord, InvokeContract, Proof } from "./scan";
+import type { AgentRecord, InvokeContract, Proof, SiteTool } from "./scan";
 import { SITES_API_VERSION } from "./scan";
 
 const WORKER = "https://agent-webmcp-sites.agent-webmcp.workers.dev";
@@ -10,6 +10,7 @@ export interface SiteEntry {
   description: string;
   platform: string;
   skill: string;
+  tools: Array<SiteTool>;
   invoke: InvokeContract | null;
   proof: Proof;
 }
@@ -27,6 +28,7 @@ interface ContractFile {
     description?: unknown;
     platform?: unknown;
     skill?: unknown;
+    tools?: unknown;
     invoke?: { transport?: unknown; endpoint?: unknown; example?: unknown };
     proof?: { verified?: unknown; ref?: unknown };
   }>;
@@ -34,8 +36,8 @@ interface ContractFile {
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
-function contracts(): Map<string, { description: string; platform: string; skill: string; invoke: InvokeContract | null; proof: Proof }> {
-  const out = new Map<string, { description: string; platform: string; skill: string; invoke: InvokeContract | null; proof: Proof }>();
+function contracts(): Map<string, { description: string; platform: string; skill: string; tools: Array<SiteTool>; invoke: InvokeContract | null; proof: Proof }> {
+  const out = new Map<string, { description: string; platform: string; skill: string; tools: Array<SiteTool>; invoke: InvokeContract | null; proof: Proof }>();
   const file = data as unknown as ContractFile;
   if (!Array.isArray(file.sites)) return out;
   for (const s of file.sites) {
@@ -45,6 +47,13 @@ function contracts(): Map<string, { description: string; platform: string; skill
       description: str(s.description),
       platform: str(s.platform),
       skill: str(s.skill),
+      tools: Array.isArray(s.tools)
+        ? s.tools.flatMap((t) =>
+            typeof t === "object" && t !== null && typeof (t as SiteTool).name === "string"
+              ? [{ name: (t as SiteTool).name, params: str((t as SiteTool).params) }]
+              : []
+          )
+        : [],
       invoke:
         typeof inv === "object" && inv !== null
           ? { transport: inv.transport as InvokeContract["transport"], endpoint: str(inv.endpoint), example: str(inv.example) }
@@ -61,12 +70,13 @@ function contracts(): Map<string, { description: string; platform: string; skill
 // worker-only rows append as discovered-but-uncontracted entries.
 export async function readAgents(): Promise<Array<SiteEntry>> {
   const known = contracts();
-  const toEntry = (slug: string, c: { description: string; platform: string; skill: string; invoke: InvokeContract | null; proof: Proof }): SiteEntry => ({
+  const toEntry = (slug: string, c: { description: string; platform: string; skill: string; tools: Array<SiteTool>; invoke: InvokeContract | null; proof: Proof }): SiteEntry => ({
     origin: `https://${slug}`,
     slug,
     description: c.description,
     platform: c.platform,
     skill: c.skill,
+    tools: c.tools,
     invoke: c.invoke,
     proof: c.proof,
   });
@@ -91,6 +101,7 @@ export async function readAgents(): Promise<Array<SiteEntry>> {
             description: str(row.description),
             platform: "",
             skill: "",
+            tools: [],
             invoke: null,
             proof: {
               verified: str((row.proof as { verified?: unknown } | undefined)?.verified),

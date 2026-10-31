@@ -45,6 +45,13 @@ for (const s of file.sites) {
   if (typeof s.proof?.verified !== "string" || Number.isNaN(Date.parse(s.proof.verified)))
     fail(tag, "proof.verified must be a date");
   if (typeof s.proof?.ref !== "string" || s.proof.ref === "") fail(tag, "proof.ref must be a non-empty evidence note");
+  if (!Array.isArray(s.tools)) fail(tag, "tools must be an array (possibly empty)");
+  else
+    for (const t of s.tools) {
+      if (typeof t !== "object" || t === null || typeof t.name !== "string" || t.name === "")
+        fail(tag, "tools[].name must be a non-empty string");
+      else if (typeof t.params !== "string") fail(tag, `tools[${t.name}].params must be a string`);
+    }
 }
 if (fails.length > 0) {
   console.error(`FAIL verify-sites:\n${fails.map((f) => ` - ${f}`).join("\n")}`);

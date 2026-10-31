@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import SiteNav from "../../site-nav";
 import { DomainScan } from "./domain-scan";
 import { contractOf, contractSlugs } from "../list-data";
-import type { InvokeContract } from "../scan";
+import type { InvokeContract, SiteTool } from "../scan";
 import { looksLikeDomain, SITES_API_VERSION } from "../scan";
 import { OriginFavicon } from "../site-art";
 import { CopyCodeButton } from "./copy-code-button";
@@ -28,6 +28,7 @@ interface RecordShape {
   description: string;
   platform: string;
   skill: string;
+  tools: Array<SiteTool>;
   invoke: InvokeContract | null;
 }
 
@@ -61,6 +62,7 @@ async function readRecord(host: string): Promise<RecordShape | null> {
     description: contract?.description || worker?.description || "",
     platform: contract?.platform || "",
     skill: contract?.skill || "",
+    tools: contract?.tools || [],
     invoke: contract?.invoke ?? null,
   };
 }
@@ -96,9 +98,6 @@ function Shell({ host, children }: { host: string; children: React.ReactNode }) 
   );
 }
 
-const ASK_SNIPPET = (tool: string) =>
-  `const answer = await tools.${tool}({\n  question: "How do I get started?",\n});\n// → worked answer with citations`;
-
 const TRIED_Q = "How do I get started?";
 const TRIED_A =
   "Read 1 file and ran 1 command. Follow the Quickstart: deploy via mintlify.com/start, then make changes in the web editor or with the CLI… with links to the pages it used.";
@@ -127,6 +126,29 @@ function measuredRuns(): Array<{ label: string; question: string; ok: boolean; m
 
 const fmtSecs = (ms: number): string => `${(Math.round((ms / 1000) * 10) / 10).toFixed(1)}s`;
 
+// Example prompts: verified transcripts first, then suggestions.
+function examplePrompts(host: string, short: string): Array<string> {
+  if (host === "mintlify.com")
+    return ["How do I get started?", "What is the assistant widget?", "How does billing work for the assistant?"];
+  if (host === "claude.com")
+    return [
+      "What is a connector?",
+      "How is that different from an MCP server?",
+      "How do directory connectors differ from custom ones?",
+    ];
+  return [`Search ${short} docs for "…"`, `Read a ${short} docs page as Markdown`];
+}
+
+const isReadOnly = (name: string): boolean => !/feedback|submit|navigate|open|create|update/i.test(name);
+
+function Pill({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center rounded-full border border-line px-2 py-0.5 font-mono text-[11px] leading-4 text-ink-2">
+      {children}
+    </span>
+  );
+}
+
 export default async function SitePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   if (!slug.includes(".")) notFound();
@@ -142,16 +164,14 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
     );
   }
 
-  const tool = `ask_${host.split(".")[0]}`;
-  const askSnippet = ASK_SNIPPET(tool);
-  const copyPrompt = COPY_PROMPT(host, record.description);
-  const tryHref = `https://www.${host}/docs/quickstart?assistant=${encodeURIComponent("How do I get started?")}`;
-  const isMintlify = host === "mintlify.com";
-  const isMintlifyPlatform = record.platform === "mintlify" && !isMintlify;
-  const mcpTool = (record.invoke?.example.match(/tools\/call (\S+)/) ?? [])[1] ?? "search";
-  const mcpSnippet = `const res = await fetch("${record.invoke?.endpoint ?? ""}", {\n  method: "POST",\n  headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },\n  body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call",\n    params: { name: "${mcpTool}", arguments: { query: "How do I get started?" } } }),\n});\n// -> cited passages with source links (no key, no browser)`;
-// Measured runs are mintlify.com's — never show another host's numbers.
-  const runs = isMintlify ? measuredRuns() : [];
+  const short = host.split(".")[0];
+  const platformLabel = record.platform === "" ? "site" : record.platform;
+  const prompts = examplePrompts(host, short);
+  const siblings = contractSlugs()
+    .filter((s) => s !== host && (contractOf(s)?.platform || "") === record.platform && record.platform !== "")
+    .map((s) => ({ slug: s, tools: contractOf(s)?.tools.length ?? 0 }));
+  // Measured runs are mintlify.com's — never show another host's numbers.
+  const runs = host === "mintlify.com" ? measuredRuns() : [];
   const okRuns = runs.filter((r) => r.ok);
   const sortedMs = [...runs.map((r) => r.ms)].sort((a, b) => a - b);
   const medianMs = sortedMs.length > 0 ? sortedMs[Math.floor(sortedMs.length / 2)] : 0;
@@ -166,220 +186,221 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
           { label: "Cited answers", value: `${citedCount}/${okRuns.length}` },
         ]
       : [];
+  const facts: Array<{ label: string; value: string }> = [
+    { label: "Tools", value: String(record.tools.length) },
+    { label: "Transport", value: record.invoke.transport },
+    { label: "Platform", value: platformLabel },
+    { label: "Verified", value: host === "mintlify.com" || host === "claude.com" ? "2026-11-01" : "MCP handshake" },
+  ];
 
   return (
     <>
       <SiteNav />
       <div className="mx-auto w-full max-w-[1120px] px-6 py-10">
-        <p className="text-sm leading-5 text-ink-2">
+        <p className="font-mono text-xs uppercase tracking-wide text-ink-2">
           <Link href="/agents" className="no-underline hover:text-ink">
-            ← All agents
+            Agents directory
           </Link>
+          {" / "}
+          {platformLabel}
+          {" / "}
+          {host}
         </p>
-        <div className="mt-8 flex min-w-0 items-start gap-5">
-          <div className="mt-1.5 shrink-0">
-            <OriginFavicon host={host} size={64} />
+
+        <div className="mt-6 flex min-w-0 items-start gap-4">
+          <div className="mt-1 shrink-0">
+            <OriginFavicon host={host} size={56} />
           </div>
           <div className="w-max min-w-0 max-w-full">
-            <h1 className="break-all text-[clamp(1.75rem,1.25rem+3.5vw,3rem)] font-medium leading-[1.05] tracking-[-0.04em] text-ink">
-              {host}{" "}
-              <span className="inline-flex items-center gap-1.5 align-middle font-sans text-sm font-normal leading-5 text-ink-2">
-                <span aria-hidden="true" className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
-                Verified
-              </span>{" "}
-              {record.platform !== "" ? (
-                <span className="inline-flex items-center rounded-full border border-line px-2.5 py-1 align-middle font-mono text-xs font-normal leading-4 text-ink-2">
-                  {record.platform}
-                </span>
-              ) : null}
+            <p className="font-mono text-xs uppercase tracking-wide text-ink-2">
+              {platformLabel} · {host}
+            </p>
+            <h1 className="mt-1 break-all text-[clamp(2rem,1.5rem+3.5vw,3.5rem)] font-medium leading-[1.05] tracking-[-0.04em] text-ink">
+              {host}
             </h1>
-            {record.description !== "" ? (
-              <p className="mt-3 max-w-[60ch] text-[15px] leading-6 text-ink-2">{record.description}</p>
-            ) : null}
-            <div className="mt-4 flex flex-wrap gap-3">
-              <CopyCodeButton code={copyPrompt} label="Copy prompt" primary />
-              <a
-                href={tryHref}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex h-9 cursor-pointer items-center rounded-full border border-line px-4 text-sm font-medium leading-5 text-ink no-underline transition hover:bg-hover"
-              >
-                Try it ↗
-              </a>
-            </div>
           </div>
         </div>
 
-        {isMintlify ? (
-        <div className="mt-10 rounded-lg border border-line bg-raised p-5">
-          <p className="font-mono text-xs uppercase tracking-wide text-ink-2">Tried live — one real exchange</p>
-          <p className="mt-3 text-[15px] leading-6 text-ink">
-            <span className="text-ink-2">Q: </span>
-            {TRIED_Q}
-          </p>
-          <p className="mt-1 text-[15px] leading-6 text-ink">
-            <span className="text-ink-2">A: </span>
-            {TRIED_A}
-          </p>
-        </div>
-        ) : null}
-        {host === "claude.com" ? (
-        <div className="mt-10 rounded-lg border border-line bg-raised p-5">
-          <p className="font-mono text-xs uppercase tracking-wide text-ink-2">Tried live — multi-turn, headed browser</p>
-          <p className="mt-3 text-[15px] leading-6 text-ink">
-            <span className="text-ink-2">Q: </span>
-            What is a connector?
-          </p>
-          <p className="mt-1 text-[15px] leading-6 text-ink">
-            <span className="text-ink-2">A: </span>
-            Read 1 file. A connector links Claude to an outside app or service… with links to Get started with connectors and the connectors directory.
-          </p>
-          <p className="mt-3 text-[15px] leading-6 text-ink">
-            <span className="text-ink-2">Q: </span>
-            How is that different from an MCP server?
-          </p>
-          <p className="mt-1 text-[15px] leading-6 text-ink">
-            <span className="text-ink-2">A: </span>
-            Resolved “that” in context: a connector is the user-facing presentation, the MCP server is what it connects to — directory vs custom, same infrastructure.
-          </p>
-        </div>
+        {record.description !== "" ? (
+          <p className="mt-4 max-w-[70ch] text-[15px] leading-6 text-ink-2">{record.description}</p>
         ) : null}
 
-        {runs.length > 0 ? (
-          <div className="mt-10">
-            <h2 className="text-xl font-medium leading-7 text-ink">Measured, not modeled</h2>
-            <p className="mt-1 max-w-[70ch] text-sm leading-6 text-ink-2">
-              Every run below is a real ask through the engine — open tab, deep link, wait for the settled answer,
-              read it. No sampling, no estimates.
-            </p>
-            <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
-              {stats.map((s) => (
-                <div key={s.label} className="rounded-lg border border-line bg-raised p-5">
-                  <p className="text-sm leading-5 text-ink-2">{s.label}</p>
-                  <p className="mt-1 font-mono text-2xl leading-8 text-ink">{s.value}</p>
+        <div className="mt-5 flex flex-wrap gap-3">
+          <a
+            href={record.origin}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-9 cursor-pointer items-center rounded-full bg-ink px-4 text-sm font-medium leading-5 text-canvas no-underline transition hover:opacity-85"
+          >
+            Open {host} <ExternalLink className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
+          </a>
+          <CopyCodeButton code={COPY_PROMPT(host, record.description)} label="Copy prompt" />
+        </div>
+
+        <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="min-w-0">
+            <h2 className="text-xl font-medium leading-7 text-ink">Ask an agent to</h2>
+            <ul className="mt-2 list-none p-0">
+              {prompts.map((p) => (
+                <li key={p} className="border-b border-line py-3 text-[15px] leading-6 text-ink">
+                  {p}
+                </li>
+              ))}
+            </ul>
+
+            <h2 className="mt-8 text-xl font-medium leading-7 text-ink">
+              {record.tools.length} tool{record.tools.length === 1 ? "" : "s"}
+            </h2>
+            {record.tools.length === 0 ? (
+              <p className="mt-2 text-[15px] leading-6 text-ink-2">
+                Verbs observed live; full list pending a rescan.
+              </p>
+            ) : (
+              <ul className="mt-2 list-none p-0">
+                {record.tools.map((t) => (
+                  <li key={t.name} className="border-b border-line py-3">
+                    <p className="flex flex-wrap items-center gap-2 font-mono text-[13px] leading-5 text-ink">
+                      {t.name}
+                      {isReadOnly(t.name) ? <Pill>read-only</Pill> : null}
+                      <Pill>untrusted content</Pill>
+                    </p>
+                    {t.params !== "" ? (
+                      <p className="mt-1 font-mono text-xs leading-5 text-ink-2">{t.params}</p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {(host === "mintlify.com" || host === "claude.com") && (
+              <div className="mt-8 rounded-lg border border-line bg-raised p-5">
+                <p className="font-mono text-xs uppercase tracking-wide text-ink-2">
+                  Tried live — {host === "claude.com" ? "multi-turn, headed browser" : "one real exchange"}
+                </p>
+                {host === "mintlify.com" ? (
+                  <>
+                    <p className="mt-3 text-[15px] leading-6 text-ink">
+                      <span className="text-ink-2">Q: </span>
+                      {TRIED_Q}
+                    </p>
+                    <p className="mt-1 text-[15px] leading-6 text-ink">
+                      <span className="text-ink-2">A: </span>
+                      {TRIED_A}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-3 text-[15px] leading-6 text-ink">
+                      <span className="text-ink-2">Q: </span>
+                      What is a connector?
+                    </p>
+                    <p className="mt-1 text-[15px] leading-6 text-ink">
+                      <span className="text-ink-2">A: </span>
+                      Read 1 file. A connector links Claude to an outside app or service… with links to Get started
+                      with connectors and the connectors directory.
+                    </p>
+                    <p className="mt-3 text-[15px] leading-6 text-ink">
+                      <span className="text-ink-2">Q: </span>
+                      How is that different from an MCP server?
+                    </p>
+                    <p className="mt-1 text-[15px] leading-6 text-ink">
+                      <span className="text-ink-2">A: </span>
+                      Resolved “that” in context: a connector is the user-facing presentation, the MCP server is what
+                      it connects to — directory vs custom, same infrastructure.
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+
+            {runs.length > 0 && (
+              <div className="mt-8">
+                <h2 className="text-xl font-medium leading-7 text-ink">Measured, not modeled</h2>
+                <p className="mt-1 max-w-[70ch] text-sm leading-6 text-ink-2">
+                  Every run below is a real ask through the engine — open tab, deep link, wait for the settled
+                  answer, read it. No sampling, no estimates.
+                </p>
+                <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+                  {stats.map((s) => (
+                    <div key={s.label} className="rounded-lg border border-line bg-raised p-5">
+                      <p className="text-sm leading-5 text-ink-2">{s.label}</p>
+                      <p className="mt-1 font-mono text-2xl leading-8 text-ink">{s.value}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 rounded-lg border border-line bg-raised p-5">
+                  <p className="font-mono text-xs uppercase tracking-wide text-ink-2">Response time per verified run</p>
+                  <div className="mt-2 h-56">
+                    <LatencyChart runs={runs.map((r) => ({ label: r.label, ms: r.ms }))} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {record.skill !== "" && (
+              <div className="mt-8">
+                <h2 className="text-xl font-medium leading-7 text-ink">Use it programmatically — get_agent</h2>
+                <p className="mt-1 max-w-[70ch] text-sm leading-6 text-ink-2">
+                  One call returns the full skill: the registerTool def plus the headless and headed invoke
+                  recipes. Register it in your own page, drive it through agent-webmcp.
+                </p>
+                <div className="mt-3 rounded-lg border border-line bg-raised p-5">
+                  <div className="flex items-center justify-end">
+                    <CopyCodeButton code={`await tools.get_agent({ domain: "${host}" })`} />
+                  </div>
+                  <pre className="mt-1 overflow-x-auto whitespace-pre-wrap font-mono text-[13px] leading-6 text-ink">
+                    {record.skill}
+                  </pre>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <aside className="min-w-0">
+            <dl className="overflow-hidden rounded-lg border border-line">
+              {facts.map((f) => (
+                <div key={f.label} className="flex items-center justify-between gap-4 border-b border-line px-4 py-2.5 last:border-b-0">
+                  <dt className="text-sm leading-5 text-ink-2">{f.label}</dt>
+                  <dd className="truncate font-mono text-[13px] leading-5 text-ink">{f.value}</dd>
                 </div>
               ))}
-            </div>
-            <div className="mt-4 rounded-lg border border-line bg-raised p-5">
-              <p className="font-mono text-xs uppercase tracking-wide text-ink-2">Response time per verified run</p>
-              <div className="mt-2 h-56">
-                <LatencyChart runs={runs.map((r) => ({ label: r.label, ms: r.ms }))} />
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        <div className="mt-10">
-          <h2 className="text-xl font-medium leading-7 text-ink">
-            <span className="mr-3 font-mono text-ink-2">01</span>Ask it — one call
-          </h2>
-          {isMintlifyPlatform ? (
-            <>
-              <p className="mt-1 max-w-[70ch] text-sm leading-6 text-ink-2">
-                Headless-safe: this docs MCP answers without a key or a browser.
-              </p>
-              <div className="mt-3 rounded-lg border border-line bg-raised p-5">
-                <div className="flex items-center justify-end">
-                  <CopyCodeButton code={mcpSnippet} />
-                </div>
-                <pre className="mt-1 overflow-x-auto font-mono text-[13px] leading-6 text-ink">{mcpSnippet}</pre>
-              </div>
-            </>
-          ) : (
-            <>
-              <p className="mt-1 max-w-[70ch] text-sm leading-6 text-ink-2">
-                No install — built into agent-webmcp. Ask from any {host} session:
-              </p>
-              <div className="mt-3 rounded-lg border border-line bg-raised p-5">
-                <div className="flex items-center justify-end">
-                  <CopyCodeButton code={askSnippet} />
-                </div>
-                <pre className="mt-1 overflow-x-auto font-mono text-[13px] leading-6 text-ink">{askSnippet}</pre>
-              </div>
-            </>
-          )}
-          <p className="mt-3 max-w-[70ch] text-sm leading-6 text-ink-2">
-            Find it programmatically:{" "}
-            <code className="font-mono text-[13px] text-ink">await tools.search_agents({"{"} query: "…"
-            {"}"})</code>{" "}
-            on any /agents page.
-          </p>
-        </div>
-
-        {record.skill !== "" ? (
-          <div className="mt-10">
-            <h2 className="text-xl font-medium leading-7 text-ink">
-              <span className="mr-3 font-mono text-ink-2">02</span>Use it programmatically — get_agent
-            </h2>
-            <p className="mt-1 max-w-[70ch] text-sm leading-6 text-ink-2">
-              One call returns the full skill: the registerTool def plus the headless and headed invoke
-              recipes. Register it in your own page, drive it through agent-webmcp.
+            </dl>
+            <p className="mt-4 text-sm leading-6 text-ink-2">
+              Tool names are what {host} registered via its docs MCP ({record.invoke?.endpoint}). The
+              description and example prompts are suggestions — except the tried-live transcript, which is
+              verbatim from a verified run.
             </p>
-            <div className="mt-3 rounded-lg border border-line bg-raised p-5">
-              <div className="flex items-center justify-end">
-                <CopyCodeButton code={`await tools.get_agent({ domain: "${host}" })`} />
-              </div>
-              <pre className="mt-1 overflow-x-auto whitespace-pre-wrap font-mono text-[13px] leading-6 text-ink">{record.skill}</pre>
+          </aside>
+        </div>
+
+        {siblings.length > 0 && (
+          <div className="mt-12">
+            <h2 className="text-xl font-medium leading-7 text-ink">More {platformLabel} sites</h2>
+            <div className="mt-4 grid gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
+              {siblings.map((s) => (
+                <Link
+                  key={s.slug}
+                  href={`/agents/${s.slug}`}
+                  prefetch={false}
+                  className="flex items-center gap-3 bg-canvas p-4 no-underline transition hover:bg-hover/40"
+                >
+                  <OriginFavicon host={s.slug} size={28} />
+                  <span className="min-w-0">
+                    <span className="block truncate text-[15px] font-medium leading-5 text-ink">{s.slug}</span>
+                    <span className="block font-mono text-xs leading-4 text-ink-2">
+                      {s.tools} tool{s.tools === 1 ? "" : "s"} · {s.slug}
+                    </span>
+                  </span>
+                </Link>
+              ))}
             </div>
+            <p className="mt-3 text-[15px] leading-6 text-ink-2">
+              <Link href="/agents" className="text-link no-underline hover:opacity-80">
+                Browse all agents
+              </Link>
+            </p>
           </div>
-        ) : null}
-
-        <div className="mt-10 max-w-[70ch]">
-          <h2 className="text-xl font-medium leading-7 text-ink">Why ask instead of crawling</h2>
-          <ul className="mt-3 list-none space-y-3 p-0 text-[15px] leading-6 text-ink-2">
-            <li>
-              <span className="text-ink">Cited answers.</span> The agent searches its own docs and links the pages it
-              used — verify instead of reading everything.
-            </li>
-            <li>
-              <span className="text-ink">It keeps the thread.</span> Follow-ups resolve in context: no re-asking, no
-              re-feeding context.
-            </li>
-            <li>
-              <span className="text-ink">Honest no.</span> Out of scope comes back as a refusal with a redirect, not
-              junk snippets.
-            </li>
-          </ul>
-        </div>
-
-        <div className="mt-10">
-          <h2 className="text-xl font-medium leading-7 text-ink">More agents</h2>
-          <p className="mt-3 text-[15px] leading-6 text-ink-2">
-            <Link href="/agents" className="text-link no-underline hover:opacity-80">
-              Browse all agents
-            </Link>
-          </p>
-        </div>
-
-        {isMintlify ? (
-        <>
-                <div className="mt-10">
-                  <h2 className="text-xl font-medium leading-7 text-ink">Links</h2>
-                  <ul className="mt-3 list-none space-y-2 p-0 text-[15px] leading-6">
-                    <li>
-                      <a
-                        href="https://www.mintlify.com/docs"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-link no-underline hover:opacity-80"
-                      >
-                        Official documentation ↗
-                      </a>
-                    </li>
-                    <li>
-                      <a
-                        href="https://www.mintlify.com/docs/assistant"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-link no-underline hover:opacity-80"
-                      >
-                        Assistant docs ↗
-                      </a>
-                    </li>
-                  </ul>
-                </div>
-        </>
-) : null}
+        )}
 
         <p className="mt-8 border-t border-line pt-4 text-sm leading-5 text-ink-2">
           Something wrong?{" "}

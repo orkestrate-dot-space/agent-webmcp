@@ -10,6 +10,7 @@ interface ContractRow {
   description?: unknown;
   platform?: unknown;
   skill?: unknown;
+  tools?: unknown;
   invoke?: { transport?: unknown; endpoint?: unknown; example?: unknown };
   proof?: { verified?: unknown; ref?: unknown };
 }
@@ -30,6 +31,7 @@ function rows(): Array<{
   description: string;
   platform: string;
   skill: string;
+  tools: Array<{ name: string; params: string }>;
   transport: string;
   endpoint: string;
   example: string;
@@ -37,18 +39,24 @@ function rows(): Array<{
 }> {
   const file = contractsFile as unknown as { sites?: unknown };
   if (!Array.isArray(file.sites)) return [];
-  const out: Array<{ domain: string; description: string; platform: string; skill: string; transport: string; endpoint: string; example: string; verified: string }> = [];
+  const out: Array<{ domain: string; description: string; platform: string; skill: string; tools: Array<{ name: string; params: string }>; transport: string; endpoint: string; example: string; verified: string }> = [];
   for (const s of file.sites) {
     if (typeof s !== "object" || s === null) continue;
     const r = s as ContractRow;
     if (typeof r.slug !== "string" || r.slug === "") continue;
     const inv = (r.invoke ?? {}) as Record<string, unknown>;
     const proof = (r.proof ?? {}) as Record<string, unknown>;
+    const tools = Array.isArray(r.tools)
+      ? (r.tools as Array<Record<string, unknown>>)
+          .filter((t) => typeof t.name === "string" && t.name !== "")
+          .map((t) => ({ name: t.name as string, params: typeof t.params === "string" ? t.params : "" }))
+      : [];
     out.push({
       domain: r.slug,
       description: typeof r.description === "string" ? r.description : "",
       platform: typeof r.platform === "string" ? r.platform : "",
       skill: typeof r.skill === "string" ? r.skill : "",
+      tools,
       transport: typeof inv.transport === "string" ? inv.transport : "",
       endpoint: typeof inv.endpoint === "string" ? inv.endpoint : "",
       example: typeof inv.example === "string" ? inv.example : "",
@@ -125,6 +133,7 @@ export function RegisterAgentTools() {
             domain: hit.domain,
             description: hit.description,
             platform: hit.platform,
+            tools: hit.tools,
             invoke: { transport: hit.transport, endpoint: hit.endpoint, example: hit.example },
             skill: hit.skill,
             verified: hit.verified,

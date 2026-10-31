@@ -15,7 +15,21 @@
    "proof": {
     "verified": "2026-11-01",
     "ref": "askMintlify: multi-turn verified (?assistant= + panel read); declines out-of-scope (poem test); probe-mintlify: MCP initialize (Mintlify) + tools/list [search_mintlify, query_docs_filesystem_mintlify, submit_feedback] live; llms.txt 23900B; siteconfig present. Chat NOT verified (captcha-gated, needs non-bot browser)."
-   }
+   },
+   "tools": [
+    {
+     "name": "search_mintlify",
+     "params": "query: string, language: string?"
+    },
+    {
+     "name": "query_docs_filesystem_mintlify",
+     "params": "command: string"
+    },
+    {
+     "name": "submit_feedback",
+     "params": "path: string, feedback: string"
+    }
+   ]
   },
   {
    "origin": "https://claude.com",
@@ -31,7 +45,21 @@
    "proof": {
     "verified": "2026-11-01",
     "ref": "chat verified headed 2026-11-01 (deep-link auto-open + multi-turn pronoun resolution + poem-test refusal); probe-mintlify: MCP initialize (Claude.ai Documentation) + tools/list [search_claude_ai_documentation, query_docs_filesystem_claude_ai_documentation, submit_feedback] live; llms.txt 67759B; siteconfig present. Chat NOT verified (captcha-gated, needs non-bot browser)."
-   }
+   },
+   "tools": [
+    {
+     "name": "search_claude_ai_documentation",
+     "params": "query: string"
+    },
+    {
+     "name": "query_docs_filesystem_claude_ai_documentation",
+     "params": "command: string"
+    },
+    {
+     "name": "submit_feedback",
+     "params": "path: string, feedback: string"
+    }
+   ]
   },
   {
    "origin": "https://launchdarkly.com",
@@ -47,7 +75,21 @@
    "proof": {
     "verified": "2026-11-01",
     "ref": "Chat NOT tried live (captcha-gated, needs non-bot browser); probe-mintlify: MCP initialize (LaunchDarkly) + tools/list [search_launch_darkly, query_docs_filesystem_launch_darkly, submit_feedback] live; llms.txt 208806B; siteconfig present. Chat NOT verified (captcha-gated, needs non-bot browser)."
-   }
+   },
+   "tools": [
+    {
+     "name": "search_launch_darkly",
+     "params": "query: string"
+    },
+    {
+     "name": "query_docs_filesystem_launch_darkly",
+     "params": "command: string"
+    },
+    {
+     "name": "submit_feedback",
+     "params": "path: string, feedback: string"
+    }
+   ]
   },
   {
    "origin": "https://auth0.com",
@@ -63,7 +105,21 @@
    "proof": {
     "verified": "2026-11-01",
     "ref": "Chat NOT tried live (captcha-gated, needs non-bot browser); probe-mintlify: MCP initialize (Auth0 Docs) + tools/list [search_auth0_docs, query_docs_filesystem_auth0_docs, submit_feedback] live; llms.txt 43721B; siteconfig absent. Chat NOT verified (captcha-gated, needs non-bot browser)."
-   }
+   },
+   "tools": [
+    {
+     "name": "search_auth0_docs",
+     "params": "query: string, language: string?"
+    },
+    {
+     "name": "query_docs_filesystem_auth0_docs",
+     "params": "command: string"
+    },
+    {
+     "name": "submit_feedback",
+     "params": "path: string, feedback: string"
+    }
+   ]
   },
   {
    "origin": "https://bunny.net",
@@ -79,7 +135,21 @@
    "proof": {
     "verified": "2026-11-01",
     "ref": "Chat NOT tried live (captcha-gated, needs non-bot browser); probe-mintlify: MCP initialize (bunny.net Documentation) + tools/list [search_bunny_net_documentation, query_docs_filesystem_bunny_net_documentation, submit_feedback] live; llms.txt 82330B; siteconfig present. Chat NOT verified (captcha-gated, needs non-bot browser)."
-   }
+   },
+   "tools": [
+    {
+     "name": "search_bunny_net_documentation",
+     "params": "query: string"
+    },
+    {
+     "name": "query_docs_filesystem_bunny_net_documentation",
+     "params": "command: string"
+    },
+    {
+     "name": "submit_feedback",
+     "params": "path: string, feedback: string"
+    }
+   ]
   }
  ]
 }

@@ -35,11 +35,27 @@ async function probe(base) {
     const server = (itext.match(/"name":"([^"]+)"/) || [])[1] || "";
     const toolsRes = await jrpc(`${base}/mcp`, "tools/list", {});
     const ttext = await toolsRes.text();
-    const tools = [...ttext.matchAll(/"name":"([a-z0-9_]+)"/g)]
-      .map((m) => m[1])
-      .filter((n, i, a) => a.indexOf(n) === i);
-    const searchTool = tools.find((t) => t.startsWith("search")) || "";
-    const fsTool = tools.find((t) => /filesystem|fs|read|cat/.test(t)) || "";
+    const m = ttext.match(/^data: (.*)$/m);
+    let tools = [];
+    try {
+      const listed = (JSON.parse(m[1]).result?.tools ?? []).filter((t) => t && typeof t.name === "string");
+      tools = listed.map((t) => {
+        const props = t.inputSchema?.properties ?? {};
+        const req = new Set(t.inputSchema?.required ?? []);
+        const params = Object.entries(props)
+          .map(([k, v]) => `${k}: ${v?.type ?? "string"}${req.has(k) ? "" : "?"}`)
+          .join(", ");
+        return { name: t.name, params };
+      });
+    } catch {
+      tools = [...ttext.matchAll(/"name":"([a-z0-9_]+)"/g)]
+        .map((x) => x[1])
+        .filter((n, i, a) => a.indexOf(n) === i)
+        .map((name) => ({ name, params: "" }));
+    }
+    const toolNames = tools.map((t) => t.name);
+    const searchTool = toolNames.find((t) => t.startsWith("search")) || "";
+    const fsTool = toolNames.find((t) => /filesystem|fs|read|cat/.test(t)) || "";
     let llms = 0;
     try {
       const l = await fetch(`${base}/llms.txt`, { signal: AbortSignal.timeout(15000) });
@@ -67,8 +83,9 @@ async function probe(base) {
       skill: skillFor({ host, label, base, server, searchTool, fsTool }),
       proof: {
         verified: day,
-        ref: `probe-mintlify: MCP initialize (${server || "unnamed"}) + tools/list [${tools.join(", ")}] live; llms.txt ${llms > 0 ? llms + "B" : "missing"}; siteconfig ${siteconfig ? "present" : "absent"}. Chat NOT verified (captcha-gated, needs non-bot browser).`,
+        ref: `probe-mintlify: MCP initialize (${server || "unnamed"}) + tools/list [${toolNames.join(", ")}] live; llms.txt ${llms > 0 ? llms + "B" : "missing"}; siteconfig ${siteconfig ? "present" : "absent"}. Chat NOT verified (captcha-gated, needs non-bot browser).`,
       },
+      tools,
     };
   } catch (e) {
     out.error = String(e && e.message ? e.message : e).slice(0, 200);
