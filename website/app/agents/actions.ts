@@ -12,8 +12,6 @@ import { revalidatePath, revalidateTag, updateTag } from "next/cache";
 export async function revalidateAfterScan(host?: string): Promise<{ revalidated: boolean }> {
   updateTag("sites-list");
   revalidateTag("sites-list", "max");
-  updateTag("sites-counts");
-  revalidateTag("sites-counts", "max");
   if (host) {
     updateTag(host);
     revalidateTag(host, "max");

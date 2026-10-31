@@ -1,107 +1,102 @@
 import data from "../../sites.json";
-import type { SiteEntry } from "./sites-catalog";
+import type { AgentRecord, InvokeContract, Proof } from "./scan";
 import { SITES_API_VERSION } from "./scan";
 
 const WORKER = "https://agent-webmcp-sites.agent-webmcp.workers.dev";
 
-interface WorkerList {
-  sites?: unknown;
-  nextCursor?: unknown;
+export interface SiteEntry {
+  origin: string;
+  slug: string;
+  description: string;
+  invoke: InvokeContract | null;
+  proof: Proof;
 }
 
-interface WorkerCounts {
-  counts?: Record<string, unknown>;
+interface WorkerRow {
+  domain?: unknown;
+  description?: unknown;
+  proof?: { verified?: unknown };
 }
 
-export interface Counts {
-  total: number;
-  WebMCP: number;
-  Skills: number;
-  API: number;
-  MCP: number;
-  Auth: number;
-  Ask: number;
+interface ContractFile {
+  sites?: Array<{
+    origin?: unknown;
+    slug?: unknown;
+    description?: unknown;
+    invoke?: { transport?: unknown; endpoint?: unknown; example?: unknown };
+    proof?: { verified?: unknown; ref?: unknown };
+  }>;
 }
 
-const EMPTY_COUNTS: Counts = { total: 0, WebMCP: 0, Skills: 0, API: 0, MCP: 0, Auth: 0, Ask: 0 };
+const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
-const bool = (v: unknown): boolean => v === true;
-
-// Page 1 + chip counts from the worker (both cached 300s
-// there), sites.json fallback. Counts ride the server render so
-// chips never flash uncounted on mount or tab-back.
-export async function readFirstPage(): Promise<{ sites: Array<SiteEntry>; cursor: string | null; counts: Counts }> {
-  const fallback = (): Array<SiteEntry> => {
-    const file = data as unknown as { sites?: Array<SiteEntry> };
-    return Array.isArray(file.sites) ? file.sites : [];
-  };
-  const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
-  const readCounts = async (): Promise<Counts> => {
-    try {
-      const r = await fetch(`${WORKER}/sites/counts?v=${SITES_API_VERSION}`, {
-        next: { revalidate: 300, tags: ["sites-counts"] },
-      });
-      if (!r.ok) return EMPTY_COUNTS;
-      const j = (await r.json()) as WorkerCounts;
-      const c = j.counts ?? {};
-      return {
-        total: num(c["total"]),
-        WebMCP: num(c["webmcp"]),
-        Skills: num(c["skills"]),
-        API: num(c["api"]),
-        MCP: num(c["mcp"]),
-        Auth: num(c["auth"]),
-        Ask: num(c["ask"]),
-      };
-    } catch {
-      return EMPTY_COUNTS;
-    }
-  };
-  try {
-    const [r, counts] = await Promise.all([
-      fetch(`${WORKER}/sites?limit=50&v=${SITES_API_VERSION}`, {
-        next: { revalidate: 300, tags: ["sites-list"] },
-      }),
-      readCounts(),
-    ]);
-    if (!r.ok) return { sites: fallback(), cursor: null, counts };
-    const j = (await r.json()) as WorkerList;
-    if (!Array.isArray(j.sites)) return { sites: fallback(), cursor: null, counts };
-    const sites: Array<SiteEntry> = [];
-    for (const s of j.sites) {
-      if (typeof s !== "object" || s === null) continue;
-      const row = s as Record<string, unknown>;
-      if (typeof row["domain"] !== "string" || row["domain"] === "") continue;
-      const has = (row["has"] ?? {}) as Record<string, unknown>;
-      const proof = (row["proof"] ?? {}) as Record<string, unknown>;
-      sites.push({
-        origin: `https://${row["domain"]}`,
-        slug: row["domain"] as string,
-        description: typeof row["description"] === "string" ? (row["description"] as string) : "",
-        state: row["state"] === "quarantined" ? "quarantined" : "listed",
-        reason: typeof row["reason"] === "string" ? (row["reason"] as string) : "",
-        proof: {
-          verified: typeof proof["verified"] === "string" ? (proof["verified"] as string) : "",
-          ref: typeof proof["ref"] === "string" ? (proof["ref"] as string) : "",
-        },
-        repo: "",
-        path: "",
-        has: {
-          webmcp: bool(has["webmcp"]),
-          skills: bool(has["skills"]),
-          api: bool(has["api"]),
-          mcp: bool(has["mcp"]),
-          auth: bool(has["auth"]),
-          ask: bool(has["ask"]),
-        },
-      });
-    }
-    return {
-      sites,
-      cursor: typeof j.nextCursor === "string" && j.nextCursor !== "" ? j.nextCursor : null,
-      counts,
-    };
-  } catch {
-    return { sites: fallback(), cursor: null, counts: EMPTY_COUNTS };
+function contracts(): Map<string, { description: string; invoke: InvokeContract | null; proof: Proof }> {
+  const out = new Map<string, { description: string; invoke: InvokeContract | null; proof: Proof }>();
+  const file = data as unknown as ContractFile;
+  if (!Array.isArray(file.sites)) return out;
+  for (const s of file.sites) {
+    if (typeof s !== "object" || s === null || typeof s.slug !== "string") continue;
+    const inv = s.invoke;
+    out.set(s.slug, {
+      description: str(s.description),
+      invoke:
+        typeof inv === "object" && inv !== null
+          ? { transport: inv.transport as InvokeContract["transport"], endpoint: str(inv.endpoint), example: str(inv.example) }
+          : null,
+      proof: { verified: str(s.proof?.verified), ref: str(s.proof?.ref) },
+    });
   }
+  return out;
+}
+
+// v1: worker is presence, sites.json is the contract. One merged page,
+// no cursor — the list is short enough to serve whole.
+export async function readAgents(): Promise<Array<SiteEntry>> {
+  const known = contracts();
+  const fallback = (): Array<SiteEntry> =>
+    [...known].map(([slug, c]) => ({
+      origin: `https://${slug}`,
+      slug,
+      description: c.description,
+      invoke: c.invoke,
+      proof: c.proof,
+    }));
+  try {
+    const r = await fetch(`${WORKER}/sites?limit=100&v=${SITES_API_VERSION}`, {
+      next: { revalidate: 300, tags: ["sites-list"] },
+    });
+    if (!r.ok) return fallback();
+    const j = (await r.json()) as { sites?: unknown };
+    if (!Array.isArray(j.sites)) return fallback();
+    const rows: Array<SiteEntry> = [];
+    for (const w of j.sites) {
+      if (typeof w !== "object" || w === null) continue;
+      const row = w as WorkerRow;
+      if (typeof row.domain !== "string" || row.domain === "") continue;
+      const c = known.get(row.domain);
+      rows.push({
+        origin: `https://${row.domain}`,
+        slug: row.domain,
+        description: c?.description || str(row.description),
+        invoke: c?.invoke ?? null,
+        proof: {
+          verified: str((row.proof as { verified?: unknown } | undefined)?.verified) || c?.proof.verified || "",
+          ref: c?.proof.ref || "",
+        },
+      });
+    }
+    return rows;
+  } catch {
+    return fallback();
+  }
+}
+
+// Records for static params + metadata: contracts only (worker is live data, not build input).
+export function contractSlugs(): Array<string> {
+  return [...contracts()].map(([slug]) => slug);
+}
+
+export function contractOf(slug: string): Omit<AgentRecord, "origin" | "slug"> | null {
+  const c = contracts().get(slug);
+  return c ?? null;
 }

@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 
 import { SitesCatalog } from "./sites-catalog";
-import { readFirstPage } from "./list-data";
+import { RegisterAgentTools } from "./register-tools";
+import { readAgents } from "./list-data";
 
 export const metadata: Metadata = {
   title: "Agents · agent-webmcp",
@@ -13,7 +14,7 @@ export const metadata: Metadata = {
 export const revalidate = 300;
 
 export default async function SitesPage() {
-  const { sites, cursor, counts } = await readFirstPage();
+  const sites = await readAgents();
   return (
     <>
       <a
@@ -22,7 +23,8 @@ export default async function SitesPage() {
       >
         Skip to content
       </a>
-      <SitesCatalog initialSites={sites} initialCursor={cursor} initialCounts={counts} />
+      <SitesCatalog initialSites={sites} />
+      <RegisterAgentTools />
     </>
   );
 }

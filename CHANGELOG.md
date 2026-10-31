@@ -27,6 +27,14 @@ Base-prompt budget gated: skill text + all served descriptions ≤ 8000
 chars (~2k tokens; currently ~4.7k). Skill loop now states plan-up-front
 (one program over many calls, `Promise.all` for independent awaits).
 
+**New (non-breaking):** authored site agents. Sessions opened on a
+contracted origin (/agents rows, compiled in — v1: mintlify.com) also
+serve `ask_<site>({question})`: a fixed per-transport driver that asks
+the site's own assistant in a dedicated tab and returns its answer.
+Native verbs of the same name always win; mint-refusing browsers fail
+loud. Nothing is read from or written to disk for this — the row is
+data, the driver is engine code.
+
 **Breaking:** the registry is gone. No `registry/` reads or writes anywhere:
 `src/registry.ts`, `src/admission.ts`, `src/snippet.ts` (and their tests)
 deleted; verbs resolve live-only. `open` absorbs `attach` (`{url}` mints,
