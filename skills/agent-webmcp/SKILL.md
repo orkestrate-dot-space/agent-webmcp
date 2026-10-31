@@ -28,8 +28,9 @@ skill (this file) -> open {url|targetId} -> list {handle} -> execute {code} -> c
    `list`, the page serves nothing. If it fails to connect,
    run `doctor` before retrying.
 3. **List before calling.** `list {handle}` returns the only names
-   `execute` may call. `list {handle, tool}` for one
-   verb's full schema. Empty is not an error — the page serves nothing.
+   `execute` may call, each with its call signature. `list {handle,
+   tool}` for one verb's full schema. Empty is not an error — the
+   page serves nothing.
 4. **Execute code, not calls.** Plan the whole workflow first, then
    write it as one program — one `execute` beats five small ones.
    One handle runs flat (`await tools.NAME(args)`);
