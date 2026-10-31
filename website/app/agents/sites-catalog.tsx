@@ -15,13 +15,23 @@ function Row({ site }: { site: SiteEntry }) {
     <Link
       href={`/agents/${host}`}
       prefetch={false}
-      className="flex flex-wrap items-center gap-4 border-b border-line py-4 no-underline transition-colors hover:bg-hover/40"
+      className="flex items-center gap-4 border-b border-line py-4 no-underline transition-colors hover:bg-hover/40"
     >
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] border border-line bg-raised">
         <OriginFavicon host={host} size={22} />
       </span>
-      <span className="w-36 shrink-0 truncate text-[15px] font-medium leading-5 text-ink sm:w-52">{host}</span>
-      <span className="min-w-0 flex-1 truncate text-sm leading-5 text-ink-2">{site.description}</span>
+      <span className="min-w-0 flex-1">
+        <span className="flex flex-wrap items-baseline gap-x-3">
+          <span className="text-[15px] font-medium leading-5 text-ink">{host}</span>
+          <span className="font-mono text-[13px] leading-5 text-ink-2">{site.origin}</span>
+        </span>
+        <span className="mt-0.5 block truncate text-sm leading-5 text-ink-2">{site.description}</span>
+      </span>
+      {site.platform !== "" ? (
+        <span className="hidden shrink-0 rounded-full border border-line px-2.5 py-1 font-mono text-xs leading-4 text-ink-2 sm:inline-block">
+          {site.platform}
+        </span>
+      ) : null}
     </Link>
   );
 }

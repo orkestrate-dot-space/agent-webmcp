@@ -1,1 +1,85 @@
-{"version":2,"sites":[{"origin":"https://mintlify.com","slug":"mintlify.com","description":"Ask Mintlify's docs assistant anything; answers with citations from their docs.","invoke":{"transport":"deep-link","endpoint":"https://www.mintlify.com/docs/<page>?assistant=<question>","example":"ask_mintlify({question: \"How do I get started?\"}) → worked answer with citations; follow-ups keep the thread"},"proof":{"verified":"2026-10-31","ref":"askMintlify: multi-turn verified (?assistant= + panel read); declines out-of-scope (poem test); hosted MCP + 5 WebMCP verbs also live"}}]}
+{
+ "version": 2,
+ "sites": [
+  {
+   "origin": "https://mintlify.com",
+   "slug": "mintlify.com",
+   "description": "Ask Mintlify's docs assistant anything; answers with citations from their docs.",
+   "platform": "mintlify",
+   "invoke": {
+    "transport": "mcp",
+    "endpoint": "https://www.mintlify.com/docs/mcp",
+    "example": "tools/call search_mintlify {\"query\": \"...\"} -> cited passages; query_docs_filesystem_mintlify head -80 /<path>.mdx"
+   },
+   "skill": "ASK mintlify.com docs (platform: mintlify).\nTIER 1 — headless-safe (MCP, no auth): POST https://www.mintlify.com/docs/mcp JSON-RPC (Streamable HTTP, Accept: application/json, text/event-stream).\ninit: {\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"x\",\"version\":\"0\"}}}\nsearch: tools/call {\"name\":\"search_mintlify\",\"arguments\":{\"query\":\"...\"}} -> results with page paths.\nread: tools/call {\"name\":\"query_docs_filesystem_mintlify\",\"arguments\":{\"command\":\"head -80 /<path>.mdx\"}} (append .mdx to the result path).\nregisterTool def to expose it: {\"name\":\"ask_mintlify\",\"description\":\"Ask mintlify.com docs; returns cited passages.\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"question\":{\"type\":\"string\"}},\"required\":[\"question\"]}} with execute running TIER 1.\nTIER 2 — headed browser only (bot-gated chat): open https://www.mintlify.com/docs?assistant=<urlencoded question> (panel auto-opens; else click button[aria-label=\"Toggle assistant panel\"]). Read [role=\"dialog\"] text for the cited answer. Follow-ups: set textarea value, dispatch input, click Send — same tab keeps the thread. Needs a non-bot browser (webdriver=false alone is not enough).",
+   "proof": {
+    "verified": "2026-11-01",
+    "ref": "askMintlify: multi-turn verified (?assistant= + panel read); declines out-of-scope (poem test); probe-mintlify: MCP initialize (Mintlify) + tools/list [search_mintlify, query_docs_filesystem_mintlify, submit_feedback] live; llms.txt 23900B; siteconfig present. Chat NOT verified (captcha-gated, needs non-bot browser)."
+   }
+  },
+  {
+   "origin": "https://claude.com",
+   "slug": "claude.com",
+   "description": "Ask Claude's docs anything; grounded answers with page citations, multi-turn threads.",
+   "platform": "mintlify",
+   "invoke": {
+    "transport": "mcp",
+    "endpoint": "https://claude.com/docs/mcp",
+    "example": "tools/call search_claude_ai_documentation {\"query\": \"...\"} -> cited passages; query_docs_filesystem_claude_ai_documentation head -80 /<path>.mdx"
+   },
+   "skill": "ASK claude.com docs (platform: mintlify).\nTIER 1 — headless-safe (MCP, no auth): POST https://claude.com/docs/mcp JSON-RPC (Streamable HTTP, Accept: application/json, text/event-stream).\ninit: {\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"x\",\"version\":\"0\"}}}\nsearch: tools/call {\"name\":\"search_claude_ai_documentation\",\"arguments\":{\"query\":\"...\"}} -> results with page paths.\nread: tools/call {\"name\":\"query_docs_filesystem_claude_ai_documentation\",\"arguments\":{\"command\":\"head -80 /<path>.mdx\"}} (append .mdx to the result path).\nregisterTool def to expose it: {\"name\":\"ask_claude\",\"description\":\"Ask claude.com docs; returns cited passages.\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"question\":{\"type\":\"string\"}},\"required\":[\"question\"]}} with execute running TIER 1.\nTIER 2 — headed browser only (bot-gated chat): open https://claude.com/docs?assistant=<urlencoded question> (panel auto-opens; else click button[aria-label=\"Toggle assistant panel\"]). Read [role=\"dialog\"] text for the cited answer. Follow-ups: set textarea value, dispatch input, click Send — same tab keeps the thread. Needs a non-bot browser (webdriver=false alone is not enough).",
+   "proof": {
+    "verified": "2026-11-01",
+    "ref": "chat verified headed 2026-11-01 (deep-link auto-open + multi-turn pronoun resolution + poem-test refusal); probe-mintlify: MCP initialize (Claude.ai Documentation) + tools/list [search_claude_ai_documentation, query_docs_filesystem_claude_ai_documentation, submit_feedback] live; llms.txt 67759B; siteconfig present. Chat NOT verified (captcha-gated, needs non-bot browser)."
+   }
+  },
+  {
+   "origin": "https://launchdarkly.com",
+   "slug": "launchdarkly.com",
+   "description": "Search LaunchDarkly docs and read pages as Markdown via Mintlify MCP.",
+   "platform": "mintlify",
+   "invoke": {
+    "transport": "mcp",
+    "endpoint": "https://launchdarkly.com/docs/mcp",
+    "example": "tools/call search_launch_darkly {\"query\": \"...\"} -> cited passages; query_docs_filesystem_launch_darkly head -80 /<path>.mdx"
+   },
+   "skill": "ASK launchdarkly.com docs (platform: mintlify).\nTIER 1 — headless-safe (MCP, no auth): POST https://launchdarkly.com/docs/mcp JSON-RPC (Streamable HTTP, Accept: application/json, text/event-stream).\ninit: {\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"x\",\"version\":\"0\"}}}\nsearch: tools/call {\"name\":\"search_launch_darkly\",\"arguments\":{\"query\":\"...\"}} -> results with page paths.\nread: tools/call {\"name\":\"query_docs_filesystem_launch_darkly\",\"arguments\":{\"command\":\"head -80 /<path>.mdx\"}} (append .mdx to the result path).\nregisterTool def to expose it: {\"name\":\"ask_launchdarkly\",\"description\":\"Ask launchdarkly.com docs; returns cited passages.\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"question\":{\"type\":\"string\"}},\"required\":[\"question\"]}} with execute running TIER 1.\nTIER 2 — headed browser only (bot-gated chat): open https://launchdarkly.com/docs?assistant=<urlencoded question> (panel auto-opens; else click button[aria-label=\"Toggle assistant panel\"]). Read [role=\"dialog\"] text for the cited answer. Follow-ups: set textarea value, dispatch input, click Send — same tab keeps the thread. Needs a non-bot browser (webdriver=false alone is not enough).",
+   "proof": {
+    "verified": "2026-11-01",
+    "ref": "Chat NOT tried live (captcha-gated, needs non-bot browser); probe-mintlify: MCP initialize (LaunchDarkly) + tools/list [search_launch_darkly, query_docs_filesystem_launch_darkly, submit_feedback] live; llms.txt 208806B; siteconfig present. Chat NOT verified (captcha-gated, needs non-bot browser)."
+   }
+  },
+  {
+   "origin": "https://auth0.com",
+   "slug": "auth0.com",
+   "description": "Search Auth0 docs and read pages as Markdown via Mintlify MCP.",
+   "platform": "mintlify",
+   "invoke": {
+    "transport": "mcp",
+    "endpoint": "https://auth0.com/docs/mcp",
+    "example": "tools/call search_auth0_docs {\"query\": \"...\"} -> cited passages; query_docs_filesystem_auth0_docs head -80 /<path>.mdx"
+   },
+   "skill": "ASK auth0.com docs (platform: mintlify).\nTIER 1 — headless-safe (MCP, no auth): POST https://auth0.com/docs/mcp JSON-RPC (Streamable HTTP, Accept: application/json, text/event-stream).\ninit: {\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"x\",\"version\":\"0\"}}}\nsearch: tools/call {\"name\":\"search_auth0_docs\",\"arguments\":{\"query\":\"...\"}} -> results with page paths.\nread: tools/call {\"name\":\"query_docs_filesystem_auth0_docs\",\"arguments\":{\"command\":\"head -80 /<path>.mdx\"}} (append .mdx to the result path).\nregisterTool def to expose it: {\"name\":\"ask_auth0\",\"description\":\"Ask auth0.com docs; returns cited passages.\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"question\":{\"type\":\"string\"}},\"required\":[\"question\"]}} with execute running TIER 1.\nTIER 2 — headed browser only (bot-gated chat): open https://auth0.com/docs?assistant=<urlencoded question> (panel auto-opens; else click button[aria-label=\"Toggle assistant panel\"]). Read [role=\"dialog\"] text for the cited answer. Follow-ups: set textarea value, dispatch input, click Send — same tab keeps the thread. Needs a non-bot browser (webdriver=false alone is not enough).",
+   "proof": {
+    "verified": "2026-11-01",
+    "ref": "Chat NOT tried live (captcha-gated, needs non-bot browser); probe-mintlify: MCP initialize (Auth0 Docs) + tools/list [search_auth0_docs, query_docs_filesystem_auth0_docs, submit_feedback] live; llms.txt 43721B; siteconfig absent. Chat NOT verified (captcha-gated, needs non-bot browser)."
+   }
+  },
+  {
+   "origin": "https://bunny.net",
+   "slug": "bunny.net",
+   "description": "Search bunny.net CDN docs and read pages as Markdown via Mintlify MCP.",
+   "platform": "mintlify",
+   "invoke": {
+    "transport": "mcp",
+    "endpoint": "https://bunny.net/docs/mcp",
+    "example": "tools/call search_bunny_net_documentation {\"query\": \"...\"} -> cited passages; query_docs_filesystem_bunny_net_documentation head -80 /<path>.mdx"
+   },
+   "skill": "ASK bunny.net docs (platform: mintlify).\nTIER 1 — headless-safe (MCP, no auth): POST https://bunny.net/docs/mcp JSON-RPC (Streamable HTTP, Accept: application/json, text/event-stream).\ninit: {\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"x\",\"version\":\"0\"}}}\nsearch: tools/call {\"name\":\"search_bunny_net_documentation\",\"arguments\":{\"query\":\"...\"}} -> results with page paths.\nread: tools/call {\"name\":\"query_docs_filesystem_bunny_net_documentation\",\"arguments\":{\"command\":\"head -80 /<path>.mdx\"}} (append .mdx to the result path).\nregisterTool def to expose it: {\"name\":\"ask_bunny\",\"description\":\"Ask bunny.net docs; returns cited passages.\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"question\":{\"type\":\"string\"}},\"required\":[\"question\"]}} with execute running TIER 1.\nTIER 2 — headed browser only (bot-gated chat): open https://bunny.net/docs?assistant=<urlencoded question> (panel auto-opens; else click button[aria-label=\"Toggle assistant panel\"]). Read [role=\"dialog\"] text for the cited answer. Follow-ups: set textarea value, dispatch input, click Send — same tab keeps the thread. Needs a non-bot browser (webdriver=false alone is not enough).",
+   "proof": {
+    "verified": "2026-11-01",
+    "ref": "Chat NOT tried live (captcha-gated, needs non-bot browser); probe-mintlify: MCP initialize (bunny.net Documentation) + tools/list [search_bunny_net_documentation, query_docs_filesystem_bunny_net_documentation, submit_feedback] live; llms.txt 82330B; siteconfig present. Chat NOT verified (captcha-gated, needs non-bot browser)."
+   }
+  }
+ ]
+}

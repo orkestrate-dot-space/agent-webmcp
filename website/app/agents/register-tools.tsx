@@ -8,6 +8,8 @@ interface ContractRow {
   origin?: unknown;
   slug?: unknown;
   description?: unknown;
+  platform?: unknown;
+  skill?: unknown;
   invoke?: { transport?: unknown; endpoint?: unknown; example?: unknown };
   proof?: { verified?: unknown; ref?: unknown };
 }
@@ -26,6 +28,8 @@ interface ModelContext {
 function rows(): Array<{
   domain: string;
   description: string;
+  platform: string;
+  skill: string;
   transport: string;
   endpoint: string;
   example: string;
@@ -33,7 +37,7 @@ function rows(): Array<{
 }> {
   const file = contractsFile as unknown as { sites?: unknown };
   if (!Array.isArray(file.sites)) return [];
-  const out: Array<{ domain: string; description: string; transport: string; endpoint: string; example: string; verified: string }> = [];
+  const out: Array<{ domain: string; description: string; platform: string; skill: string; transport: string; endpoint: string; example: string; verified: string }> = [];
   for (const s of file.sites) {
     if (typeof s !== "object" || s === null) continue;
     const r = s as ContractRow;
@@ -43,6 +47,8 @@ function rows(): Array<{
     out.push({
       domain: r.slug,
       description: typeof r.description === "string" ? r.description : "",
+      platform: typeof r.platform === "string" ? r.platform : "",
+      skill: typeof r.skill === "string" ? r.skill : "",
       transport: typeof inv.transport === "string" ? inv.transport : "",
       endpoint: typeof inv.endpoint === "string" ? inv.endpoint : "",
       example: typeof inv.example === "string" ? inv.example : "",
@@ -66,7 +72,7 @@ export function RegisterAgentTools() {
         name: "search_agents",
         title: "Search listed site agents",
         description:
-          "Find /agents entries matching a capability or question. Returns each match with its full invoke contract: domain, description, transport, endpoint, worked example, and proof date. This is how you find and call a site's agent.",
+          "Find /agents entries matching a capability or question. Returns each match with its full invoke contract: domain, description, platform, transport, endpoint, worked example, and proof date. This is how you find and call a site's agent.",
         inputSchema: {
           type: "object",
           properties: { query: { type: "string", description: "Capability or question to match, e.g. 'docs assistant'. Empty returns all rows." } },
@@ -79,7 +85,7 @@ export function RegisterAgentTools() {
           const terms = (typeof q === "string" ? q : "").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
           const hits = rows()
             .map((r) => {
-              const hay = `${r.domain} ${r.description} ${r.transport}`.toLowerCase();
+              const hay = `${r.domain} ${r.description} ${r.platform} ${r.transport}`.toLowerCase();
               const score = terms.reduce((n, t) => n + (hay.includes(t) ? 1 : 0), 0);
               return { r, score };
             })
@@ -89,10 +95,40 @@ export function RegisterAgentTools() {
             .map((h) => ({
               domain: h.r.domain,
               description: h.r.description,
+              platform: h.r.platform,
               invoke: { transport: h.r.transport, endpoint: h.r.endpoint, example: h.r.example },
               verified: h.r.verified,
             }));
           return { agents: hits };
+        },
+      },
+      opts
+    );
+    mc.registerTool(
+      {
+        name: "get_agent",
+        title: "Get a site agent's skill",
+        description:
+          "Return the full skill for one listed site agent: how to register it as a custom WebMCP tool (registerTool def) and how to invoke it through agent-webmcp, headless tier and headed tier. Call search_agents first to find the domain.",
+        inputSchema: {
+          type: "object",
+          properties: { domain: { type: "string", description: "Exact listed domain, e.g. 'claude.com'." } },
+          required: ["domain"],
+          additionalProperties: false,
+        },
+        annotations: { readOnlyHint: true },
+        execute: (input: unknown) => {
+          const d = (((input ?? {}) as { domain?: unknown }).domain ?? "").toString().toLowerCase().trim();
+          const hit = rows().find((r) => r.domain === d || r.domain === d.replace(/^www\./, ""));
+          if (!hit) return { error: `no listed agent for '${d}' — try search_agents to find one` };
+          return {
+            domain: hit.domain,
+            description: hit.description,
+            platform: hit.platform,
+            invoke: { transport: hit.transport, endpoint: hit.endpoint, example: hit.example },
+            skill: hit.skill,
+            verified: hit.verified,
+          };
         },
       },
       opts

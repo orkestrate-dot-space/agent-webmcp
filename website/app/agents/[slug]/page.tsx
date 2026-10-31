@@ -9,6 +9,8 @@ import type { InvokeContract } from "../scan";
 import { looksLikeDomain, SITES_API_VERSION } from "../scan";
 import { OriginFavicon } from "../site-art";
 import { CopyCodeButton } from "./copy-code-button";
+import { LatencyChart } from "./latency-chart";
+import runsFile from "../../../data/mintlify-runs.json";
 import { ExternalLink } from "lucide-react";
 
 export const dynamicParams = true;
@@ -24,6 +26,8 @@ interface RecordShape {
   origin: string;
   slug: string;
   description: string;
+  platform: string;
+  skill: string;
   invoke: InvokeContract | null;
 }
 
@@ -55,6 +59,8 @@ async function readRecord(host: string): Promise<RecordShape | null> {
     origin: `https://${worker?.domain ?? host}`,
     slug: host,
     description: contract?.description || worker?.description || "",
+    platform: contract?.platform || "",
+    skill: contract?.skill || "",
     invoke: contract?.invoke ?? null,
   };
 }
@@ -68,7 +74,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const host = slug.includes(".") ? slug.toLowerCase() : null;
   if (host === null) return { title: "Not found · agent-webmcp" };
-  return { title: `${host} · agent-webmcp`, description: `Ask ${host} through agent-webmcp.` };
+  return { title: `${host} · agent-webmcp`, description: `Ask ${host}'s AI assistant through agent-webmcp.` };
 }
 
 function Shell({ host, children }: { host: string; children: React.ReactNode }) {
@@ -93,11 +99,33 @@ function Shell({ host, children }: { host: string; children: React.ReactNode }) 
 const ASK_SNIPPET = (tool: string) =>
   `const answer = await tools.${tool}({\n  question: "How do I get started?",\n});\n// → worked answer with citations`;
 
-const FIND_SNIPPET = `const found = await tools.search_agents({\n  query: "docs assistant",\n});\n// → { domain, invoke contract, verified }`;
-
 const TRIED_Q = "How do I get started?";
 const TRIED_A =
   "Read 1 file and ran 1 command. Follow the Quickstart: deploy via mintlify.com/start, then make changes in the web editor or with the CLI… with links to the pages it used.";
+
+const COPY_PROMPT = (host: string, description: string) =>
+  `You can ask ${host}'s docs assistant anything about what's in their docs. ${description} It answers with citations to the pages it used, keeps context across follow-up questions, and says no to out-of-scope questions instead of guessing. When I ask about ${host}, consult it first and cite what it says.`;
+
+interface RunRow {
+  label?: unknown;
+  question?: unknown;
+  ok?: unknown;
+  ms?: unknown;
+  cited?: unknown;
+}
+
+function measuredRuns(): Array<{ label: string; question: string; ok: boolean; ms: number; cited: boolean }> {
+  const file = runsFile as unknown as { runs?: unknown };
+  if (!Array.isArray(file.runs)) return [];
+  return file.runs.flatMap((r) => {
+    if (typeof r !== "object" || r === null) return [];
+    const row = r as Record<string, unknown>;
+    if (typeof row.label !== "string" || typeof row.question !== "string" || typeof row.ms !== "number") return [];
+    return [{ label: row.label, question: row.question, ok: row.ok === true, ms: row.ms, cited: row.cited === true }];
+  });
+}
+
+const fmtSecs = (ms: number): string => `${(Math.round((ms / 1000) * 10) / 10).toFixed(1)}s`;
 
 export default async function SitePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -116,6 +144,28 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
 
   const tool = `ask_${host.split(".")[0]}`;
   const askSnippet = ASK_SNIPPET(tool);
+  const copyPrompt = COPY_PROMPT(host, record.description);
+  const tryHref = `https://www.${host}/docs/quickstart?assistant=${encodeURIComponent("How do I get started?")}`;
+  const isMintlify = host === "mintlify.com";
+  const isMintlifyPlatform = record.platform === "mintlify" && !isMintlify;
+  const mcpTool = (record.invoke?.example.match(/tools\/call (\S+)/) ?? [])[1] ?? "search";
+  const mcpSnippet = `const res = await fetch("${record.invoke?.endpoint ?? ""}", {\n  method: "POST",\n  headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },\n  body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call",\n    params: { name: "${mcpTool}", arguments: { query: "How do I get started?" } } }),\n});\n// -> cited passages with source links (no key, no browser)`;
+// Measured runs are mintlify.com's — never show another host's numbers.
+  const runs = isMintlify ? measuredRuns() : [];
+  const okRuns = runs.filter((r) => r.ok);
+  const sortedMs = [...runs.map((r) => r.ms)].sort((a, b) => a - b);
+  const medianMs = sortedMs.length > 0 ? sortedMs[Math.floor(sortedMs.length / 2)] : 0;
+  const slowestMs = sortedMs.length > 0 ? sortedMs[sortedMs.length - 1] : 0;
+  const citedCount = runs.filter((r) => r.ok && r.cited).length;
+  const stats: Array<{ label: string; value: string }> =
+    runs.length > 0
+      ? [
+          { label: "Success rate", value: `${okRuns.length}/${runs.length}` },
+          { label: "Median response", value: fmtSecs(medianMs) },
+          { label: "Slowest verified", value: fmtSecs(slowestMs) },
+          { label: "Cited answers", value: `${citedCount}/${okRuns.length}` },
+        ]
+      : [];
 
   return (
     <>
@@ -126,33 +176,41 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
             ← All agents
           </Link>
         </p>
-
         <div className="mt-8 flex min-w-0 items-start gap-5">
           <div className="mt-1.5 shrink-0">
             <OriginFavicon host={host} size={64} />
           </div>
           <div className="w-max min-w-0 max-w-full">
-            <p className="font-mono text-xs uppercase tracking-wide text-ink-2">{record.invoke.transport}</p>
-            <h1 className="mt-1 break-all text-[clamp(1.75rem,1.25rem+3.5vw,3rem)] font-medium leading-[1.05] tracking-[-0.04em] text-ink">
-              {host}
+            <h1 className="break-all text-[clamp(1.75rem,1.25rem+3.5vw,3rem)] font-medium leading-[1.05] tracking-[-0.04em] text-ink">
+              {host}{" "}
+              <span className="inline-flex items-center gap-1.5 align-middle font-sans text-sm font-normal leading-5 text-ink-2">
+                <span aria-hidden="true" className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+                Verified
+              </span>{" "}
+              {record.platform !== "" ? (
+                <span className="inline-flex items-center rounded-full border border-line px-2.5 py-1 align-middle font-mono text-xs font-normal leading-4 text-ink-2">
+                  {record.platform}
+                </span>
+              ) : null}
             </h1>
             {record.description !== "" ? (
               <p className="mt-3 max-w-[60ch] text-[15px] leading-6 text-ink-2">{record.description}</p>
             ) : null}
             <div className="mt-4 flex flex-wrap gap-3">
-              <CopyCodeButton code={`await tools.${tool}({ question: "<question>" })`} label="Copy prompt" primary />
+              <CopyCodeButton code={copyPrompt} label="Copy prompt" primary />
               <a
-                href={`https://${host}`}
+                href={tryHref}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex h-9 cursor-pointer items-center rounded-full border border-line px-4 text-sm font-medium leading-5 text-ink no-underline transition hover:bg-hover"
               >
-                Open site ↗
+                Try it ↗
               </a>
             </div>
           </div>
         </div>
 
+        {isMintlify ? (
         <div className="mt-10 rounded-lg border border-line bg-raised p-5">
           <p className="font-mono text-xs uppercase tracking-wide text-ink-2">Tried live — one real exchange</p>
           <p className="mt-3 text-[15px] leading-6 text-ink">
@@ -164,34 +222,111 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
             {TRIED_A}
           </p>
         </div>
+        ) : null}
+        {host === "claude.com" ? (
+        <div className="mt-10 rounded-lg border border-line bg-raised p-5">
+          <p className="font-mono text-xs uppercase tracking-wide text-ink-2">Tried live — multi-turn, headed browser</p>
+          <p className="mt-3 text-[15px] leading-6 text-ink">
+            <span className="text-ink-2">Q: </span>
+            What is a connector?
+          </p>
+          <p className="mt-1 text-[15px] leading-6 text-ink">
+            <span className="text-ink-2">A: </span>
+            Read 1 file. A connector links Claude to an outside app or service… with links to Get started with connectors and the connectors directory.
+          </p>
+          <p className="mt-3 text-[15px] leading-6 text-ink">
+            <span className="text-ink-2">Q: </span>
+            How is that different from an MCP server?
+          </p>
+          <p className="mt-1 text-[15px] leading-6 text-ink">
+            <span className="text-ink-2">A: </span>
+            Resolved “that” in context: a connector is the user-facing presentation, the MCP server is what it connects to — directory vs custom, same infrastructure.
+          </p>
+        </div>
+        ) : null}
+
+        {runs.length > 0 ? (
+          <div className="mt-10">
+            <h2 className="text-xl font-medium leading-7 text-ink">Measured, not modeled</h2>
+            <p className="mt-1 max-w-[70ch] text-sm leading-6 text-ink-2">
+              Every run below is a real ask through the engine — open tab, deep link, wait for the settled answer,
+              read it. No sampling, no estimates.
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+              {stats.map((s) => (
+                <div key={s.label} className="rounded-lg border border-line bg-raised p-5">
+                  <p className="text-sm leading-5 text-ink-2">{s.label}</p>
+                  <p className="mt-1 font-mono text-2xl leading-8 text-ink">{s.value}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 rounded-lg border border-line bg-raised p-5">
+              <p className="font-mono text-xs uppercase tracking-wide text-ink-2">Response time per verified run</p>
+              <div className="mt-2 h-56">
+                <LatencyChart runs={runs.map((r) => ({ label: r.label, ms: r.ms }))} />
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         <div className="mt-10">
           <h2 className="text-xl font-medium leading-7 text-ink">
             <span className="mr-3 font-mono text-ink-2">01</span>Ask it — one call
           </h2>
-          <div className="mt-3 rounded-lg border border-line bg-raised p-5">
-            <div className="flex items-center justify-end">
-              <CopyCodeButton code={askSnippet} />
-            </div>
-            <pre className="mt-1 overflow-x-auto font-mono text-[13px] leading-6 text-ink">{askSnippet}</pre>
-          </div>
+          {isMintlifyPlatform ? (
+            <>
+              <p className="mt-1 max-w-[70ch] text-sm leading-6 text-ink-2">
+                Headless-safe: this docs MCP answers without a key or a browser.
+              </p>
+              <div className="mt-3 rounded-lg border border-line bg-raised p-5">
+                <div className="flex items-center justify-end">
+                  <CopyCodeButton code={mcpSnippet} />
+                </div>
+                <pre className="mt-1 overflow-x-auto font-mono text-[13px] leading-6 text-ink">{mcpSnippet}</pre>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="mt-1 max-w-[70ch] text-sm leading-6 text-ink-2">
+                No install — built into agent-webmcp. Ask from any {host} session:
+              </p>
+              <div className="mt-3 rounded-lg border border-line bg-raised p-5">
+                <div className="flex items-center justify-end">
+                  <CopyCodeButton code={askSnippet} />
+                </div>
+                <pre className="mt-1 overflow-x-auto font-mono text-[13px] leading-6 text-ink">{askSnippet}</pre>
+              </div>
+            </>
+          )}
+          <p className="mt-3 max-w-[70ch] text-sm leading-6 text-ink-2">
+            Find it programmatically:{" "}
+            <code className="font-mono text-[13px] text-ink">await tools.search_agents({"{"} query: "…"
+            {"}"})</code>{" "}
+            on any /agents page.
+          </p>
         </div>
 
-        <div className="mt-10">
-          <h2 className="text-xl font-medium leading-7 text-ink">
-            <span className="mr-3 font-mono text-ink-2">02</span>Find it programmatically — from any agent
-          </h2>
-          <div className="mt-3 rounded-lg border border-line bg-raised p-5">
-            <div className="flex items-center justify-end">
-              <CopyCodeButton code={FIND_SNIPPET} />
+        {record.skill !== "" ? (
+          <div className="mt-10">
+            <h2 className="text-xl font-medium leading-7 text-ink">
+              <span className="mr-3 font-mono text-ink-2">02</span>Use it programmatically — get_agent
+            </h2>
+            <p className="mt-1 max-w-[70ch] text-sm leading-6 text-ink-2">
+              One call returns the full skill: the registerTool def plus the headless and headed invoke
+              recipes. Register it in your own page, drive it through agent-webmcp.
+            </p>
+            <div className="mt-3 rounded-lg border border-line bg-raised p-5">
+              <div className="flex items-center justify-end">
+                <CopyCodeButton code={`await tools.get_agent({ domain: "${host}" })`} />
+              </div>
+              <pre className="mt-1 overflow-x-auto whitespace-pre-wrap font-mono text-[13px] leading-6 text-ink">{record.skill}</pre>
             </div>
-            <pre className="mt-1 overflow-x-auto font-mono text-[13px] leading-6 text-ink">{FIND_SNIPPET}</pre>
           </div>
-        </div>
+        ) : null}
 
-        <div className="mt-10">
+        <div className="mt-10 max-w-[70ch]">
           <h2 className="text-xl font-medium leading-7 text-ink">Why ask instead of crawling</h2>
-          <ul className="mt-3 max-w-[70ch] list-none space-y-3 p-0 text-[15px] leading-6 text-ink-2">
+          <ul className="mt-3 list-none space-y-3 p-0 text-[15px] leading-6 text-ink-2">
             <li>
               <span className="text-ink">Cited answers.</span> The agent searches its own docs and links the pages it
               used — verify instead of reading everything.
@@ -215,6 +350,36 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
             </Link>
           </p>
         </div>
+
+        {isMintlify ? (
+        <>
+                <div className="mt-10">
+                  <h2 className="text-xl font-medium leading-7 text-ink">Links</h2>
+                  <ul className="mt-3 list-none space-y-2 p-0 text-[15px] leading-6">
+                    <li>
+                      <a
+                        href="https://www.mintlify.com/docs"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-link no-underline hover:opacity-80"
+                      >
+                        Official documentation ↗
+                      </a>
+                    </li>
+                    <li>
+                      <a
+                        href="https://www.mintlify.com/docs/assistant"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-link no-underline hover:opacity-80"
+                      >
+                        Assistant docs ↗
+                      </a>
+                    </li>
+                  </ul>
+                </div>
+        </>
+) : null}
 
         <p className="mt-8 border-t border-line pt-4 text-sm leading-5 text-ink-2">
           Something wrong?{" "}

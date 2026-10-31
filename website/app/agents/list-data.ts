@@ -8,6 +8,8 @@ export interface SiteEntry {
   origin: string;
   slug: string;
   description: string;
+  platform: string;
+  skill: string;
   invoke: InvokeContract | null;
   proof: Proof;
 }
@@ -23,6 +25,8 @@ interface ContractFile {
     origin?: unknown;
     slug?: unknown;
     description?: unknown;
+    platform?: unknown;
+    skill?: unknown;
     invoke?: { transport?: unknown; endpoint?: unknown; example?: unknown };
     proof?: { verified?: unknown; ref?: unknown };
   }>;
@@ -30,8 +34,8 @@ interface ContractFile {
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
-function contracts(): Map<string, { description: string; invoke: InvokeContract | null; proof: Proof }> {
-  const out = new Map<string, { description: string; invoke: InvokeContract | null; proof: Proof }>();
+function contracts(): Map<string, { description: string; platform: string; skill: string; invoke: InvokeContract | null; proof: Proof }> {
+  const out = new Map<string, { description: string; platform: string; skill: string; invoke: InvokeContract | null; proof: Proof }>();
   const file = data as unknown as ContractFile;
   if (!Array.isArray(file.sites)) return out;
   for (const s of file.sites) {
@@ -39,6 +43,8 @@ function contracts(): Map<string, { description: string; invoke: InvokeContract 
     const inv = s.invoke;
     out.set(s.slug, {
       description: str(s.description),
+      platform: str(s.platform),
+      skill: str(s.skill),
       invoke:
         typeof inv === "object" && inv !== null
           ? { transport: inv.transport as InvokeContract["transport"], endpoint: str(inv.endpoint), example: str(inv.example) }
@@ -51,44 +57,53 @@ function contracts(): Map<string, { description: string; invoke: InvokeContract 
 
 // v1: worker is presence, sites.json is the contract. One merged page,
 // no cursor — the list is short enough to serve whole.
+// Union: every contracted row lists (contract wins on conflicts);
+// worker-only rows append as discovered-but-uncontracted entries.
 export async function readAgents(): Promise<Array<SiteEntry>> {
   const known = contracts();
-  const fallback = (): Array<SiteEntry> =>
-    [...known].map(([slug, c]) => ({
-      origin: `https://${slug}`,
-      slug,
-      description: c.description,
-      invoke: c.invoke,
-      proof: c.proof,
-    }));
+  const toEntry = (slug: string, c: { description: string; platform: string; skill: string; invoke: InvokeContract | null; proof: Proof }): SiteEntry => ({
+    origin: `https://${slug}`,
+    slug,
+    description: c.description,
+    platform: c.platform,
+    skill: c.skill,
+    invoke: c.invoke,
+    proof: c.proof,
+  });
+  const fallback = (): Array<SiteEntry> => [...known].map(([slug, c]) => toEntry(slug, c));
+  const rows = new Map<string, SiteEntry>();
+  for (const [slug, c] of known) rows.set(slug, toEntry(slug, c));
   try {
     const r = await fetch(`${WORKER}/sites?limit=100&v=${SITES_API_VERSION}`, {
       next: { revalidate: 300, tags: ["sites-list"] },
     });
-    if (!r.ok) return fallback();
-    const j = (await r.json()) as { sites?: unknown };
-    if (!Array.isArray(j.sites)) return fallback();
-    const rows: Array<SiteEntry> = [];
-    for (const w of j.sites) {
-      if (typeof w !== "object" || w === null) continue;
-      const row = w as WorkerRow;
-      if (typeof row.domain !== "string" || row.domain === "") continue;
-      const c = known.get(row.domain);
-      rows.push({
-        origin: `https://${row.domain}`,
-        slug: row.domain,
-        description: c?.description || str(row.description),
-        invoke: c?.invoke ?? null,
-        proof: {
-          verified: str((row.proof as { verified?: unknown } | undefined)?.verified) || c?.proof.verified || "",
-          ref: c?.proof.ref || "",
-        },
-      });
+    if (r.ok) {
+      const j = (await r.json()) as { sites?: unknown };
+      if (Array.isArray(j.sites)) {
+        for (const w of j.sites) {
+          if (typeof w !== "object" || w === null) continue;
+          const row = w as WorkerRow;
+          if (typeof row.domain !== "string" || row.domain === "") continue;
+          if (rows.has(row.domain)) continue;
+          rows.set(row.domain, {
+            origin: `https://${row.domain}`,
+            slug: row.domain,
+            description: str(row.description),
+            platform: "",
+            skill: "",
+            invoke: null,
+            proof: {
+              verified: str((row.proof as { verified?: unknown } | undefined)?.verified),
+              ref: "",
+            },
+          });
+        }
+      }
     }
-    return rows;
   } catch {
-    return fallback();
+    // Worker down: contracts still list.
   }
+  return [...rows.values()];
 }
 
 // Records for static params + metadata: contracts only (worker is live data, not build input).

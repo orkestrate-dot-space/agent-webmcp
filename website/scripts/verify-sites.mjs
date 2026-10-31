@@ -32,6 +32,10 @@ for (const s of file.sites) {
   foldedSeen.add(folded);
   if (typeof s.description !== "string" || s.description === "" || s.description.length > 140)
     fail(tag, "description must be 1-140 chars");
+  if (typeof s.platform !== "string") fail(tag, "platform must be a string (\"\" when unknown)");
+  else if (s.platform !== "" && !/^[a-z0-9.-]+$/.test(s.platform)) fail(tag, "platform must be a lowercase id");
+  if (typeof s.skill !== "string" || s.skill === "" || s.skill.length > 4000)
+    fail(tag, "skill must be a 1-4000 char get_agent payload");
   if (typeof s.invoke !== "object" || s.invoke === null) fail(tag, "invoke contract is required");
   else {
     if (!TRANSPORTS.includes(s.invoke.transport)) fail(tag, `invoke.transport must be one of ${TRANSPORTS.join("|")}`);

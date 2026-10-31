@@ -20,7 +20,15 @@ export interface AgentRecord {
   origin: string;
   slug: string;
   description: string;
+  /** Platform that ships the agent (mintlify, kapa.ai, …). "" when unknown. */
+  platform: string;
   invoke: InvokeContract | null;
+  /**
+   * get_agent payload: the registerTool def + invoke recipe for this
+   * row (both tiers where they exist). This is the agent-to-agent
+   * contract — a calling agent registers it and drives it.
+   */
+  skill: string;
   proof: Proof;
 }
 
