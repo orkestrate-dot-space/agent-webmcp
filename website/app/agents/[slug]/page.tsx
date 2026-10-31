@@ -9,7 +9,6 @@ import type { InvokeContract } from "../scan";
 import { looksLikeDomain, SITES_API_VERSION } from "../scan";
 import { OriginFavicon } from "../site-art";
 import { CopyCodeButton } from "./copy-code-button";
-import { ExternalLink } from "lucide-react";
 
 export const dynamicParams = true;
 
@@ -59,19 +58,6 @@ async function readRecord(host: string): Promise<RecordShape | null> {
   };
 }
 
-// One runnable recipe per transport. v1 only serves mcp rows; a row
-// whose transport has no recipe renders its endpoint + example raw.
-function recipeFor(invoke: InvokeContract): string | null {
-  if (invoke.transport !== "deep-link") return null;
-  return `// Ask the site's agent. Needs tabs + JS (any DOM-capable harness).
-const QUESTION = "<question>";
-const tab = await tools.browser.tabs.open({url: "${invoke.endpoint}".replace("<page>", "quickstart").replace("<question>", encodeURIComponent(QUESTION))});
-const wait = "(async () => { const t0 = Date.now(); let prev = ''; while (Date.now() - t0 < 30000) { let best = ''; document.querySelectorAll('[role=dialog],[role=complementary],aside').forEach(function (el) { const tx = (el.innerText || '').trim(); if (tx.indexOf(QUESTION.slice(0, 20)) !== -1 && tx.length > best.length) best = tx; }); if (best.length > 200 && best === prev) return best.slice(0, 2500); if (best) prev = best; await new Promise(function (r) { setTimeout(r, 1000); }); } return 'TIMEOUT >>> ' + prev.slice(0, 800); })()";
-const answer = await tools.browser.evaluate({tabID: tab.id, script: wait});
-await tools.browser.tabs.close({tabID: tab.id});
-return answer; // follow-ups: repeat in the same tab — the thread persists`;
-}
-
 export function generateStaticParams(): Array<{ slug: string }> {
   // Contracted rows prerender at build; the rest generate on demand.
   return contractSlugs().map((slug) => ({ slug }));
@@ -103,6 +89,23 @@ function Shell({ host, children }: { host: string; children: React.ReactNode }) 
   );
 }
 
+function Step({ n, title, code }: { n: string; title: string; code: string }) {
+  return (
+    <div className="mt-8">
+      <p className="text-sm font-medium leading-6 text-ink">
+        <span className="mr-2 font-mono text-ink-2">{n}</span>
+        {title}
+      </p>
+      <div className="mt-3 rounded-lg border border-line bg-raised p-5">
+        <div className="flex items-center justify-end">
+          <CopyCodeButton code={code} />
+        </div>
+        <pre className="mt-1 overflow-x-auto font-mono text-[13px] leading-6 text-ink">{code}</pre>
+      </div>
+    </div>
+  );
+}
+
 export default async function SitePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   if (!slug.includes(".")) notFound();
@@ -110,7 +113,7 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
   if (!looksLikeDomain(host)) notFound();
 
   const record = await readRecord(host);
-  if (!record) {
+  if (!record || !record.invoke) {
     return (
       <Shell host={host}>
         <DomainScan host={host} />
@@ -118,7 +121,11 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
     );
   }
 
-  const recipe = record.invoke ? recipeFor(record.invoke) : null;
+  // Tool name matches the engine convention: ask_<first host label>.
+  const tool = `ask_${host.split(".")[0]}`;
+  const askSnippet = `// via agent-webmcp execute, on a ${host} session\nconst answer = await tools.${tool}({ question: "<question>" });`;
+  const findSnippet = `// via agent-webmcp execute, on any /agents session\nconst found = await tools.search_agents({ query: "<what you need>" });\n// → { domain: "${host}", invoke: { transport, endpoint, example }, verified }`;
+
   return (
     <>
       <SiteNav />
@@ -132,39 +139,54 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
           <div className="mt-1.5 shrink-0">
             <OriginFavicon host={host} size={64} />
           </div>
-          <h1 className="break-all text-[clamp(1.75rem,1.25rem+3.5vw,3rem)] font-medium leading-[1.05] tracking-[-0.04em] text-ink">
-            {host}{" "}
-            <a
-              href={`https://${host}`}
-              target="_blank"
-              rel="noreferrer"
-              aria-label={`Open ${host} in a new tab`}
-              className="text-ink-2 no-underline transition hover:text-ink"
-            >
-              <ExternalLink size={26} aria-hidden="true" className="inline-block" />
-            </a>
-          </h1>
+          <div className="w-max min-w-0 max-w-full">
+            <p className="font-mono text-xs uppercase tracking-wide text-ink-2">{record.invoke.transport}</p>
+            <h1 className="mt-1 break-all text-[clamp(1.75rem,1.25rem+3.5vw,3rem)] font-medium leading-[1.05] tracking-[-0.04em] text-ink">
+              {host}
+            </h1>
+            {record.description !== "" ? (
+              <p className="mt-3 max-w-[60ch] text-[15px] leading-6 text-ink-2">{record.description}</p>
+            ) : null}
+            <p className="mt-4 flex flex-wrap gap-3">
+              <CopyCodeButton code={`await tools.${tool}({ question: "<question>" })`} />
+              <a
+                href={`https://${host}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-9 cursor-pointer items-center rounded-full border border-line px-4 text-sm font-medium leading-5 text-ink no-underline transition hover:bg-hover"
+              >
+                Open site ↗
+              </a>
+            </p>
+          </div>
         </div>
 
-        {record.invoke && recipe ? (
-          <div className="mt-8 rounded-lg border border-line bg-raised p-5">
-            <div className="flex items-center justify-between gap-4">
-              <p className="font-mono text-xs uppercase tracking-wide text-ink-2">Run in a DOM-capable harness</p>
-              <CopyCodeButton code={recipe} />
-            </div>
-            <pre className="mt-3 overflow-x-auto font-mono text-[13px] leading-6 text-ink">{recipe}</pre>
-          </div>
-        ) : record.invoke ? (
-          <div className="mt-8 rounded-lg border border-line bg-raised p-5">
-            <p className="font-mono text-xs uppercase tracking-wide text-ink-2">Invoke · {record.invoke.transport}</p>
-            <p className="mt-2 break-all font-mono text-sm leading-6 text-ink">{record.invoke.endpoint}</p>
-            <p className="mt-3 max-w-[70ch] text-sm leading-6 text-ink-2">{record.invoke.example}</p>
-          </div>
-        ) : (
-          <p className="mt-8 max-w-[60ch] text-[15px] leading-6 text-ink-2">
-            No invoke contract yet — the row exists but nobody has verified a calling path.
+        <Step n="01" title={`Ask it — worked answer, with citations`} code={askSnippet} />
+        <Step n="02" title="Find it programmatically — from any agent" code={findSnippet} />
+
+        <div className="mt-10">
+          <h2 className="text-xl font-medium leading-7 text-ink">Why ask instead of crawling</h2>
+          <ul className="mt-3 max-w-[70ch] list-none space-y-3 p-0 text-[15px] leading-6 text-ink-2">
+            <li>
+              <span className="text-ink">Cited answers.</span> The agent searches its own docs and links the pages it used — verify instead of reading everything.
+            </li>
+            <li>
+              <span className="text-ink">It keeps the thread.</span> Follow-ups resolve in context; no re-asking, no re-feeding context.
+            </li>
+            <li>
+              <span className="text-ink">Honest no.</span> Out of scope comes back as a refusal with a redirect, not junk snippets.
+            </li>
+          </ul>
+        </div>
+
+        <div className="mt-10">
+          <h2 className="text-xl font-medium leading-7 text-ink">More agents</h2>
+          <p className="mt-3 text-[15px] leading-6 text-ink-2">
+            <Link href="/agents" className="no-underline hover:text-ink">
+              Browse all agents
+            </Link>
           </p>
-        )}
+        </div>
 
         <p className="mt-8 border-t border-line pt-4 text-sm leading-5 text-ink-2">
           Something wrong?{" "}
