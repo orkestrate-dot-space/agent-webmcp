@@ -9,6 +9,7 @@ import type { InvokeContract } from "../scan";
 import { looksLikeDomain, SITES_API_VERSION } from "../scan";
 import { OriginFavicon } from "../site-art";
 import { CopyCodeButton } from "./copy-code-button";
+import { ExternalLink } from "lucide-react";
 
 export const dynamicParams = true;
 
@@ -67,7 +68,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const host = slug.includes(".") ? slug.toLowerCase() : null;
   if (host === null) return { title: "Not found · agent-webmcp" };
-  return { title: `${host} · agent-webmcp`, description: `Invoke ${host} as a subagent through agent-webmcp.` };
+  return { title: `${host} · agent-webmcp`, description: `Ask ${host} through agent-webmcp.` };
 }
 
 function Shell({ host, children }: { host: string; children: React.ReactNode }) {
@@ -89,22 +90,14 @@ function Shell({ host, children }: { host: string; children: React.ReactNode }) 
   );
 }
 
-function Step({ n, title, code }: { n: string; title: string; code: string }) {
-  return (
-    <div className="mt-8">
-      <p className="text-sm font-medium leading-6 text-ink">
-        <span className="mr-2 font-mono text-ink-2">{n}</span>
-        {title}
-      </p>
-      <div className="mt-3 rounded-lg border border-line bg-raised p-5">
-        <div className="flex items-center justify-end">
-          <CopyCodeButton code={code} />
-        </div>
-        <pre className="mt-1 overflow-x-auto font-mono text-[13px] leading-6 text-ink">{code}</pre>
-      </div>
-    </div>
-  );
-}
+const ASK_SNIPPET = (tool: string) =>
+  `const answer = await tools.${tool}({\n  question: "How do I get started?",\n});\n// → worked answer with citations`;
+
+const FIND_SNIPPET = `const found = await tools.search_agents({\n  query: "docs assistant",\n});\n// → { domain, invoke contract, verified }`;
+
+const TRIED_Q = "How do I get started?";
+const TRIED_A =
+  "Read 1 file and ran 1 command. Follow the Quickstart: deploy via mintlify.com/start, then make changes in the web editor or with the CLI… with links to the pages it used.";
 
 export default async function SitePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -121,10 +114,8 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
     );
   }
 
-  // Tool name matches the engine convention: ask_<first host label>.
   const tool = `ask_${host.split(".")[0]}`;
-  const askSnippet = `// via agent-webmcp execute, on a ${host} session\nconst answer = await tools.${tool}({ question: "<question>" });`;
-  const findSnippet = `// via agent-webmcp execute, on any /agents session\nconst found = await tools.search_agents({ query: "<what you need>" });\n// → { domain: "${host}", invoke: { transport, endpoint, example }, verified }`;
+  const askSnippet = ASK_SNIPPET(tool);
 
   return (
     <>
@@ -135,6 +126,7 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
             ← All agents
           </Link>
         </p>
+
         <div className="mt-8 flex min-w-0 items-start gap-5">
           <div className="mt-1.5 shrink-0">
             <OriginFavicon host={host} size={64} />
@@ -147,8 +139,8 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
             {record.description !== "" ? (
               <p className="mt-3 max-w-[60ch] text-[15px] leading-6 text-ink-2">{record.description}</p>
             ) : null}
-            <p className="mt-4 flex flex-wrap gap-3">
-              <CopyCodeButton code={`await tools.${tool}({ question: "<question>" })`} />
+            <div className="mt-4 flex flex-wrap gap-3">
+              <CopyCodeButton code={`await tools.${tool}({ question: "<question>" })`} label="Copy prompt" primary />
               <a
                 href={`https://${host}`}
                 target="_blank"
@@ -157,24 +149,60 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
               >
                 Open site ↗
               </a>
-            </p>
+            </div>
           </div>
         </div>
 
-        <Step n="01" title={`Ask it — worked answer, with citations`} code={askSnippet} />
-        <Step n="02" title="Find it programmatically — from any agent" code={findSnippet} />
+        <div className="mt-10 rounded-lg border border-line bg-raised p-5">
+          <p className="font-mono text-xs uppercase tracking-wide text-ink-2">Tried live — one real exchange</p>
+          <p className="mt-3 text-[15px] leading-6 text-ink">
+            <span className="text-ink-2">Q: </span>
+            {TRIED_Q}
+          </p>
+          <p className="mt-1 text-[15px] leading-6 text-ink">
+            <span className="text-ink-2">A: </span>
+            {TRIED_A}
+          </p>
+        </div>
+
+        <div className="mt-10">
+          <h2 className="text-xl font-medium leading-7 text-ink">
+            <span className="mr-3 font-mono text-ink-2">01</span>Ask it — one call
+          </h2>
+          <div className="mt-3 rounded-lg border border-line bg-raised p-5">
+            <div className="flex items-center justify-end">
+              <CopyCodeButton code={askSnippet} />
+            </div>
+            <pre className="mt-1 overflow-x-auto font-mono text-[13px] leading-6 text-ink">{askSnippet}</pre>
+          </div>
+        </div>
+
+        <div className="mt-10">
+          <h2 className="text-xl font-medium leading-7 text-ink">
+            <span className="mr-3 font-mono text-ink-2">02</span>Find it programmatically — from any agent
+          </h2>
+          <div className="mt-3 rounded-lg border border-line bg-raised p-5">
+            <div className="flex items-center justify-end">
+              <CopyCodeButton code={FIND_SNIPPET} />
+            </div>
+            <pre className="mt-1 overflow-x-auto font-mono text-[13px] leading-6 text-ink">{FIND_SNIPPET}</pre>
+          </div>
+        </div>
 
         <div className="mt-10">
           <h2 className="text-xl font-medium leading-7 text-ink">Why ask instead of crawling</h2>
           <ul className="mt-3 max-w-[70ch] list-none space-y-3 p-0 text-[15px] leading-6 text-ink-2">
             <li>
-              <span className="text-ink">Cited answers.</span> The agent searches its own docs and links the pages it used — verify instead of reading everything.
+              <span className="text-ink">Cited answers.</span> The agent searches its own docs and links the pages it
+              used — verify instead of reading everything.
             </li>
             <li>
-              <span className="text-ink">It keeps the thread.</span> Follow-ups resolve in context; no re-asking, no re-feeding context.
+              <span className="text-ink">It keeps the thread.</span> Follow-ups resolve in context: no re-asking, no
+              re-feeding context.
             </li>
             <li>
-              <span className="text-ink">Honest no.</span> Out of scope comes back as a refusal with a redirect, not junk snippets.
+              <span className="text-ink">Honest no.</span> Out of scope comes back as a refusal with a redirect, not
+              junk snippets.
             </li>
           </ul>
         </div>
@@ -182,7 +210,7 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
         <div className="mt-10">
           <h2 className="text-xl font-medium leading-7 text-ink">More agents</h2>
           <p className="mt-3 text-[15px] leading-6 text-ink-2">
-            <Link href="/agents" className="no-underline hover:text-ink">
+            <Link href="/agents" className="text-link no-underline hover:opacity-80">
               Browse all agents
             </Link>
           </p>
@@ -190,7 +218,7 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
 
         <p className="mt-8 border-t border-line pt-4 text-sm leading-5 text-ink-2">
           Something wrong?{" "}
-          <a href="https://github.com/orkestrate-dot-space/agent-webmcp/issues" target="_blank" rel="noreferrer">
+          <a href="https://github.com/orkestrate-dot-space/agent-webmcp/issues" target="_blank" rel="noreferrer" className="text-link no-underline hover:opacity-80">
             Open an issue
           </a>{" "}
           to delist it here.
