@@ -26,6 +26,7 @@ const WORKER = "https://agent-webmcp-sites.agent-webmcp.workers.dev";
 interface RecordShape {
   origin: string;
   slug: string;
+  name: string;
   description: string;
   platform: string;
   skill: string;
@@ -60,6 +61,7 @@ async function readRecord(host: string): Promise<RecordShape | null> {
   return {
     origin: `https://${worker?.domain ?? host}`,
     slug: host,
+    name: contract?.name || host,
     description: contract?.description || worker?.description || "",
     platform: contract?.platform || "",
     skill: contract?.skill || "",
@@ -235,29 +237,20 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
     <>
       <SiteNav />
       <div className="mx-auto w-full max-w-[1120px] px-6 py-10">
-        <p className="font-mono text-xs uppercase tracking-wide text-ink-2">
+        <p className="text-sm leading-5 text-ink-2">
           <Link href="/agents" className="no-underline hover:text-ink">
-            Agents directory
+            ← All agents
           </Link>
-          {" / "}
-          {platformLabel}
-          {" / "}
-          {host}
         </p>
 
         <div className="mt-6 flex min-w-0 items-center gap-3">
           <div className="shrink-0">
-            <OriginFavicon host={host} size={34} />
+            <OriginFavicon host={host} size={32} />
           </div>
-          <p className="font-mono text-xs uppercase leading-5 tracking-wide text-ink-2">
-            {platformLabel} · {host}{" "}
-            <span className="ml-1 inline-flex items-center rounded-full border border-line px-2 py-px align-middle">
-              ✓ Verified
-            </span>
-          </p>
+          <p className="font-mono text-xs uppercase leading-5 tracking-wide text-ink-2">{host}</p>
         </div>
         <h1 className="mt-2 break-all text-[clamp(2.5rem,1.75rem+4vw,3.5rem)] font-medium leading-[1.05] tracking-[-0.04em] text-ink">
-          {host}
+          {record.name}
         </h1>
 
         {record.description !== "" ? (
@@ -273,7 +266,7 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
           >
             Open {host} <ExternalLink className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
           </a>
-          <CopyCodeButton code={COPY_PROMPT(host, record.description)} label="Copy prompt" />
+          <CopyCodeButton code={COPY_PROMPT(host, record.description)} label="Copy prompt" secondary />
         </div>
 
         <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_300px]">

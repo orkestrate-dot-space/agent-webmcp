@@ -32,6 +32,8 @@ for (const s of file.sites) {
   foldedSeen.add(folded);
   if (typeof s.description !== "string" || s.description === "" || s.description.length > 140)
     fail(tag, "description must be 1-140 chars");
+  if (typeof s.name !== "string" || s.name === "" || s.name.length > 40)
+    fail(tag, "name must be a 1-40 char display name");
   if (typeof s.platform !== "string") fail(tag, "platform must be a string (\"\" when unknown)");
   else if (s.platform !== "" && !/^[a-z0-9.-]+$/.test(s.platform)) fail(tag, "platform must be a lowercase id");
   if (typeof s.skill !== "string" || s.skill === "" || s.skill.length > 4000)

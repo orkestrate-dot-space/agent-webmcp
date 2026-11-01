@@ -26,6 +26,7 @@ export interface Proof {
 export interface AgentRecord {
   origin: string;
   slug: string;
+  name: string;
   description: string;
   /** Platform that ships the agent (mintlify, kapa.ai, …). "" when unknown. */
   platform: string;

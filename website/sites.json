@@ -29,7 +29,8 @@
      "name": "submit_feedback",
      "params": "path: string, feedback: string"
     }
-   ]
+   ],
+   "name": "Mintlify"
   },
   {
    "origin": "https://claude.com",
@@ -59,7 +60,8 @@
      "name": "submit_feedback",
      "params": "path: string, feedback: string"
     }
-   ]
+   ],
+   "name": "Claude"
   },
   {
    "origin": "https://launchdarkly.com",
@@ -89,7 +91,8 @@
      "name": "submit_feedback",
      "params": "path: string, feedback: string"
     }
-   ]
+   ],
+   "name": "LaunchDarkly"
   },
   {
    "origin": "https://auth0.com",
@@ -119,7 +122,8 @@
      "name": "submit_feedback",
      "params": "path: string, feedback: string"
     }
-   ]
+   ],
+   "name": "Auth0"
   },
   {
    "origin": "https://bunny.net",
@@ -149,7 +153,8 @@
      "name": "submit_feedback",
      "params": "path: string, feedback: string"
     }
-   ]
+   ],
+   "name": "bunny.net"
   }
  ]
 }

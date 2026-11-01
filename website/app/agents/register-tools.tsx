@@ -7,6 +7,7 @@ import contractsFile from "../../sites.json";
 interface ContractRow {
   origin?: unknown;
   slug?: unknown;
+  name?: unknown;
   description?: unknown;
   platform?: unknown;
   skill?: unknown;
@@ -28,6 +29,7 @@ interface ModelContext {
 
 function rows(): Array<{
   domain: string;
+  name: string;
   description: string;
   platform: string;
   skill: string;
@@ -39,7 +41,7 @@ function rows(): Array<{
 }> {
   const file = contractsFile as unknown as { sites?: unknown };
   if (!Array.isArray(file.sites)) return [];
-  const out: Array<{ domain: string; description: string; platform: string; skill: string; tools: Array<{ name: string; params: string }>; transport: string; endpoint: string; example: string; verified: string }> = [];
+  const out: Array<{ domain: string; name: string; description: string; platform: string; skill: string; tools: Array<{ name: string; params: string }>; transport: string; endpoint: string; example: string; verified: string }> = [];
   for (const s of file.sites) {
     if (typeof s !== "object" || s === null) continue;
     const r = s as ContractRow;
@@ -53,6 +55,7 @@ function rows(): Array<{
       : [];
     out.push({
       domain: r.slug,
+      name: typeof r.name === "string" && r.name !== "" ? r.name : r.slug,
       description: typeof r.description === "string" ? r.description : "",
       platform: typeof r.platform === "string" ? r.platform : "",
       skill: typeof r.skill === "string" ? r.skill : "",
@@ -93,7 +96,7 @@ export function RegisterAgentTools() {
           const terms = (typeof q === "string" ? q : "").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
           const hits = rows()
             .map((r) => {
-              const hay = `${r.domain} ${r.description} ${r.platform} ${r.transport}`.toLowerCase();
+              const hay = `${r.domain} ${r.name} ${r.description} ${r.platform} ${r.transport}`.toLowerCase();
               const score = terms.reduce((n, t) => n + (hay.includes(t) ? 1 : 0), 0);
               return { r, score };
             })
@@ -141,6 +144,7 @@ export function RegisterAgentTools() {
           }
           return {
             domain: hit.domain,
+            name: hit.name,
             description: hit.description,
             platform: hit.platform,
             tools: hit.tools,

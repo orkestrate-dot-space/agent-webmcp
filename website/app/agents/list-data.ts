@@ -7,6 +7,7 @@ const WORKER = "https://agent-webmcp-sites.agent-webmcp.workers.dev";
 export interface SiteEntry {
   origin: string;
   slug: string;
+  name: string;
   description: string;
   platform: string;
   skill: string;
@@ -25,6 +26,7 @@ interface ContractFile {
   sites?: Array<{
     origin?: unknown;
     slug?: unknown;
+    name?: unknown;
     description?: unknown;
     platform?: unknown;
     skill?: unknown;
@@ -36,8 +38,8 @@ interface ContractFile {
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
-function contracts(): Map<string, { description: string; platform: string; skill: string; tools: Array<SiteTool>; invoke: InvokeContract | null; proof: Proof }> {
-  const out = new Map<string, { description: string; platform: string; skill: string; tools: Array<SiteTool>; invoke: InvokeContract | null; proof: Proof }>();
+function contracts(): Map<string, { name: string; description: string; platform: string; skill: string; tools: Array<SiteTool>; invoke: InvokeContract | null; proof: Proof }> {
+  const out = new Map<string, { name: string; description: string; platform: string; skill: string; tools: Array<SiteTool>; invoke: InvokeContract | null; proof: Proof }>();
   const file = data as unknown as ContractFile;
   if (!Array.isArray(file.sites)) return out;
   for (const s of file.sites) {
@@ -45,6 +47,7 @@ function contracts(): Map<string, { description: string; platform: string; skill
     const inv = s.invoke;
     out.set(s.slug, {
       description: str(s.description),
+      name: str(s.name),
       platform: str(s.platform),
       skill: str(s.skill),
       tools: Array.isArray(s.tools)
@@ -70,9 +73,10 @@ function contracts(): Map<string, { description: string; platform: string; skill
 // worker-only rows append as discovered-but-uncontracted entries.
 export async function readAgents(): Promise<Array<SiteEntry>> {
   const known = contracts();
-  const toEntry = (slug: string, c: { description: string; platform: string; skill: string; tools: Array<SiteTool>; invoke: InvokeContract | null; proof: Proof }): SiteEntry => ({
+  const toEntry = (slug: string, c: { name: string; description: string; platform: string; skill: string; tools: Array<SiteTool>; invoke: InvokeContract | null; proof: Proof }): SiteEntry => ({
     origin: `https://${slug}`,
     slug,
+    name: c.name,
     description: c.description,
     platform: c.platform,
     skill: c.skill,
@@ -98,6 +102,7 @@ export async function readAgents(): Promise<Array<SiteEntry>> {
           rows.set(row.domain, {
             origin: `https://${row.domain}`,
             slug: row.domain,
+            name: row.domain,
             description: str(row.description),
             platform: "",
             skill: "",

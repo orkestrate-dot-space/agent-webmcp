@@ -73,6 +73,7 @@ async function probe(base) {
     out.row = {
       origin,
       slug: host,
+      name: "",
       description: "",
       platform: "mintlify",
       invoke: {
