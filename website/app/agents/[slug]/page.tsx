@@ -228,6 +228,7 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
     { label: "Transport", value: record.invoke.transport },
     { label: "Platform", value: platformLabel },
     { label: "Verified", value: host === "mintlify.com" || host === "claude.com" ? "2026-11-01" : "MCP handshake" },
+    { label: "get_agent calls", value: String(await usageCount(host)) },
   ];
 
   return (
@@ -426,7 +427,8 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
             </dl>
             <p className="mt-4 text-sm leading-6 text-ink-2">
               Tool names are what {host} registered via its docs MCP. Example prompts are suggestions — except the
-              tried-live transcript, which is verbatim from a verified run.
+              tried-live transcript, which is verbatim from a verified run. Usage counts direct get_agent calls
+              from this page (local counter, resets on redeploy).
             </p>
           </aside>
         </div>
@@ -434,26 +436,21 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
         {siblings.length > 0 && (
           <div className="mt-12">
             <h2 className="text-xl font-medium leading-7 text-ink">More {platformLabel} sites</h2>
-            <div className="mt-4 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-4 flex flex-wrap items-center gap-x-7 gap-y-3">
               {siblings.map((s) => (
                 <Link
                   key={s.slug}
                   href={`/agents/${s.slug}`}
                   prefetch={false}
-                  className="flex items-center gap-3 rounded-lg border border-line p-4 no-underline transition hover:bg-hover/40"
+                  className="inline-flex items-center gap-2 text-[15px] text-ink-2 no-underline transition hover:text-ink"
                 >
-                  <OriginFavicon host={s.slug} size={28} />
-                  <span className="min-w-0">
-                    <span className="block truncate text-[15px] font-medium leading-5 text-ink">{s.slug}</span>
-                    <span className="mt-0.5 block font-mono text-xs leading-4 text-ink-2">
-                      {s.tools} tool{s.tools === 1 ? "" : "s"} · {s.slug}
-                    </span>
-                  </span>
+                  <OriginFavicon host={s.slug} size={18} />
+                  {s.slug}
                 </Link>
               ))}
             </div>
-            <p className="mt-3 text-[15px] leading-6 text-ink-2">
-              <Link href="/agents" className="text-link no-underline hover:opacity-80">
+            <p className="mt-4 text-[15px] leading-6">
+              <Link href="/agents" className="text-ink underline decoration-line underline-offset-4 hover:text-ink-2">
                 Browse all agents
               </Link>
             </p>
