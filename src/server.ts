@@ -10,7 +10,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import { buildSignature, catalogDetail, searchCatalog, type CatalogEntry } from "./catalog.ts";
 import { EngineFailed, fail } from "./result.ts";
 import { discoverDaemonBrowser, discoverWs, invokePageTool, listPageTools, pageApiPresent, webmcpSupported, type CdpConnection, type PageTool } from "./transport.ts";
-import { agentInputSchema, matchAgent, runDeepLink } from "./agents.ts";
+import { agentInputSchema, matchAgent, runMintlifyAssistant } from "./agents.ts";
 import { attachSession, closeSession, loadRecord, openSession, reattach, acquireTabLock, releaseTabLock } from "./sessions.ts";
 import { runCode, type CallFn, type PartialCall } from "./runner.ts";
 import { VERSION } from "./version.ts";
@@ -148,7 +148,7 @@ async function prepareRun(refs: Array<RunRef>, flat: boolean, perCallTimeoutMs: 
             throw new Error(`${toolName} needs {question: string} — ask the site's assistant one question.`);
           }
           try {
-            return await runDeepLink(conn, endpoint, q.question, perCallTimeoutMs);
+            return await runMintlifyAssistant(conn, endpoint, q.question, perCallTimeoutMs, toolName);
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             throw new Error(`${toolName}: [ASSISTANT] ${msg.slice(0, 400)}`);

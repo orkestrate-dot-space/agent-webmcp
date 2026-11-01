@@ -1,8 +1,9 @@
-// Authored site agents: contract registry + fixed per-transport drivers.
-// A /agents row is data (domain, tool name, transport, endpoint); the
+// Authored site agents: contract registry + per-platform drivers.
+// A /agents row is data (domain, tool name, platform, endpoint); the
 // driver below is engine code. No arbitrary bodies are ever admitted:
-// a row can only pick a transport the engine already knows how to
-// drive. v1 serves one row (mintlify, deep-link) as proof of the shape.
+// a row can only pick a platform the engine already knows how to
+// drive. Mintlify rows share one driver (deep-link + panel read);
+// each new platform gets its own run* driver + a row per verified site.
 import { evaluateJson, type CdpConnection } from "./transport.ts";
 import { fail } from "./result.ts";
 
@@ -10,6 +11,7 @@ export interface AgentContract {
   readonly domain: string;
   readonly tool: string;
   readonly description: string;
+  readonly platform: "mintlify";
   readonly transport: "deep-link";
   readonly endpoint: string;
 }
@@ -19,8 +21,17 @@ const CONTRACTS: Array<AgentContract> = [
     domain: "mintlify.com",
     tool: "ask_mintlify",
     description: "Ask Mintlify's docs assistant anything; returns its worked answer with citations.",
+    platform: "mintlify",
     transport: "deep-link",
     endpoint: "https://www.mintlify.com/docs/<page>?assistant=<question>",
+  },
+  {
+    domain: "claude.com",
+    tool: "ask_claude",
+    description: "Ask Claude's docs assistant anything; grounded answers with page citations, keeps the thread.",
+    platform: "mintlify",
+    transport: "deep-link",
+    endpoint: "https://claude.com/docs/connectors/getting-started?assistant=<question>",
   },
 ];
 
@@ -43,15 +54,17 @@ export function agentInputSchema(): Record<string, unknown> {
   };
 }
 
-// Deep-link driver: mint a hidden tab on the session's own browser,
-// open the assistant with the question in the URL, wait for the settled
-// answer text, close the tab. The user's borrowed/minted tab is never
-// navigated. Mint-refusing browsers fail loud with the fix.
-export async function runDeepLink(
+// Mintlify platform driver: mint a hidden tab on the session's own
+// browser, open the assistant with the question in the URL, wait for
+// the settled answer text, close the tab. The user's borrowed/minted
+// tab is never navigated. Mintlify chat is bot-gated, so this needs a
+// non-bot browser; refusing browsers fail loud with the fix.
+export async function runMintlifyAssistant(
   conn: CdpConnection,
   endpoint: string,
   question: string,
-  timeoutMs: number
+  timeoutMs: number,
+  toolName: string
 ): Promise<string> {
   const url = endpoint.replace("<page>", "quickstart").replace("<question>", encodeURIComponent(question));
   let targetId: string;
@@ -62,7 +75,7 @@ export async function runDeepLink(
   } catch {
     throw fail(
       "mint",
-      "browser refuses new tabs — ask_mintlify needs a minting browser for its assistant tab.",
+      `browser refuses new tabs — ${toolName} needs a minting browser for its assistant tab.`,
       "open via native Chromium (:9222), not a borrow-only window."
     );
   }
