@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ExternalLink, Info, MessageSquare, Search } from "lucide-react";
 
 import SiteNav from "../../site-nav";
 import { DomainScan } from "./domain-scan";
@@ -9,9 +10,7 @@ import type { InvokeContract, SiteTool } from "../scan";
 import { looksLikeDomain, SITES_API_VERSION } from "../scan";
 import { OriginFavicon } from "../site-art";
 import { CopyCodeButton } from "./copy-code-button";
-import { LatencyChart } from "./latency-chart";
-import runsFile from "../../../data/mintlify-runs.json";
-import { ExternalLink } from "lucide-react";
+import { IntegrateTabs } from "./integrate-tabs";
 
 export const dynamicParams = true;
 
@@ -105,27 +104,6 @@ const TRIED_A =
 const COPY_PROMPT = (host: string, description: string) =>
   `You can ask ${host}'s docs assistant anything about what's in their docs. ${description} It answers with citations to the pages it used, keeps context across follow-up questions, and says no to out-of-scope questions instead of guessing. When I ask about ${host}, consult it first and cite what it says.`;
 
-interface RunRow {
-  label?: unknown;
-  question?: unknown;
-  ok?: unknown;
-  ms?: unknown;
-  cited?: unknown;
-}
-
-function measuredRuns(): Array<{ label: string; question: string; ok: boolean; ms: number; cited: boolean }> {
-  const file = runsFile as unknown as { runs?: unknown };
-  if (!Array.isArray(file.runs)) return [];
-  return file.runs.flatMap((r) => {
-    if (typeof r !== "object" || r === null) return [];
-    const row = r as Record<string, unknown>;
-    if (typeof row.label !== "string" || typeof row.question !== "string" || typeof row.ms !== "number") return [];
-    return [{ label: row.label, question: row.question, ok: row.ok === true, ms: row.ms, cited: row.cited === true }];
-  });
-}
-
-const fmtSecs = (ms: number): string => `${(Math.round((ms / 1000) * 10) / 10).toFixed(1)}s`;
-
 // Example prompts: verified transcripts first, then suggestions.
 function examplePrompts(host: string, short: string): Array<string> {
   if (host === "mintlify.com")
@@ -139,6 +117,8 @@ function examplePrompts(host: string, short: string): Array<string> {
   return [`Search ${short} docs for "…"`, `Read a ${short} docs page as Markdown`];
 }
 
+const PROMPT_ICONS = [Search, MessageSquare, Info];
+
 const isReadOnly = (name: string): boolean => !/feedback|submit|navigate|open|create|update/i.test(name);
 
 function Pill({ children }: { children: React.ReactNode }) {
@@ -147,6 +127,40 @@ function Pill({ children }: { children: React.ReactNode }) {
       {children}
     </span>
   );
+}
+
+interface Snippets {
+  cli: string;
+  ts: string;
+  py: string;
+}
+
+function integrateSnippets(endpoint: string, searchTool: string): Snippets {
+  const q = "How do I get started?";
+  const ts =
+    `const res = await fetch("${endpoint}", {\n` +
+    `  method: "POST",\n` +
+    `  headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },\n` +
+    `  body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call",\n` +
+    `    params: { name: "${searchTool}", arguments: { query: "${q}" } } }),\n` +
+    `});\n` +
+    `// -> cited passages with source links (no key, no browser)`;
+  const cli =
+    `curl -X POST "${endpoint}" \\\n` +
+    `  -H "Content-Type: application/json" \\\n` +
+    `  -H "Accept: application/json, text/event-stream" \\\n` +
+    `  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call",` +
+    `"params":{"name":"${searchTool}","arguments":{"query":"${q}"}}}'`;
+  const py =
+    `import json, urllib.request\n\n` +
+    `req = urllib.request.Request("${endpoint}",\n` +
+    `    data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call",\n` +
+    `        "params": {"name": "${searchTool}",\n` +
+    `                   "arguments": {"query": "${q}"}}}).encode(),\n` +
+    `    headers={"Content-Type": "application/json",\n` +
+    `             "Accept": "application/json, text/event-stream"})\n` +
+    `print(urllib.request.urlopen(req).read().decode()[:2000])`;
+  return { cli, ts, py };
 }
 
 export default async function SitePage({ params }: { params: Promise<{ slug: string }> }) {
@@ -164,28 +178,12 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
     );
   }
 
-  const short = host.split(".")[0];
   const platformLabel = record.platform === "" ? "site" : record.platform;
-  const prompts = examplePrompts(host, short);
+  const prompts = examplePrompts(host, host.split(".")[0]);
+  const searchTool = record.tools.find((t) => t.name.startsWith("search"))?.name ?? "search";
   const siblings = contractSlugs()
     .filter((s) => s !== host && (contractOf(s)?.platform || "") === record.platform && record.platform !== "")
     .map((s) => ({ slug: s, tools: contractOf(s)?.tools.length ?? 0 }));
-  // Measured runs are mintlify.com's — never show another host's numbers.
-  const runs = host === "mintlify.com" ? measuredRuns() : [];
-  const okRuns = runs.filter((r) => r.ok);
-  const sortedMs = [...runs.map((r) => r.ms)].sort((a, b) => a - b);
-  const medianMs = sortedMs.length > 0 ? sortedMs[Math.floor(sortedMs.length / 2)] : 0;
-  const slowestMs = sortedMs.length > 0 ? sortedMs[sortedMs.length - 1] : 0;
-  const citedCount = runs.filter((r) => r.ok && r.cited).length;
-  const stats: Array<{ label: string; value: string }> =
-    runs.length > 0
-      ? [
-          { label: "Success rate", value: `${okRuns.length}/${runs.length}` },
-          { label: "Median response", value: fmtSecs(medianMs) },
-          { label: "Slowest verified", value: fmtSecs(slowestMs) },
-          { label: "Cited answers", value: `${citedCount}/${okRuns.length}` },
-        ]
-      : [];
   const facts: Array<{ label: string; value: string }> = [
     { label: "Tools", value: String(record.tools.length) },
     { label: "Transport", value: record.invoke.transport },
@@ -207,22 +205,23 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
           {host}
         </p>
 
-        <div className="mt-6 flex min-w-0 items-start gap-4">
-          <div className="mt-1 shrink-0">
-            <OriginFavicon host={host} size={56} />
+        <div className="mt-6 flex min-w-0 items-center gap-3">
+          <div className="shrink-0">
+            <OriginFavicon host={host} size={34} />
           </div>
-          <div className="w-max min-w-0 max-w-full">
-            <p className="font-mono text-xs uppercase tracking-wide text-ink-2">
-              {platformLabel} · {host}
-            </p>
-            <h1 className="mt-1 break-all text-[clamp(2rem,1.5rem+3.5vw,3.5rem)] font-medium leading-[1.05] tracking-[-0.04em] text-ink">
-              {host}
-            </h1>
-          </div>
+          <p className="font-mono text-xs uppercase leading-5 tracking-wide text-ink-2">
+            {platformLabel} · {host}{" "}
+            <span className="ml-1 inline-flex items-center rounded-full border border-line px-2 py-px align-middle">
+              ✓ Verified
+            </span>
+          </p>
         </div>
+        <h1 className="mt-2 break-all text-[clamp(2.5rem,1.75rem+4vw,3.5rem)] font-medium leading-[1.05] tracking-[-0.04em] text-ink">
+          {host}
+        </h1>
 
         {record.description !== "" ? (
-          <p className="mt-4 max-w-[70ch] text-[15px] leading-6 text-ink-2">{record.description}</p>
+          <p className="mt-3 max-w-[70ch] text-[15px] leading-6 text-ink-2">{record.description}</p>
         ) : null}
 
         <div className="mt-5 flex flex-wrap gap-3">
@@ -230,25 +229,32 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
             href={record.origin}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex h-9 cursor-pointer items-center rounded-full bg-ink px-4 text-sm font-medium leading-5 text-canvas no-underline transition hover:opacity-85"
+            className="inline-flex h-10 cursor-pointer items-center rounded-full bg-ink px-5 text-sm font-medium leading-5 text-canvas no-underline transition hover:opacity-85"
           >
             Open {host} <ExternalLink className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
           </a>
           <CopyCodeButton code={COPY_PROMPT(host, record.description)} label="Copy prompt" />
         </div>
 
-        <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_300px]">
           <div className="min-w-0">
             <h2 className="text-xl font-medium leading-7 text-ink">Ask an agent to</h2>
-            <ul className="mt-2 list-none p-0">
-              {prompts.map((p) => (
-                <li key={p} className="border-b border-line py-3 text-[15px] leading-6 text-ink">
-                  {p}
-                </li>
-              ))}
-            </ul>
+            <div className="mt-3 space-y-2.5">
+              {prompts.map((p, i) => {
+                const Icon = PROMPT_ICONS[i % PROMPT_ICONS.length];
+                return (
+                  <div
+                    key={p}
+                    className="flex items-center gap-3 rounded-lg border border-line px-4 py-3 text-[15px] leading-6 text-ink"
+                  >
+                    <Icon className="h-4 w-4 shrink-0 text-ink-2" aria-hidden="true" />
+                    {p}
+                  </div>
+                );
+              })}
+            </div>
 
-            <h2 className="mt-8 text-xl font-medium leading-7 text-ink">
+            <h2 className="mt-9 text-xl font-medium leading-7 text-ink">
               {record.tools.length} tool{record.tools.length === 1 ? "" : "s"}
             </h2>
             {record.tools.length === 0 ? (
@@ -256,9 +262,9 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
                 Verbs observed live; full list pending a rescan.
               </p>
             ) : (
-              <ul className="mt-2 list-none p-0">
+              <div className="mt-3 rounded-lg border border-line px-5">
                 {record.tools.map((t) => (
-                  <li key={t.name} className="border-b border-line py-3">
+                  <div key={t.name} className="border-b border-line py-3.5 last:border-b-0">
                     <p className="flex flex-wrap items-center gap-2 font-mono text-[13px] leading-5 text-ink">
                       {t.name}
                       {isReadOnly(t.name) ? <Pill>read-only</Pill> : null}
@@ -267,13 +273,13 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
                     {t.params !== "" ? (
                       <p className="mt-1 font-mono text-xs leading-5 text-ink-2">{t.params}</p>
                     ) : null}
-                  </li>
+                  </div>
                 ))}
-              </ul>
+              </div>
             )}
 
             {(host === "mintlify.com" || host === "claude.com") && (
-              <div className="mt-8 rounded-lg border border-line bg-raised p-5">
+              <div className="mt-4 rounded-lg border border-line bg-raised p-5">
                 <p className="font-mono text-xs uppercase tracking-wide text-ink-2">
                   Tried live — {host === "claude.com" ? "multi-turn, headed browser" : "one real exchange"}
                 </p>
@@ -313,47 +319,38 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
               </div>
             )}
 
-            {runs.length > 0 && (
-              <div className="mt-8">
-                <h2 className="text-xl font-medium leading-7 text-ink">Measured, not modeled</h2>
-                <p className="mt-1 max-w-[70ch] text-sm leading-6 text-ink-2">
-                  Every run below is a real ask through the engine — open tab, deep link, wait for the settled
-                  answer, read it. No sampling, no estimates.
-                </p>
-                <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
-                  {stats.map((s) => (
-                    <div key={s.label} className="rounded-lg border border-line bg-raised p-5">
-                      <p className="text-sm leading-5 text-ink-2">{s.label}</p>
-                      <p className="mt-1 font-mono text-2xl leading-8 text-ink">{s.value}</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-4 rounded-lg border border-line bg-raised p-5">
-                  <p className="font-mono text-xs uppercase tracking-wide text-ink-2">Response time per verified run</p>
-                  <div className="mt-2 h-56">
-                    <LatencyChart runs={runs.map((r) => ({ label: r.label, ms: r.ms }))} />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {record.skill !== "" && (
-              <div className="mt-8">
-                <h2 className="text-xl font-medium leading-7 text-ink">Use it programmatically — get_agent</h2>
-                <p className="mt-1 max-w-[70ch] text-sm leading-6 text-ink-2">
-                  One call returns the full skill: the registerTool def plus the headless and headed invoke
-                  recipes. Register it in your own page, drive it through agent-webmcp.
-                </p>
-                <div className="mt-3 rounded-lg border border-line bg-raised p-5">
-                  <div className="flex items-center justify-end">
-                    <CopyCodeButton code={`await tools.get_agent({ domain: "${host}" })`} />
-                  </div>
-                  <pre className="mt-1 overflow-x-auto whitespace-pre-wrap font-mono text-[13px] leading-6 text-ink">
-                    {record.skill}
-                  </pre>
-                </div>
-              </div>
-            )}
+            <p className="mt-11 font-mono text-xs uppercase tracking-wide text-ink-2">Integrate</p>
+            <h2 className="mt-1 text-[28px] font-medium leading-[1.15] tracking-[-0.02em] text-ink">
+              Use from your agent
+            </h2>
+            <p className="mt-2 max-w-[70ch] text-sm leading-6 text-ink-2">
+              Call {short(host)} as a tool in any agent with agent-webmcp.
+            </p>
+            <ul className="mt-3 list-none space-y-2 p-0 text-[15px] leading-6 text-ink">
+              <li>
+                <span className="mr-2 text-emerald-500" aria-hidden="true">
+                  ✓
+                </span>
+                Single call to register and use tools
+              </li>
+              <li>
+                <span className="mr-2 text-emerald-500" aria-hidden="true">
+                  ✓
+                </span>
+                Typed tool definitions
+              </li>
+              <li>
+                <span className="mr-2 text-emerald-500" aria-hidden="true">
+                  ✓
+                </span>
+                Works in any agent runtime
+              </li>
+            </ul>
+            <IntegrateTabs snippets={integrateSnippets(record.invoke.endpoint, searchTool)} />
+            <p className="mt-3 text-sm leading-6 text-ink-2">
+              Full skill (registerTool def + headed-browser tier):{" "}
+              <code className="font-mono text-[13px] text-ink">await tools.get_agent({"{"} domain: &quot;{host}&quot; {"}"})</code>
+            </p>
           </div>
 
           <aside className="min-w-0">
@@ -366,9 +363,8 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
               ))}
             </dl>
             <p className="mt-4 text-sm leading-6 text-ink-2">
-              Tool names are what {host} registered via its docs MCP ({record.invoke?.endpoint}). The
-              description and example prompts are suggestions — except the tried-live transcript, which is
-              verbatim from a verified run.
+              Tool names are what {host} registered via its docs MCP. Example prompts are suggestions — except the
+              tried-live transcript, which is verbatim from a verified run.
             </p>
           </aside>
         </div>
@@ -376,20 +372,17 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
         {siblings.length > 0 && (
           <div className="mt-12">
             <h2 className="text-xl font-medium leading-7 text-ink">More {platformLabel} sites</h2>
-            <div className="mt-4 grid gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-4 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
               {siblings.map((s) => (
                 <Link
                   key={s.slug}
                   href={`/agents/${s.slug}`}
                   prefetch={false}
-                  className="flex items-center gap-3 bg-canvas p-4 no-underline transition hover:bg-hover/40"
+                  className="block rounded-lg border border-line p-4 no-underline transition hover:bg-hover/40"
                 >
-                  <OriginFavicon host={s.slug} size={28} />
-                  <span className="min-w-0">
-                    <span className="block truncate text-[15px] font-medium leading-5 text-ink">{s.slug}</span>
-                    <span className="block font-mono text-xs leading-4 text-ink-2">
-                      {s.tools} tool{s.tools === 1 ? "" : "s"} · {s.slug}
-                    </span>
+                  <span className="block truncate text-[15px] font-medium leading-5 text-ink">{s.slug}</span>
+                  <span className="mt-1 block font-mono text-xs leading-4 text-ink-2">
+                    {s.tools} tool{s.tools === 1 ? "" : "s"} · {s.slug}
                   </span>
                 </Link>
               ))}
@@ -412,4 +405,8 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
       </div>
     </>
   );
+}
+
+function short(host: string): string {
+  return host.split(".")[0].charAt(0).toUpperCase() + host.split(".")[0].slice(1);
 }
