@@ -11,6 +11,8 @@ import { looksLikeDomain, SITES_API_VERSION } from "../scan";
 import { OriginFavicon } from "../site-art";
 import { CopyCodeButton } from "./copy-code-button";
 import { IntegrateTabs } from "./integrate-tabs";
+import { LatencyChart } from "./latency-chart";
+import runsFile from "../../../data/mintlify-runs.json";
 
 export const dynamicParams = true;
 
@@ -104,6 +106,27 @@ const TRIED_A =
 const COPY_PROMPT = (host: string, description: string) =>
   `You can ask ${host}'s docs assistant anything about what's in their docs. ${description} It answers with citations to the pages it used, keeps context across follow-up questions, and says no to out-of-scope questions instead of guessing. When I ask about ${host}, consult it first and cite what it says.`;
 
+interface RunRow {
+  label?: unknown;
+  question?: unknown;
+  ok?: unknown;
+  ms?: unknown;
+  cited?: unknown;
+}
+
+function measuredRuns(): Array<{ label: string; question: string; ok: boolean; ms: number; cited: boolean }> {
+  const file = runsFile as unknown as { runs?: unknown };
+  if (!Array.isArray(file.runs)) return [];
+  return file.runs.flatMap((r) => {
+    if (typeof r !== "object" || r === null) return [];
+    const row = r as Record<string, unknown>;
+    if (typeof row.label !== "string" || typeof row.question !== "string" || typeof row.ms !== "number") return [];
+    return [{ label: row.label, question: row.question, ok: row.ok === true, ms: row.ms, cited: row.cited === true }];
+  });
+}
+
+const fmtSecs = (ms: number): string => `${(Math.round((ms / 1000) * 10) / 10).toFixed(1)}s`;
+
 // Example prompts: verified transcripts first, then suggestions.
 function examplePrompts(host: string, short: string): Array<string> {
   if (host === "mintlify.com")
@@ -181,6 +204,22 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
   const platformLabel = record.platform === "" ? "site" : record.platform;
   const prompts = examplePrompts(host, host.split(".")[0]);
   const searchTool = record.tools.find((t) => t.name.startsWith("search"))?.name ?? "search";
+  // Measured runs are mintlify.com's — never show another host's numbers.
+  const runs = host === "mintlify.com" ? measuredRuns() : [];
+  const okRuns = runs.filter((r) => r.ok);
+  const sortedMs = [...runs.map((r) => r.ms)].sort((a, b) => a - b);
+  const medianMs = sortedMs.length > 0 ? sortedMs[Math.floor(sortedMs.length / 2)] : 0;
+  const slowestMs = sortedMs.length > 0 ? sortedMs[sortedMs.length - 1] : 0;
+  const citedCount = runs.filter((r) => r.ok && r.cited).length;
+  const stats: Array<{ label: string; value: string }> =
+    runs.length > 0
+      ? [
+          { label: "Success rate", value: `${okRuns.length}/${runs.length}` },
+          { label: "Median response", value: fmtSecs(medianMs) },
+          { label: "Slowest verified", value: fmtSecs(slowestMs) },
+          { label: "Cited answers", value: `${citedCount}/${okRuns.length}` },
+        ]
+      : [];
   const siblings = contractSlugs()
     .filter((s) => s !== host && (contractOf(s)?.platform || "") === record.platform && record.platform !== "")
     .map((s) => ({ slug: s, tools: contractOf(s)?.tools.length ?? 0 }));
@@ -319,6 +358,29 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
               </div>
             )}
 
+            {runs.length > 0 && (
+              <div className="mt-8">
+                <h2 className="text-xl font-medium leading-7 text-ink">Performance</h2>
+                <p className="mt-1 max-w-[70ch] text-sm leading-6 text-ink-2">
+                  Real runs through the agent, end to end — {runs.length} verified runs, no sampling.
+                </p>
+                <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+                  {stats.map((s) => (
+                    <div key={s.label} className="rounded-lg border border-line bg-raised p-5">
+                      <p className="text-sm leading-5 text-ink-2">{s.label}</p>
+                      <p className="mt-1 font-mono text-2xl leading-8 text-ink">{s.value}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 rounded-lg border border-line bg-raised p-5">
+                  <p className="font-mono text-xs uppercase tracking-wide text-ink-2">Response time per verified run</p>
+                  <div className="mt-2 h-56">
+                    <LatencyChart runs={runs.map((r) => ({ label: r.label, ms: r.ms }))} />
+                  </div>
+                </div>
+              </div>
+            )}
+
             <p className="mt-11 font-mono text-xs uppercase tracking-wide text-ink-2">Integrate</p>
             <h2 className="mt-1 text-[28px] font-medium leading-[1.15] tracking-[-0.02em] text-ink">
               Use from your agent
@@ -378,11 +440,14 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
                   key={s.slug}
                   href={`/agents/${s.slug}`}
                   prefetch={false}
-                  className="block rounded-lg border border-line p-4 no-underline transition hover:bg-hover/40"
+                  className="flex items-center gap-3 rounded-lg border border-line p-4 no-underline transition hover:bg-hover/40"
                 >
-                  <span className="block truncate text-[15px] font-medium leading-5 text-ink">{s.slug}</span>
-                  <span className="mt-1 block font-mono text-xs leading-4 text-ink-2">
-                    {s.tools} tool{s.tools === 1 ? "" : "s"} · {s.slug}
+                  <OriginFavicon host={s.slug} size={28} />
+                  <span className="min-w-0">
+                    <span className="block truncate text-[15px] font-medium leading-5 text-ink">{s.slug}</span>
+                    <span className="mt-0.5 block font-mono text-xs leading-4 text-ink-2">
+                      {s.tools} tool{s.tools === 1 ? "" : "s"} · {s.slug}
+                    </span>
                   </span>
                 </Link>
               ))}
@@ -405,6 +470,27 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
       </div>
     </>
   );
+}
+
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+
+async function usageCount(host: string): Promise<number> {
+  try {
+    const text = await readFile(join(process.cwd(), "data", "agent-usage.jsonl"), "utf8");
+    let n = 0;
+    for (const line of text.split("\n")) {
+      if (line === "") continue;
+      try {
+        if ((JSON.parse(line) as { domain?: unknown }).domain === host) n += 1;
+      } catch {
+        // Skip corrupt lines; the log is append-only.
+      }
+    }
+    return n;
+  } catch {
+    return 0;
+  }
 }
 
 function short(host: string): string {
