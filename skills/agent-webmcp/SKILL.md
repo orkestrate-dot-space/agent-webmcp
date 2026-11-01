@@ -6,9 +6,10 @@ description: Expose a live web page as callable tools. Attach any tab, list its 
 # agent-webmcp: pages as tools, code as the loop
 
 It serves whatever verbs the page serves right now — native WebMCP
-verbs — plus authored site agents (`ask_<site>`) on contracted
-origins (see /agents). Page verbs are live-only; agent verbs run a
-fixed per-transport driver and return the site's own answer.
+verbs, live only. Per-site calling patterns (deep-link + DOM observe,
+headed vs headless tiers) live in the /agents directory as skills —
+`get_agent` returns the one for a listed domain; this engine never
+mints site-specific verbs.
 
 ## The loop
 

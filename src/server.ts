@@ -10,7 +10,6 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import { buildSignature, catalogDetail, searchCatalog, type CatalogEntry } from "./catalog.ts";
 import { EngineFailed, fail } from "./result.ts";
 import { discoverDaemonBrowser, discoverWs, invokePageTool, listPageTools, pageApiPresent, webmcpSupported, type CdpConnection, type PageTool } from "./transport.ts";
-import { agentInputSchema, matchAgent, runMintlifyAssistant } from "./agents.ts";
 import { attachSession, closeSession, loadRecord, openSession, reattach, acquireTabLock, releaseTabLock } from "./sessions.ts";
 import { runCode, type CallFn, type PartialCall } from "./runner.ts";
 import { VERSION } from "./version.ts";
@@ -104,18 +103,11 @@ async function liveTools(conn: CdpConnection, sessionId: string, endpoint?: stri
   return [];
 }
 
-// Authored site agents ride every session whose origin matches a
-// contract (/agents rows, compiled in). They list and call exactly
-// like page verbs; a native verb of the same name always wins.
-function authoredFor(origin: string, liveNames: Set<string>): Array<{ name: string; description: string; inputSchema: Record<string, unknown>; endpoint: string }> {
-  const c = matchAgent(origin);
-  if (c === undefined || liveNames.has(c.tool)) return [];
-  return [{ name: c.tool, description: c.description, inputSchema: agentInputSchema(), endpoint: c.endpoint }];
-}
-
 // Dial every ref's tab, burst its live verbs, wire one flat call map.
 // Nothing is read from or written to disk: what the page serves now
 // is the whole catalog, in a deterministic order for cache stability.
+// Site agents live in the /agents directory as skills, not in the
+// engine: per-site calling patterns are data the caller brings.
 async function prepareRun(refs: Array<RunRef>, flat: boolean, perCallTimeoutMs: number): Promise<Prepared> {
   const calls: Record<string, CallFn> = {};
   const conns: Array<{ close: () => void }> = [];
@@ -136,25 +128,6 @@ async function prepareRun(refs: Array<RunRef>, flat: boolean, perCallTimeoutMs: 
       const { conn, sessionId } = await reattach(record);
       conns.push(conn);
       const live = await liveTools(conn, sessionId, record.cdpEndpoint);
-      const liveNames = new Set(live.map((t) => t.name));
-      for (const authored of authoredFor(record.origin, liveNames)) {
-        const path = flat ? authored.name : `${ref.as}.${authored.name}`;
-        entries.push({ path, description: authored.description, inputSchema: authored.inputSchema });
-        const endpoint = authored.endpoint;
-        const toolName = authored.name;
-        calls[path] = async (input: unknown) => {
-          const q = (input ?? {}) as { question?: unknown };
-          if (typeof q.question !== "string" || q.question.trim() === "") {
-            throw new Error(`${toolName} needs {question: string} — ask the site's assistant one question.`);
-          }
-          try {
-            return await runMintlifyAssistant(conn, endpoint, q.question, perCallTimeoutMs, toolName);
-          } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
-            throw new Error(`${toolName}: [ASSISTANT] ${msg.slice(0, 400)}`);
-          }
-        };
-      }
       for (const tool of [...live].sort((a, b) => a.name.localeCompare(b.name))) {
         const path = flat ? tool.name : `${ref.as}.${tool.name}`;
         entries.push({ path, description: tool.description, inputSchema: tool.inputSchema });
@@ -229,10 +202,9 @@ const handlers: Record<string, VerbHandler> = {
     const { conn, sessionId, opened } = started;
     try {
       const native = await liveTools(conn, sessionId, opened.cdpUrl);
-      const authored = authoredFor(opened.origin, new Set(native.map((t) => t.name)));
       return {
         content: JSON.stringify({
-          handle: opened.handle, url: opened.url, toolCount: native.length + authored.length,
+          handle: opened.handle, url: opened.url, toolCount: native.length,
           cdpUrl: opened.cdpUrl, owned: opened.owned,
         }),
       };
@@ -247,12 +219,7 @@ const handlers: Record<string, VerbHandler> = {
     try {
       // Deterministic order: same verbs, same rows, every call —
       // keeps prompt caches warm across turns.
-      const live = (await liveTools(conn, sessionId, record.cdpEndpoint)).sort((a, b) => a.name.localeCompare(b.name));
-      const tools = [...live];
-      for (const a of authoredFor(record.origin, new Set(live.map((t) => t.name)))) {
-        tools.push({ name: a.name, description: a.description, inputSchema: a.inputSchema, frameId: "" });
-      }
-      tools.sort((a, b) => a.name.localeCompare(b.name));
+      const tools = (await liveTools(conn, sessionId, record.cdpEndpoint)).sort((a, b) => a.name.localeCompare(b.name));
       const only = str(args.tool);
       if (only !== undefined) {
         const found = tools.find((t) => t.name === only);
