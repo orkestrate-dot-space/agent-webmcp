@@ -129,6 +129,16 @@ export function RegisterAgentTools() {
           const d = (((input ?? {}) as { domain?: unknown }).domain ?? "").toString().toLowerCase().trim();
           const hit = rows().find((r) => r.domain === d || r.domain === d.replace(/^www\./, ""));
           if (!hit) return { error: `no listed agent for '${d}' — try search_agents to find one` };
+          try {
+            fetch("/api/use", {
+              method: "POST",
+              keepalive: true,
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ domain: hit.domain }),
+            }).catch(() => {});
+          } catch {
+            // Telemetry is best-effort; never break the skill return.
+          }
           return {
             domain: hit.domain,
             description: hit.description,
