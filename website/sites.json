@@ -4,7 +4,7 @@
   {
    "origin": "https://mintlify.com",
    "slug": "mintlify.com",
-   "description": "Ask Mintlify's docs assistant anything; answers with citations from their docs.",
+   "description": "AI-native documentation platform. Agents can search and read Mintlify docs, get a site outline and read its agent skills.",
    "platform": "mintlify",
    "invoke": {
     "transport": "mcp",
