@@ -112,6 +112,7 @@ Ordered best-first. First *working* tier wins per site.
   skill / agent / plugin / ACP / marketplace), credential-custody
   table, keyless-vs-keyed implications, minimal artifact set
   (keyless MCP + portable SKILL.md + per-harness shims).
+- `docs/mintlify-agent-surface.md` — Mintlify platform agent-to-agent surface (Discovery API, anon MCP tools, widget/deep-link, per-site variance), primary-sourced 2026-11-01.
 - Standing corrections from research: Jev is a TypeSafe *decision*
   model, not a browser agent — never cite it as one. TinyFish is a
   search/fetch toolkit, not browser infra.
