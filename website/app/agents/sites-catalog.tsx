@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import SiteNav from "../site-nav";
@@ -38,7 +38,6 @@ function Row({ site }: { site: SiteEntry }) {
 
 export function SitesCatalog({ initialSites }: { initialSites: Array<SiteEntry> }) {
   const router = useRouter();
-  const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
 
   const onEnter = () => {
@@ -83,8 +82,7 @@ export function SitesCatalog({ initialSites }: { initialSites: Array<SiteEntry> 
                 <path d="m10.5 10.5 3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
               <input
-                ref={inputRef}
-                value={query}
+                                value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") onEnter();

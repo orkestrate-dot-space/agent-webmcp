@@ -3,6 +3,15 @@
 import { useEffect } from "react";
 
 import contractsFile from "../../sites.json";
+import {
+  DRIVERS,
+  driverNote,
+  mintlifyRegisterDef,
+  mintlifySkill,
+  OBSERVER_CORE,
+  SEND_CORE,
+  type MintlifyDeltas,
+} from "./mintlify-template";
 
 interface ContractRow {
   origin?: unknown;
@@ -11,6 +20,10 @@ interface ContractRow {
   description?: unknown;
   platform?: unknown;
   skill?: unknown;
+  page?: unknown;
+  searchTool?: unknown;
+  fsTool?: unknown;
+  autoSubmit?: unknown;
   tools?: unknown;
   invoke?: { transport?: unknown; endpoint?: unknown; example?: unknown };
   proof?: { verified?: unknown; ref?: unknown };
@@ -33,6 +46,10 @@ function rows(): Array<{
   description: string;
   platform: string;
   skill: string;
+  page: string;
+  searchTool: string;
+  fsTool: string;
+  autoSubmit: boolean;
   tools: Array<{ name: string; params: string }>;
   transport: string;
   endpoint: string;
@@ -41,7 +58,7 @@ function rows(): Array<{
 }> {
   const file = contractsFile as unknown as { sites?: unknown };
   if (!Array.isArray(file.sites)) return [];
-  const out: Array<{ domain: string; name: string; description: string; platform: string; skill: string; tools: Array<{ name: string; params: string }>; transport: string; endpoint: string; example: string; verified: string }> = [];
+  const out: Array<{ domain: string; name: string; description: string; platform: string; skill: string; page: string; searchTool: string; fsTool: string; autoSubmit: boolean; tools: Array<{ name: string; params: string }>; transport: string; endpoint: string; example: string; verified: string }> = [];
   for (const s of file.sites) {
     if (typeof s !== "object" || s === null) continue;
     const r = s as ContractRow;
@@ -59,6 +76,10 @@ function rows(): Array<{
       description: typeof r.description === "string" ? r.description : "",
       platform: typeof r.platform === "string" ? r.platform : "",
       skill: typeof r.skill === "string" ? r.skill : "",
+      page: typeof r.page === "string" ? r.page : "",
+      searchTool: typeof r.searchTool === "string" ? r.searchTool : "search",
+      fsTool: typeof r.fsTool === "string" ? r.fsTool : "",
+      autoSubmit: r.autoSubmit === false ? false : true,
       tools,
       transport: typeof inv.transport === "string" ? inv.transport : "",
       endpoint: typeof inv.endpoint === "string" ? inv.endpoint : "",
@@ -142,6 +163,17 @@ export function RegisterAgentTools() {
           } catch {
             // Telemetry is best-effort; never break the skill return.
           }
+          const deltas: MintlifyDeltas = {
+            host: hit.domain,
+            docs: hit.endpoint,
+            page: hit.page || hit.endpoint,
+            searchTool: hit.searchTool,
+            fsTool: hit.fsTool,
+            autoSubmit: hit.autoSubmit,
+            description: hit.description,
+            verified: hit.verified,
+          };
+          const drivers = DRIVERS.map((driver) => ({ driver, how: driverNote(driver) }));
           return {
             domain: hit.domain,
             name: hit.name,
@@ -149,7 +181,11 @@ export function RegisterAgentTools() {
             platform: hit.platform,
             tools: hit.tools,
             invoke: { transport: hit.transport, endpoint: hit.endpoint, example: hit.example },
-            skill: hit.skill,
+            register: mintlifyRegisterDef(deltas),
+            skill: mintlifySkill(deltas),
+            drivers,
+            observerCore: OBSERVER_CORE,
+            sendCore: SEND_CORE,
             verified: hit.verified,
           };
         },

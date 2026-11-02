@@ -1,16 +1,19 @@
 import data from "../../sites.json";
 import type { AgentRecord, InvokeContract, Proof, SiteTool } from "./scan";
-import { SITES_API_VERSION } from "./scan";
-
-const WORKER = "https://agent-webmcp-sites.agent-webmcp.workers.dev";
+import { SITES_API_VERSION, WORKER } from "./scan";
 
 export interface SiteEntry {
   origin: string;
   slug: string;
   name: string;
+  docs: string;
   description: string;
   platform: string;
   skill: string;
+  page: string;
+  searchTool: string;
+  fsTool: string;
+  autoSubmit: boolean;
   tools: Array<SiteTool>;
   invoke: InvokeContract | null;
   proof: Proof;
@@ -27,9 +30,14 @@ interface ContractFile {
     origin?: unknown;
     slug?: unknown;
     name?: unknown;
+    docs?: unknown;
     description?: unknown;
     platform?: unknown;
     skill?: unknown;
+    page?: unknown;
+    searchTool?: unknown;
+    fsTool?: unknown;
+    autoSubmit?: unknown;
     tools?: unknown;
     invoke?: { transport?: unknown; endpoint?: unknown; example?: unknown };
     proof?: { verified?: unknown; ref?: unknown };
@@ -38,8 +46,8 @@ interface ContractFile {
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
-function contracts(): Map<string, { name: string; description: string; platform: string; skill: string; tools: Array<SiteTool>; invoke: InvokeContract | null; proof: Proof }> {
-  const out = new Map<string, { name: string; description: string; platform: string; skill: string; tools: Array<SiteTool>; invoke: InvokeContract | null; proof: Proof }>();
+function contracts(): Map<string, { name: string; docs: string; description: string; platform: string; skill: string; page: string; searchTool: string; fsTool: string; autoSubmit: boolean; tools: Array<SiteTool>; invoke: InvokeContract | null; proof: Proof }> {
+  const out = new Map<string, { name: string; docs: string; description: string; platform: string; skill: string; page: string; searchTool: string; fsTool: string; autoSubmit: boolean; tools: Array<SiteTool>; invoke: InvokeContract | null; proof: Proof }>();
   const file = data as unknown as ContractFile;
   if (!Array.isArray(file.sites)) return out;
   for (const s of file.sites) {
@@ -47,9 +55,14 @@ function contracts(): Map<string, { name: string; description: string; platform:
     const inv = s.invoke;
     out.set(s.slug, {
       description: str(s.description),
+      docs: str(s.docs),
       name: str(s.name),
       platform: str(s.platform),
       skill: str(s.skill),
+      page: str(s.page) || str(s.docs),
+      searchTool: str(s.searchTool) || "search",
+      fsTool: str(s.fsTool),
+      autoSubmit: s.autoSubmit === false ? false : true,
       tools: Array.isArray(s.tools)
         ? s.tools.flatMap((t) =>
             typeof t === "object" && t !== null && typeof (t as SiteTool).name === "string"
@@ -73,18 +86,22 @@ function contracts(): Map<string, { name: string; description: string; platform:
 // worker-only rows append as discovered-but-uncontracted entries.
 export async function readAgents(): Promise<Array<SiteEntry>> {
   const known = contracts();
-  const toEntry = (slug: string, c: { name: string; description: string; platform: string; skill: string; tools: Array<SiteTool>; invoke: InvokeContract | null; proof: Proof }): SiteEntry => ({
+  const toEntry = (slug: string, c: { name: string; docs: string; description: string; platform: string; skill: string; page: string; searchTool: string; fsTool: string; autoSubmit: boolean; tools: Array<SiteTool>; invoke: InvokeContract | null; proof: Proof }): SiteEntry => ({
     origin: `https://${slug}`,
     slug,
     name: c.name,
+    docs: c.docs,
     description: c.description,
     platform: c.platform,
     skill: c.skill,
+    page: c.page,
+    searchTool: c.searchTool,
+    fsTool: c.fsTool,
+    autoSubmit: c.autoSubmit,
     tools: c.tools,
     invoke: c.invoke,
     proof: c.proof,
   });
-  const fallback = (): Array<SiteEntry> => [...known].map(([slug, c]) => toEntry(slug, c));
   const rows = new Map<string, SiteEntry>();
   for (const [slug, c] of known) rows.set(slug, toEntry(slug, c));
   try {
@@ -103,9 +120,14 @@ export async function readAgents(): Promise<Array<SiteEntry>> {
             origin: `https://${row.domain}`,
             slug: row.domain,
             name: row.domain,
+            docs: "",
             description: str(row.description),
             platform: "",
             skill: "",
+            page: "",
+            searchTool: "search",
+            fsTool: "",
+            autoSubmit: true,
             tools: [],
             invoke: null,
             proof: {

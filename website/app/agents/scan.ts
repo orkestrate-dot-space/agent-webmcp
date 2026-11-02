@@ -27,6 +27,8 @@ export interface AgentRecord {
   origin: string;
   slug: string;
   name: string;
+  /** Docs root the agent lives under, e.g. https://claude.com/docs */
+  docs: string;
   description: string;
   /** Platform that ships the agent (mintlify, kapa.ai, …). "" when unknown. */
   platform: string;
@@ -40,7 +42,14 @@ export interface AgentRecord {
    */
   skill: string;
   proof: Proof;
+  /** Mintlify-platform deltas (empty for non-Mintlify rows). */
+  page: string;
+  searchTool: string;
+  fsTool: string;
+  autoSubmit: boolean;
 }
+
+export const WORKER = "https://agent-webmcp-sites.agent-webmcp.workers.dev";
 
 // Cache-buster pinned to the worker's SCAN_VERSION. Every worker
 // fetch carries it, so a logic bump retires all cached rows at

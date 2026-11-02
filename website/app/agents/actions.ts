@@ -8,7 +8,7 @@ import { revalidatePath, revalidateTag, updateTag } from "next/cache";
 // back-navigation to /sites doesn't replay the old payload.
 // (revalidateTag alone is stale-while-revalidate; updateTag alone
 // leaves the router cache — the pair covers both layers.)
-// Called from DomainScan/RescanButton.
+// Called from DomainScan after a successful worker scan.
 export async function revalidateAfterScan(host?: string): Promise<{ revalidated: boolean }> {
   updateTag("sites-list");
   revalidateTag("sites-list", "max");

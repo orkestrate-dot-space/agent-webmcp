@@ -39,7 +39,7 @@ function CheckIcon() {
   );
 }
 
-export function CopyCodeButton({ code, label, primary, secondary }: { code: string; label?: string; primary?: boolean; secondary?: boolean }) {
+export function CopyCodeButton({ code, label, secondary }: { code: string; label?: string; secondary?: boolean }) {
   const [state, setState] = useState<"idle" | "ok" | "fail">("idle");
   const text = state === "ok" ? "Copied" : state === "fail" ? "Copy failed" : (label ?? "Copy");
   const run = () => {
@@ -53,18 +53,6 @@ export function CopyCodeButton({ code, label, primary, secondary }: { code: stri
   if (secondary) {
     return (
       <button type="button" onClick={run} className={`${base} border border-line bg-raised text-ink hover:bg-hover`}>
-        {text}
-        {state === "ok" ? <CheckIcon /> : null}
-      </button>
-    );
-  }
-  if (primary) {
-    return (
-      <button
-        type="button"
-        onClick={run}
-        className={`${base} bg-ink text-canvas no-underline hover:opacity-90`}
-      >
         {text}
         {state === "ok" ? <CheckIcon /> : null}
       </button>

@@ -34,9 +34,15 @@ for (const s of file.sites) {
     fail(tag, "description must be 1-140 chars");
   if (typeof s.name !== "string" || s.name === "" || s.name.length > 40)
     fail(tag, "name must be a 1-40 char display name");
+  if (typeof s.docs !== "string" || !/^https:\/\//.test(s.docs))
+    fail(tag, "docs must be an https URL for the docs root");
   if (typeof s.platform !== "string") fail(tag, "platform must be a string (\"\" when unknown)");
   else if (s.platform !== "" && !/^[a-z0-9.-]+$/.test(s.platform)) fail(tag, "platform must be a lowercase id");
-  if (typeof s.skill !== "string" || s.skill === "" || s.skill.length > 4000)
+  if (typeof s.page === "string" && s.page !== "") {
+    // Template-rendered row: mintlify-template.ts is the skill source, sites.json carries deltas only.
+    if (typeof s.searchTool !== "string" || s.searchTool === "")
+      fail(tag, "template row needs searchTool (mintlify-template delta)");
+  } else if (typeof s.skill !== "string" || s.skill === "" || s.skill.length > 4000)
     fail(tag, "skill must be a 1-4000 char get_agent payload");
   if (typeof s.invoke !== "object" || s.invoke === null) fail(tag, "invoke contract is required");
   else {

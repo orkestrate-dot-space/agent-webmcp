@@ -4,9 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { revalidateAfterScan } from "../actions";
-import { SITES_API_VERSION } from "../scan";
-
-const WORKER = "https://agent-webmcp-sites.agent-webmcp.workers.dev";
+import { SITES_API_VERSION, WORKER } from "../scan";
 
 // Scan-then-render: POSTs a worker scan (which persists the row),
 // waits until the row is readable (D1 reads can lag the write),

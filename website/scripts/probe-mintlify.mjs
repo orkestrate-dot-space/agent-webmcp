@@ -6,13 +6,24 @@
 // Usage: bun scripts/probe-mintlify.mjs https://claude.com/docs [...]
 const day = new Date().toISOString().slice(0, 10);
 
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const PLATFORM_VERBS = JSON.parse(
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), "mintlify-verbs.json"), "utf8")
+);
+
 const skillFor = ({ host, label, base, server, searchTool, fsTool }) => `ASK ${host} docs (platform: mintlify).
-TIER 1 — headless-safe (MCP, no auth): POST ${base}/mcp JSON-RPC (Streamable HTTP, Accept: application/json, text/event-stream).
-init: {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"x","version":"0"}}}
-search: tools/call {"name":"${searchTool}","arguments":{"query":"..."}} -> results with page paths.
-read: tools/call {"name":"${fsTool}","arguments":{"command":"head -80 /<path>.mdx"}} (append .mdx to the result path).
-registerTool def to expose it: {"name":"ask_${label}","description":"Ask ${host} docs; returns cited passages.","inputSchema":{"type":"object","properties":{"question":{"type":"string"}},"required":["question"]}} with execute running TIER 1.
-TIER 2 — headed browser only (bot-gated chat): open ${base}?assistant=<urlencoded question> (panel auto-opens; else click button[aria-label="Toggle assistant panel"]). Read [role="dialog"] text for the cited answer. Follow-ups: set textarea value, dispatch input, click Send — same tab keeps the thread. Needs a non-bot browser (webdriver=false alone is not enough).`;
+NATIVE WEBMCP VERBS (page-registered; drive from any CDP-attached tab with agent-webmcp open+execute — verified headless AND headed):
+- get_site_overview() — docs outline by section.
+- search_docs({query}) — matching pages + content.
+- read_page({path}) — full page as markdown (path from search).
+- read_skill({skill_name}) — agent skill document.
+- navigate_page({path}) — move the tab.
+registerTool def to expose it: {"name":"ask_${label}","description":"Ask ${host} docs; returns cited passages.","inputSchema":{"type":"object","properties":{"question":{"type":"string"}},"required":["question"]}} with execute mapping question -> search_docs + read_page.
+ALSO (retrieval only, no agent): anonymous docs MCP at ${base}/mcp (tools/call ${searchTool}/{${fsTool}}; no key).
+HEADED-ONLY: conversational assistant (?assistant= + panel) needs a non-bot browser — captcha-gated chat endpoint. Owner-keyed Mintlify assistant/search APIs need a key (401 without).`;
 
 const jrpc = (url, method, params) =>
   fetch(url, {
@@ -74,19 +85,20 @@ async function probe(base) {
       origin,
       slug: host,
       name: "",
+      docs: base,
       description: "",
       platform: "mintlify",
       invoke: {
-        transport: "mcp",
-        endpoint: `${base}/mcp`,
-        example: `tools/call ${searchTool} {"query": "..."} -> cited passages; ${fsTool} head -80 /<path>.mdx`,
+        transport: "webmcp",
+        endpoint: `${origin}${new URL(base).pathname.replace(/\/$/, "")}`,
+        example: `open tab -> await tools.search_docs({ query: "..." }) -> cited passages; read_page({ path }) for full markdown`,
       },
       skill: skillFor({ host, label, base, server, searchTool, fsTool }),
       proof: {
         verified: day,
-        ref: `probe-mintlify: MCP initialize (${server || "unnamed"}) + tools/list [${toolNames.join(", ")}] live; llms.txt ${llms > 0 ? llms + "B" : "missing"}; siteconfig ${siteconfig ? "present" : "absent"}. Chat NOT verified (captcha-gated, needs non-bot browser).`,
+        ref: `probe-mintlify: MCP initialize (${server || "unnamed"}) live; llms.txt ${llms > 0 ? llms + "B" : "missing"}; siteconfig ${siteconfig ? "present" : "absent"}. WebMCP page verbs [${PLATFORM_VERBS.tools.map((t) => t.name).join(", ")}] verified live in-page on 5 Mintlify sites. Chat NOT verified (captcha-gated, needs non-bot browser).`,
       },
-      tools,
+      tools: PLATFORM_VERBS.tools,
     };
   } catch (e) {
     out.error = String(e && e.message ? e.message : e).slice(0, 200);
