@@ -3,9 +3,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Beta](https://img.shields.io/badge/channel-0.2.0--beta-orange.svg)](CHANGELOG.md)
 
-**Give your agent verbs for any page.** Write each verb once as a TypeScript file. The engine proves it inside the page and keeps it. Your agent calls it forever over MCP.
+**Give your agent any page's verbs as code.** Attach any tab — the engine serves whatever verbs the page serves right now. Your agent discovers them, then calls them from one program: batched tool calls, one model request, full results kept in variables.
 
-Six verbs. One dependency. MIT licensed, runs local.
+Seven verbs. One dependency. MIT licensed, runs local.
 
 ## Install
 
@@ -27,39 +27,31 @@ Skill first, every session: `skill action=show`.
 ```js
 // Discover, then call. Calls resolve to the envelope.
 await search({ query: "read" });
-const out = await tools.eve_read({});
-const reply = JSON.parse(out.content[0].text);
+const out = await tools.read_current_page({});
+const reply = out.content[0].text;
 ```
 
-`open` attaches a tab and returns a handle. `list` shows what that handle can call. `execute` runs your code over those verbs. `close` drops the tab. `skill` serves docs and finds agents. `doctor` tells the truth about the browser and the registry.
+`open` attaches a tab and returns a handle (`{url}` mints one, `{targetId}` borrows a live one). `list` shows what that handle can call. `execute` runs your code over those verbs — `background:true` detaches long runs, `poll` reads them back. `close` drops the tab. `skill` serves the compose loop. `doctor` tells the truth about the browser.
 
-The engine never launches a browser. It attaches tabs in one you already run and never kills it.
+The engine never launches a browser. It attaches tabs in one you already run and never kills it. It keeps no tools: what the page serves now is the whole catalog.
 
-## Author a verb
+## Programmatic calls
 
-No register verbs. Write two files with your own tools. The engine validates, injects, proves, and stamps them:
-
-```
-~/.local/share/agent-webmcp/registry/<origin-slug>/<agent>/{spec.json, body.ts}
-```
-
-`spec.json` declares the input and output shapes. `body.ts` is a typed function that returns `{content: [{type: "text", text}]}`. First call admits the verb: validate, check against the live page catalog, run the fixture, stamp on success. Bad files never inject. The reason names the fix.
-
-One origin holds one or more agents. Each agent has its own skill file, served on `open` and searchable by name, description, and capability.
+One `execute` runs many tool calls in one model request: discover with
+`search()`/`catalog()`, branch on results in code, print one summary.
+Raw outputs stay in program variables, never in context. Long jobs run
+detached (`background:true`) and report back via `poll` — no polling
+loops, no timeout deaths.
 
 ## Skills
 
 | Layer | Loads | Answers |
 |---|---|---|
-| `SKILL.md` | always | drive and compose |
-| `show name=drivers` | before first recon | how to see and act |
-| `show name=author` | before authoring | files, schemas, prove |
-| `show name=site-agents` | before chat agents | open, ask, read, close |
-| origin and capability skills | auto on `open` | how this place works |
+| `SKILL.md` | always (`skill` verb, no args) | attach, compose, background runs |
 
 ## Local and remote
 
-Two entries, same six verbs. Local runs over stdio with no key. Remote runs over HTTP with a bearer key against shared browsers and stored logins. Same agents, same call shape. Mint locally, run anywhere.
+Two entries, same verbs. Local runs over stdio with no key. Remote runs over HTTP with a bearer key against shared browsers and stored logins. Same pages, same call shape. Attach locally, run anywhere.
 
 ## How it compares
 

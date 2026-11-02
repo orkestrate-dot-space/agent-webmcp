@@ -61,6 +61,12 @@
       "skillPath": "skills/improve-animations/SKILL.md",
       "computedHash": "524ea241e41d58bbdd8e288700fe24f5725e2a2f3ae7186ad7cebf9055058356"
     },
+    "lightpanda": {
+      "source": "lightpanda-io/agent-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "3a0e0f9d496996578a1a6371d6aed4564cb6669e8dc771af6da3ee024c4cefaa"
+    },
     "mobile-native": {
       "source": "emilkowalski/skill",
       "sourceType": "github",

@@ -166,27 +166,54 @@ export interface PageTool {
   readonly description: string;
   readonly inputSchema: Record<string, unknown>;
   readonly frameId: string;
-  readonly annotations: { readonly readOnly?: boolean; readonly untrustedContent?: boolean; readonly consequential?: boolean };
 }
 
 function toPageTool(t: {
-  name: unknown; description: unknown; inputSchema?: unknown; frameId: unknown; annotations?: unknown;
+  name: unknown; description: unknown; inputSchema?: unknown; frameId: unknown;
 }): PageTool {
   if (typeof t.name !== "string" || typeof t.frameId !== "string") throw fail("decode", "tool burst shape broke", "the page's tool catalog is malformed.");
-  const ann = (t.annotations ?? {}) as { readOnly?: unknown; readOnlyHint?: unknown; untrustedContent?: unknown; consequential?: unknown };
   return {
     name: t.name,
     description: typeof t.description === "string" ? t.description : "",
     inputSchema: typeof t.inputSchema === "object" && t.inputSchema !== null && !Array.isArray(t.inputSchema) ? t.inputSchema as Record<string, unknown> : { type: "object" },
     frameId: t.frameId,
-    annotations: {
-      ...(typeof ann.readOnly === "boolean" ? { readOnly: ann.readOnly } : typeof ann.readOnlyHint === "boolean" ? { readOnly: ann.readOnlyHint } : {}),
-      ...(typeof ann.untrustedContent === "boolean" ? { untrustedContent: ann.untrustedContent } : {}),
-      ...(typeof ann.consequential === "boolean" ? { consequential: ann.consequential } : {}),
-    },
   };
 }
 
+// WebMCP support probe. Resolves true when the domain exists (any
+// outcome but method-not-found counts — a wedged browser surfaces
+// its real error on the caller's own path). False ONLY when the
+// browser has no WebMCP domain at all: without this, open would
+// report toolCount 0 and the skill would blame the page.
+export async function webmcpSupported(conn: CdpConnection, timeoutMs: number, sessionId?: string): Promise<boolean> {
+  try {
+    await withTimeout(conn.send("WebMCP.enable", {}, sessionId), timeoutMs, "WebMCP.enable probe");
+    return true;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return !/wasn't found|not found|no such method/i.test(msg);
+  }
+}
+
+// Page-side API probe. The CDP domain can exist while the page API
+// doesn't (stock Chromium without --enable-features=WebMCP): no page
+// can ever register tools there. Side-effect-free typeof read.
+// Retries while the page loads: a clean true wins at once, errors are
+// inconclusive (keep waiting), all-clean-false means flag-off.
+// Never throws — inconclusive fails open to [] (the old behavior).
+export async function pageApiPresent(conn: CdpConnection, timeoutMs: number, sessionId?: string, attempts = 4): Promise<boolean> {
+  const EXPR = "typeof navigator.modelContext!=='undefined'||typeof document.modelContext!=='undefined'";
+  let cleanFalse = false;
+  for (let i = 0; i < attempts; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, 1000));
+    try {
+      const v = await evaluateJson(conn, EXPR, timeoutMs, sessionId);
+      if (v === true) return true;
+      if (v === false) cleanFalse = true;
+    } catch { /* mid-navigation or wedged — inconclusive, retry */ }
+  }
+  return !cleanFalse;
+}
 // Native catalog read. Subscribes BEFORE enable (the burst fires
 // immediately). Empty pages resolve [] — open must succeed with toolCount 0.
 // A missing domain throws; callers that tolerate plain Chromium catch it.

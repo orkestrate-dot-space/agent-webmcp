@@ -6,6 +6,51 @@ until 1.0: deleted paths fail loud naming the replacement, never silently.
 
 ## Unreleased
 
+**Breaking:** authored site agents are gone from the engine.
+`src/agents.ts` (contract registry + deep-link driver) is deleted and
+`ask_mintlify`/`ask_claude` no longer exist as verbs — the engine is
+back to seven generic verbs over live page tools only. Callers that
+need a site assistant use the /agents directory instead:
+`search_agents` to find the row, `get_agent` for its skill, which
+carries the same deep-link + DOM-observe pattern per driver
+(agent-webmcp codemode, Playwright, plain CDP), headed and headless
+tiers marked. Nothing else changes: sessions, handles, budgets,
+and the skill loop are untouched.
+
+**Breaking:** `open`/`list` fail loud on browsers without the WebMCP
+domain (`webmcp: browser serves no WebMCP domain…`) instead of reporting
+no verbs. `toolCount: 0` and empty `list` now mean the page serves
+nothing — the skill's claim is enforced by the engine.
+
+**Breaking:** the `--consequential` policy is gone (`policy.ts` deleted,
+`confirm` arg removed from `execute`). Page verbs call free — the gate
+was a leftover from authored/stamped tools, and with live-only verbs
+there is no wall behind it to guard. `mcp serve` takes no flags;
+`doctor` drops the `policy` field. A passed `confirm:true` is inert
+(extra args are ignored, never errors). The calling harness owns
+approval now — that was always true in practice.
+
+**Fundamentals (non-breaking):** failed runs keep a `partial` ledger —
+the last 20 completed calls with 200-char output heads — on timeout,
+call-budget, and mid-run throws, in `execute` and `poll` alike.
+Timeouts stop discarding work: continue from the ledger, never redo it.
+Base-prompt budget gated: skill text + all served descriptions ≤ 8000
+chars (~2k tokens; currently ~4.7k). Skill loop now states plan-up-front
+(one program over many calls, `Promise.all` for independent awaits).
+
+**Breaking:** the registry is gone. No `registry/` reads or writes anywhere:
+`src/registry.ts`, `src/admission.ts`, `src/snippet.ts` (and their tests)
+deleted; verbs resolve live-only. `open` absorbs `attach` (`{url}` mints,
+`{targetId}` borrows — one verb, `owned` in the response). `skill` loses
+`search` and all `name`/`origin`/`capability` scoping: `skill` with no args
+returns the core loop, that is the whole skill surface. New verb `poll`
+reads back `execute {background:true}` runs (`{runId}` → running|done);
+long jobs no longer die on timeouts and never need polling loops. `doctor`
+drops the `registry` field. `list` output is name-sorted for cache
+stability. Session handles are allowlisted (`s_[0-9a-f]{12}`) — yesterday's
+traversal shape now fails as `bad-handle`.
+Old registry files on disk are inert (never read); delete them.
+
 **Breaking:** `skill` loses the `list` action — `search` with no query
 returns the grouped map instead (same shape). Codemode `search()`
 loses the `namespace` filter (sessions are already handle-scoped).

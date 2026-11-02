@@ -46,7 +46,7 @@ agent-webmcp open --json https://example.com   # reapplied:["ping"] — memory w
 - Contract skill ships in the binary (`agent-webmcp skill show`); pattern
   recipes ride inside it — neither installs, neither stales.
 - Origin verbs install into your registry: browse the
-  [sites](https://agent-webmcp.vercel.app/sites), review the author's
+  [agents](https://agent-webmcp.vercel.app/agents), review the author's
   code, then `skill install` the repo path. Strangers fixture-prove on
   first open.
 

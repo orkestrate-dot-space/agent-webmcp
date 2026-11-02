@@ -1,0 +1,1 @@
+self.__RSC_SERVER_MANIFEST="{\"node\":{\"407cadef006025c671151dfd22e0d6e1b85964648d\":{\"workers\":{\"app/agents/[slug]/page\":{\"moduleId\":\"4430\",\"async\":false}},\"filename\":\"app/agents/actions.ts\",\"exportedName\":\"revalidateAfterScan\"}},\"edge\":{},\"encryptionKey\":\"process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY\"}"

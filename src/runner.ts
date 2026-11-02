@@ -5,9 +5,17 @@ export interface RunBudgets { readonly timeoutMs: number; readonly maxToolCalls:
 
 export type CallFn = (input: unknown) => Promise<unknown>;
 
+// Partial ledger: what a failed run completed before it died (timeout,
+// call budget, or a mid-run throw). Capped heads, not full outputs —
+// enough to continue from, never to redo. Kept host-side because the
+// worker owns its variables and dies with them.
+export interface PartialCall { readonly path: string; readonly head: string }
+const PARTIAL_HEAD_CHARS = 200;
+const PARTIAL_KEEP = 20;
+
 export type RunResult =
   | { readonly ok: true; readonly value: unknown; readonly spilled: boolean; readonly toolCalls: number; readonly calls: ReadonlyArray<string>; readonly logs: ReadonlyArray<string> }
-  | { readonly ok: false; readonly error: { readonly kind: "ParseError" | "TimeoutExceeded" | "ToolCallLimitExceeded" | "ToolFailure"; readonly message: string }; readonly toolCalls: number; readonly calls: ReadonlyArray<string>; readonly logs: ReadonlyArray<string> };
+  | { readonly ok: false; readonly error: { readonly kind: "ParseError" | "TimeoutExceeded" | "ToolCallLimitExceeded" | "ToolFailure"; readonly message: string }; readonly toolCalls: number; readonly calls: ReadonlyArray<string>; readonly logs: ReadonlyArray<string>; readonly partial: ReadonlyArray<PartialCall> };
 
 type WorkerMsg =
   | { readonly type: "call"; readonly id: number; readonly path: string; readonly input: unknown }
@@ -111,9 +119,11 @@ async function runWithWorker(code: string, calls: Record<string, CallFn>, budget
       let calls_n = 0;
       let spilled = false;
       const paths: Array<string> = [];
+      const ledger: Array<PartialCall> = [];
+      const partial = (): Array<PartialCall> => ledger.slice(-PARTIAL_KEEP);
       let done = false;
       const finish = (r: RunResult): void => { if (!done) { done = true; resolve(r); } };
-      const timer = setTimeout(() => finish({ ok: false, error: { kind: "TimeoutExceeded", message: `past timeoutMs (${budgets.timeoutMs})` }, toolCalls: calls_n, calls: paths, logs: [] }), budgets.timeoutMs);
+      const timer = setTimeout(() => finish({ ok: false, error: { kind: "TimeoutExceeded", message: `past timeoutMs (${budgets.timeoutMs}) — partial ledger kept, continue from it` }, toolCalls: calls_n, calls: paths, logs: [], partial: partial() }), budgets.timeoutMs);
       const tell = (msg: HostMsg): void => { try { worker.postMessage(msg); } catch { /* worker gone */ } };
       worker.onmessage = (event) => {
         const msg = event.data as WorkerMsg;
@@ -127,7 +137,7 @@ async function runWithWorker(code: string, calls: Record<string, CallFn>, budget
               finish({ ok: true, value: msg.value === undefined ? null : msg.value, spilled, toolCalls: calls_n, calls: paths, logs: msg.logs });
             }
           } else {
-            finish({ ok: false, error: { kind: msg.kind, message: msg.message }, toolCalls: calls_n, calls: paths, logs: msg.logs });
+            finish({ ok: false, error: { kind: msg.kind, message: msg.message }, toolCalls: calls_n, calls: paths, logs: msg.logs, partial: partial() });
           }
           return;
         }
@@ -136,7 +146,7 @@ async function runWithWorker(code: string, calls: Record<string, CallFn>, budget
         const inputText = JSON.stringify(msg.input) ?? "null";
         if (inputText.length > budgets.maxChars) { tell({ type: "result", id: msg.id, ok: false, message: `input exceeds maxChars (${inputText.length} > ${budgets.maxChars})` }); return; }
         if (calls_n >= budgets.maxToolCalls) {
-          finish({ ok: false, error: { kind: "ToolCallLimitExceeded", message: `past maxToolCalls (${budgets.maxToolCalls})` }, toolCalls: calls_n, calls: paths, logs: [] });
+          finish({ ok: false, error: { kind: "ToolCallLimitExceeded", message: `past maxToolCalls (${budgets.maxToolCalls}) — partial ledger kept, continue from it` }, toolCalls: calls_n, calls: paths, logs: [], partial: partial() });
           tell({ type: "result", id: msg.id, ok: false, message: `past maxToolCalls (${budgets.maxToolCalls})` });
           return;
         }
@@ -146,6 +156,8 @@ async function runWithWorker(code: string, calls: Record<string, CallFn>, budget
           (v) => {
             const outText = JSON.stringify(v) ?? "null";
             if (outText.length > budgets.maxChars) spilled = true;
+            ledger.push({ path: msg.path, head: outText.slice(0, PARTIAL_HEAD_CHARS) });
+            if (ledger.length > PARTIAL_KEEP) ledger.shift();
             tell({ type: "result", id: msg.id, ok: true, value: v });
           },
           (e) => tell({ type: "result", id: msg.id, ok: false, message: String(e instanceof Error ? e.message : e).slice(0, 500) })
@@ -153,7 +165,7 @@ async function runWithWorker(code: string, calls: Record<string, CallFn>, budget
       };
       worker.onerror = (e) => {
         clearTimeout(timer);
-        finish({ ok: false, error: { kind: "ToolFailure", message: `worker defect: ${String(e.message ?? e).slice(0, 200)}` }, toolCalls: calls_n, calls: paths, logs: [] });
+        finish({ ok: false, error: { kind: "ToolFailure", message: `worker defect: ${String(e.message ?? e).slice(0, 200)}` }, toolCalls: calls_n, calls: paths, logs: [], partial: partial() });
       };
     });
   } finally {

@@ -21,17 +21,14 @@ const run = async (cmd: Array<string>): Promise<{ code: number; out: string }> =
   if (r.code !== 0) { console.error(r.out); fail("unit tests"); }
   pass("unit tests");
 }
-// 3. skill shape: SKILL.md + refs exist, frontmatter name matches dirname
+// 3. skill shape: SKILL.md exists, frontmatter name matches dirname
 {
-  const { readdirSync, readFileSync, existsSync } = await import("node:fs");
+  const { readFileSync, existsSync } = await import("node:fs");
   const root = import.meta.dir + "/../skills/agent-webmcp";
-  for (const rel of ["SKILL.md", "references/author.md", "references/drivers.md"]) {
-    if (!existsSync(`${root}/${rel}`)) fail(`skill-shape (missing ${rel})`);
-  }
+  if (!existsSync(`${root}/SKILL.md`)) fail("skill-shape (missing SKILL.md)");
   const core = readFileSync(`${root}/SKILL.md`, "utf8");
   const name = /^name:\s*(\S+)/m.exec(core)?.[1];
   if (name !== "agent-webmcp") fail("skill-shape (core name mismatch)");
-  void readdirSync;
   pass("skill-shape");
 }
 // 4. schema-object: every served inputSchema is a top-level object
@@ -53,5 +50,19 @@ const run = async (cmd: Array<string>): Promise<{ code: number; out: string }> =
     }
   }
   pass("desc-budget");
+}
+// 6. base-budget: the fixed per-turn cost stays small — skill text +
+// served descriptions ≤ 8000 chars (~2k tokens). Growth fails loud.
+{
+  const { readFileSync } = await import("node:fs");
+  const { VERBS } = await import("../src/server.ts");
+  let total = readFileSync(import.meta.dir + "/../skills/agent-webmcp/SKILL.md", "utf8").length;
+  for (const v of VERBS as Array<{ description: string; inputSchema: { properties?: Record<string, { description?: string }> } }>) {
+    total += v.description.length;
+    for (const p of Object.values(v.inputSchema.properties ?? {})) total += (p.description ?? "").length;
+  }
+  if (total > 8000) fail(`base-budget (${total} chars > 8000)`);
+  console.log(`  (base fixed cost: ${total} chars)`);
+  pass("base-budget");
 }
 console.log("gate: green");

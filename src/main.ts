@@ -1,16 +1,14 @@
-// main: argument parse, one dispatch. piped=JSON, writes need --yes.
-// Exits 0 ok / 2 usage / 1 defect.
+// main: argument parse, one dispatch. Exits 0 ok / 2 usage / 1 defect.
 import { serveStdio } from "./server.ts";
-import { parsePolicy } from "./policy.ts";
 import { VERSION } from "./version.ts";
 
 function usage(): string {
   return [
     "agent-webmcp <command> [options]",
     "",
-    "  mcp serve [--consequential allow|ask|deny]   serve tools over stdio",
-    "  doctor [--cdp URL]                           reachability + release report",
-    "  --version                                    print version",
+    "  mcp serve              serve tools over stdio",
+    "  doctor [--cdp URL]     reachability + release report",
+    "  --version              print version",
   ].join("\n");
 }
 
@@ -28,11 +26,10 @@ async function main(): Promise<void> {
   const [cmd, sub] = args;
   if (cmd === "--version" || cmd === "-V") { console.log(VERSION); return; }
   if (cmd === "doctor") {
-    const { discoverDaemonBrowser } = await import("./transport.ts");
-    const cdp = flag("--cdp");
+    const { discoverDaemonBrowser, discoverWs } = await import("./transport.ts");
+    const cdp = flag("--cdp") ?? ((process.env.AGENT_WEBMCP_CDP ?? "").trim() || undefined);
     let endpoint: string | undefined;
     try {
-      const { discoverWs } = await import("./transport.ts");
       if (cdp !== undefined) { await discoverWs(cdp, 5000); endpoint = cdp; }
       else endpoint = await discoverDaemonBrowser();
     } catch { endpoint = undefined; }
@@ -43,11 +40,7 @@ async function main(): Promise<void> {
     return;
   }
   if (cmd === "mcp" && sub === "serve") {
-    let policy;
-    try { policy = parsePolicy(flag("--consequential")); }
-    catch (e) { console.error(e instanceof Error ? e.message : String(e)); process.exit(2); }
-    const source = flag("--consequential") === undefined ? "default" as const : "flag" as const;
-    await serveStdio({ policy: policy as ReturnType<typeof parsePolicy>, policySource: source });
+    await serveStdio();
     return;
   }
   console.error(usage());

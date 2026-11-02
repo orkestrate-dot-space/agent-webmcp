@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { buildSignature, catalogDetail, searchCatalog, type CatalogEntry } from "./catalog.ts";
 
 const entries: Array<CatalogEntry> = [
-  { path: "add_book", description: "Add a book", admitted: true },
-  { path: "p1.count_books", description: "Count books", admitted: true },
-  { path: "mark_read", description: "Mark read", admitted: false },
+  { path: "add_book", description: "Add a book" },
+  { path: "p1.count_books", description: "Count books" },
+  { path: "mark_read", description: "Mark read" },
 ];
 
 describe("searchCatalog", () => {
@@ -12,15 +12,9 @@ describe("searchCatalog", () => {
     expect(searchCatalog(entries, {}).map((e) => e.path)).toEqual(["add_book", "p1.count_books", "mark_read"]);
     expect(searchCatalog(entries, { limit: 1 }).length).toBe(1);
   });
-  test("query matches path, description, and capability", () => {
+  test("query matches path and description", () => {
     expect(searchCatalog(entries, { query: "count" }).map((e) => e.path)).toEqual(["p1.count_books"]);
-    expect(searchCatalog(
-      [{ path: "x", description: "y", admitted: true, capability: "chat" }],
-      { query: "chat" }
-    ).map((e) => e.path)).toEqual(["x"]);
-  });
-  test("unadmitted rows say how to admit", () => {
-    expect(searchCatalog(entries, { query: "mark" })[0]?.description).toMatch(/first call admits/);
+    expect(searchCatalog(entries, { query: "mark" }).map((e) => e.path)).toEqual(["mark_read"]);
   });
 });
 
@@ -42,7 +36,7 @@ describe("catalogDetail", () => {
 
   test("outputSchema surfaces in detail when declared", () => {
     const withOut: Array<CatalogEntry> = [
-      { path: "typed", description: "Typed", inputSchema: { type: "object" }, outputSchema: { type: "object", properties: { text: { type: "string" } } }, admitted: true },
+      { path: "typed", description: "Typed", inputSchema: { type: "object" }, outputSchema: { type: "object", properties: { text: { type: "string" } } } },
     ];
     const det = catalogDetail(withOut, "typed") as { outputSchema?: unknown; returns?: unknown };
     expect(det.outputSchema).toEqual({ type: "object", properties: { text: { type: "string" } } });
