@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 
 import { SitesCatalog } from "./sites-catalog";
-import { RegisterAgentTools } from "./register-tools";
 import { readAgents } from "./list-data";
 
 export const metadata: Metadata = {
@@ -24,7 +23,6 @@ export default async function SitesPage() {
         Skip to content
       </a>
       <SitesCatalog initialSites={sites} />
-      <RegisterAgentTools />
     </>
   );
 }
