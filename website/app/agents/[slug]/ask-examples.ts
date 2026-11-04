@@ -3,9 +3,9 @@
 // list. Concrete jobs with specifics, not FAQ questions.
 const BY_HOST: Record<string, Array<string>> = {
   "mintlify.com": [
-    "Get a Mintlify docs site live from the quickstart",
-    "Add the assistant widget to my docs",
-    "Publish a docs change from the Mintlify dashboard",
+    "Document a POST /v1/payments endpoint with a docs.json entry and a manual API page.",
+    "My docs page returns 404 after I add a new MDX file, even though the file exists. What usually causes this in Mintlify?",
+    "We still use mint.json. What changes when we migrate to docs.json?",
   ],
   "claude.com": [
     "Connect Claude to my team's Slack workspace",
