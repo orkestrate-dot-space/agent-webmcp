@@ -192,54 +192,6 @@
    ],
    "name": "Auth0",
    "docs": "https://auth0.com/docs"
-  },
-  {
-   "origin": "https://bunny.net",
-   "slug": "bunny.net",
-   "description": "Search bunny.net CDN docs and read pages as Markdown via Mintlify MCP.",
-   "platform": "mintlify",
-   "page": "https://bunny.net/docs",
-   "searchTool": "search_bunny_net_documentation",
-   "fsTool": "query_docs_filesystem_bunny_net_documentation",
-   "autoSubmit": true,
-   "invoke": {
-    "transport": "webmcp",
-    "endpoint": "https://bunny.net/docs",
-    "example": "open tab -> await tools.search_docs({ query: \"...\" }) -> cited passages; read_page({ path }) for full markdown"
-   },
-   "proof": {
-    "verified": "2026-11-01",
-    "ref": "Chat NOT verified (captcha-gated, needs non-bot browser); probe-mintlify: MCP initialize (bunny.net Documentation) live; llms.txt 82330B; siteconfig present. WebMCP page verbs [get_site_overview, navigate_page, read_page, read_skill, search_docs] verified live in-page on 5 Mintlify sites. Chat NOT verified (captcha-gated, needs non-bot browser)."
-   },
-   "tools": [
-    {
-     "name": "get_site_overview",
-     "params": "",
-     "readOnly": true
-    },
-    {
-     "name": "navigate_page",
-     "params": "path: string",
-     "readOnly": false
-    },
-    {
-     "name": "read_page",
-     "params": "path: string",
-     "readOnly": true
-    },
-    {
-     "name": "read_skill",
-     "params": "skill_name: string",
-     "readOnly": true
-    },
-    {
-     "name": "search_docs",
-     "params": "query: string",
-     "readOnly": true
-    }
-   ],
-   "name": "bunny.net",
-   "docs": "https://bunny.net/docs"
   }
  ]
 }

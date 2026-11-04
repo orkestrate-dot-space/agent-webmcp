@@ -1,6 +1,8 @@
-// Per-agent example tasks for the "Example tasks" list.
+// Per-agent example tasks for the "Try it out" list.
 // Curated per agent — no generic fallback: agents without entries get no
-// list. Concrete jobs with specifics, not FAQ questions.
+// list. Every entry here is a cold deep-link question that the site's own
+// assistant actually answered. Questions stay plain text, self-contained,
+// and free of apostrophes/code fences (both break Mintlify prefill).
 const BY_HOST: Record<string, Array<string>> = {
   "mintlify.com": [
     "Document a POST /v1/payments endpoint with a docs.json entry and a manual API page.",
@@ -8,24 +10,13 @@ const BY_HOST: Record<string, Array<string>> = {
     "We still use mint.json. What changes when we migrate to docs.json?",
   ],
   "claude.com": [
-    "Connect Claude to my team's Slack workspace",
-    "Explain connectors vs MCP servers for a custom integration",
-    "Add the GitHub connector to Claude",
+    "We want Claude to read our internal Postgres database. Should we build an MCP server or use a connector? What is the difference and which do you recommend?",
+    "How do I add a custom connector for an MCP server that uses OAuth?",
   ],
   "auth0.com": [
-    "Set up Auth0 authentication for a new app",
-    "Isolate my staging users in a separate tenant",
-    "Enforce MFA with push notifications on my tenant",
-  ],
-  "launchdarkly.com": [
-    "Roll out a feature flag to 10% of production traffic",
-    "Target a flag at Team-plan users in the EU",
-    "Set up a LaunchDarkly project for staging vs production",
-  ],
-  "bunny.net": [
-    "Put my site behind a bunny.net pull zone",
-    "Purge the CDN cache after a deploy",
-    "Estimate bunny.net costs for 50TB of video delivery",
+    "How do I require MFA with push notifications for all users in a tenant?",
+    "We run staging and production. Should we use separate Auth0 tenants or one tenant per environment?",
+    "How do I add a custom claim to an access token only for users in a specific organization?",
   ],
 };
 
