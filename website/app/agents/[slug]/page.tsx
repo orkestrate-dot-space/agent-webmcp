@@ -238,7 +238,7 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
                 {askExamplesFor(host).map((q) => (
                   <a
                     key={q}
-                    href={`${deltas.docs.replace(/\/$/, "")}?assistant=${encodeURIComponent(q)}`}
+                    href={`${(deltas.page || deltas.docs).replace(/\/$/, "")}?assistant=${encodeURIComponent(q)}`}
                     target="_blank"
                     rel="noreferrer"
                     className="flex items-center justify-between gap-4 border-b border-line py-3 text-[15px] leading-6 text-ink no-underline transition hover:text-ink"
