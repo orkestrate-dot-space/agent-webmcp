@@ -229,13 +229,26 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
           {askExamplesFor(host).length > 0 ? (
             <div className="mt-12">
               <h2 className="text-[28px] font-medium leading-[1.15] tracking-[-0.02em] text-ink">
-                Example tasks
+                Try it out
               </h2>
+              <p className="mt-2 max-w-[70ch] text-sm leading-6 text-ink-2">
+                Opens this site&apos;s assistant with the question pre-filled.
+              </p>
               <div className="mt-4 border-t border-line">
                 {askExamplesFor(host).map((q) => (
-                  <p key={q} className="border-b border-line py-3 text-[15px] leading-6 text-ink">
-                    {q}
-                  </p>
+                  <a
+                    key={q}
+                    href={`${deltas.docs.replace(/\/$/, "")}?assistant=${encodeURIComponent(q)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-between gap-4 border-b border-line py-3 text-[15px] leading-6 text-ink no-underline transition hover:text-ink"
+                  >
+                    <span>{q}</span>
+                    <ExternalLink
+                      className="h-4 w-4 shrink-0 text-ink-2"
+                      aria-label="Opens the site assistant with this question"
+                    />
+                  </a>
                 ))}
               </div>
             </div>

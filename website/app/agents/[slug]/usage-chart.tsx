@@ -17,7 +17,7 @@ const RANGES = [
   { id: "today", label: "Today", days: 1, caption: "get_agent calls · last 24 hours" },
   { id: "7d", label: "7d", days: 7, caption: "get_agent calls · last 7 days" },
   { id: "30d", label: "30d", days: 30, caption: "get_agent calls · last 30 days" },
-  { id: "all", label: "All time", days: 90, caption: "get_agent calls · all time" },
+  { id: "all", label: "90d", days: 90, caption: "get_agent calls · last 90 days" },
 ] as const;
 
 type RangeId = (typeof RANGES)[number]["id"];

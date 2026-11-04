@@ -37,7 +37,25 @@ interface ModelContext {
     inputSchema: Record<string, unknown>;
     annotations?: Record<string, unknown>;
     execute: (input: unknown) => unknown;
-  }, options?: { signal?: AbortSignal }): void;
+  }, options?: { signal?: AbortSignal }): unknown;
+}
+
+type ToolDefinition = Parameters<ModelContext["registerTool"]>[0];
+
+// Native WebMCP returns a promise that rejects with AbortError when the
+// registration signal aborts (React StrictMode remounts, route teardown).
+// That is expected lifecycle, not a page error — swallow it.
+function registerSafely(
+  mc: ModelContext,
+  def: ToolDefinition,
+  options: { signal?: AbortSignal }
+): void {
+  try {
+    const pending = mc.registerTool(def, options) as { catch?: (fn: () => void) => void } | null;
+    if (pending && typeof pending.catch === "function") pending.catch(() => {});
+  } catch {
+    // Registration is best-effort; the page must render regardless.
+  }
 }
 
 function rows(): Array<{
@@ -99,7 +117,7 @@ export function RegisterAgentTools() {
     if (!mc || typeof mc.registerTool !== "function") return;
     const ctrl = new AbortController();
     const opts = { signal: ctrl.signal };
-    mc.registerTool(
+    registerSafely(mc,
       {
         name: "search_agents",
         title: "Search listed site agents",
@@ -136,7 +154,7 @@ export function RegisterAgentTools() {
       },
       opts
     );
-    mc.registerTool(
+    registerSafely(mc,
       {
         name: "get_agent",
         title: "Get a site agent's skill",
