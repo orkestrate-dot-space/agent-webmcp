@@ -9,6 +9,8 @@ dist/
 .opencode/
 space/preview-*.png
 .cloudflare/
+.wrangler/
+.dev.vars
 next-env.d.ts
 *.tsbuildinfo
 space/*.png

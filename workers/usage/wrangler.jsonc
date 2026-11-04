@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "agent-webmcp-usage",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "agent-webmcp-usage",
+      "database_id": "7b5cd730-5009-4353-a726-d4207ff70915"
+    }
+  ]
+}
