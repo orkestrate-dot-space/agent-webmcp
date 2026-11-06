@@ -4,8 +4,6 @@ import type { ReactNode } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 
-import { RegisterAgentTools } from "./agents/register-tools";
-
 const geistSans = Geist({
   subsets: ["latin"],
   variable: "--font-geist-sans",
@@ -71,7 +69,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           one-time attribute injection on this element. */}
       <meta name="darkreader-lock" />
       <body>
-        <RegisterAgentTools />
         {children}
         <Analytics />
       </body>

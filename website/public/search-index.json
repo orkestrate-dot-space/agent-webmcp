@@ -48,18 +48,6 @@
   ]
  },
  {
-  "url": "/agents",
-  "title": "Agents · agent-webmcp",
-  "description": "Websites your agent can work with. Scanned live, with proof.",
-  "sections": [
-   {
-    "anchor": "",
-    "heading": "",
-    "text": "export const metadata: Metadata = { title: \"Agents · agent-webmcp\", description: \"Websites your agent can work with. Scanned live, with proof.\", }; // Static shell, fresh data every few minutes. Row data comes from // the worker (cached 300s there); sites.json is fallback only. export const revalidate = 300; export default async function SitesPage() { const sites = await readAgents(); return ( Skip to content ); }"
-   }
-  ]
- },
- {
   "url": "/docs/changelog",
   "title": "Changelog · agent-webmcp docs",
   "description": "Engine v2 history, starting at 0.1.0.",

@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build --webpack",
-    "prebuild": "node ./scripts/build-search-index.mjs && node ./scripts/verify-sites.mjs",
+    "prebuild": "node ./scripts/build-search-index.mjs",
     "start": "next start",
     "typecheck": "tsc --noEmit"
   },

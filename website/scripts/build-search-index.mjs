@@ -48,7 +48,7 @@ const clean = (raw) => {
 const preferMdx = (base) =>
   existsSync(join(appDir, `${base}.mdx`)) ? `${base}.mdx` : `${base}.tsx`;
 
-const pageFiles = [{ file: preferMdx("page"), url: "/" }, { file: preferMdx("docs/page"), url: "/docs" }, { file: "agents/page.tsx", url: "/agents" }];
+const pageFiles = [{ file: preferMdx("page"), url: "/" }, { file: preferMdx("docs/page"), url: "/docs" }];
 for (const entry of readdirSync(join(appDir, "docs"), { withFileTypes: true })) {
   if (entry.isDirectory()) {
     for (const candidate of [`docs/${entry.name}/page.mdx`, `docs/${entry.name}/page.tsx`]) {

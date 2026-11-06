@@ -18,14 +18,18 @@ const withMDX = nextMDX({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   pageExtensions: ['ts', 'tsx', 'mdx'],
+  // Headless-Chrome hydration: the dev server self-identifies as
+  // `localhost`, so HMR WebSocket upgrades from `127.0.0.1` origins are
+  // refused and the App Router never hydrates headless (SSR shell only,
+  // no fibers, registerTools effects never run). Allow the loopback origin
+  // and decouple hydration from the React debug channel close-chunk,
+  // which never arrives over the headless HMR socket.
+  allowedDevOrigins: ['127.0.0.1'],
+  experimental: {
+    reactDebugChannel: false,
+  },
   turbopack: {
     root: dirname(fileURLToPath(import.meta.url)),
-  },
-  async redirects() {
-    return [
-      { source: '/sites', destination: '/agents', permanent: true },
-      { source: '/sites/:slug*', destination: '/agents/:slug*', permanent: true },
-    ];
   },
 };
 

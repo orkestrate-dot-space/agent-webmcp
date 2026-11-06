@@ -19,9 +19,6 @@ export default function SiteNav() {
           <a href="/docs" className={link}>
             Docs
           </a>
-          <a href="/agents" className={link}>
-            Agents
-          </a>
           <a href={DIRECTORY} className={link}>
             webmcp.com ↗
           </a>
