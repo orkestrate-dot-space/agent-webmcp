@@ -25,7 +25,7 @@
 One line installs (clone, gate, compile, PATH):
 
 ```bash
-curl -fsSL https://agent-webmcp.vercel.app/install.sh | bash
+curl -fsSL https://web.orkestrate.space/webmcp/install.sh | bash
 ```
 
 Or step by step:
@@ -46,7 +46,7 @@ agent-webmcp open --json https://example.com   # reapplied:["ping"] — memory w
 - Contract skill ships in the binary (`agent-webmcp skill show`); pattern
   recipes ride inside it — neither installs, neither stales.
 - Origin verbs install into your registry: browse the
-  [agents](https://agent-webmcp.vercel.app/agents), review the author's
+  [agents](https://web.orkestrate.space/agents), review the author's
   code, then `skill install` the repo path. Strangers fixture-prove on
   first open.
 
@@ -71,16 +71,16 @@ Then read the version-matched agent contract (byte-equal to source by gate):
 
 ## Pages (read the one matching your task)
 
-- [Docs](https://agent-webmcp.vercel.app/docs) — start here: the model in five minutes.
-- [Installation](https://agent-webmcp.vercel.app/docs/installation) — build from source, verify, wire MCP.
-- [Quick start](https://agent-webmcp.vercel.app/docs/quick-start) — the golden path with evidence at every step.
-- [Custom tools](https://agent-webmcp.vercel.app/docs/custom-tools) — authoring: discovery first, spec plus body, fixture proof, rot recovery.
-- [Codemode](https://agent-webmcp.vercel.app/docs/codemode) — `search` + `execute` shapes, budgets, failure codes.
-- [Commands](https://agent-webmcp.vercel.app/docs/commands) — every verb, both doors, exits.
-- [Sessions](https://agent-webmcp.vercel.app/docs/sessions) — owned vs borrowed browsers; will `close` kill my browser?
-- [Security](https://agent-webmcp.vercel.app/docs/security) — trust boundaries in one page.
-- [Troubleshooting](https://agent-webmcp.vercel.app/docs/troubleshooting) — exact error strings and their fixes.
-- [Changelog](https://agent-webmcp.vercel.app/docs/changelog) — what changed and the evidence to expect.
+- [Docs](https://web.orkestrate.space/webmcp/docs) — start here: the model in five minutes.
+- [Installation](https://web.orkestrate.space/webmcp/docs/installation) — build from source, verify, wire MCP.
+- [Quick start](https://web.orkestrate.space/webmcp/docs/quick-start) — the golden path with evidence at every step.
+- [Custom tools](https://web.orkestrate.space/webmcp/docs/custom-tools) — authoring: discovery first, spec plus body, fixture proof, rot recovery.
+- [Codemode](https://web.orkestrate.space/webmcp/docs/codemode) — `search` + `execute` shapes, budgets, failure codes.
+- [Commands](https://web.orkestrate.space/webmcp/docs/commands) — every verb, both doors, exits.
+- [Sessions](https://web.orkestrate.space/webmcp/docs/sessions) — owned vs borrowed browsers; will `close` kill my browser?
+- [Security](https://web.orkestrate.space/webmcp/docs/security) — trust boundaries in one page.
+- [Troubleshooting](https://web.orkestrate.space/webmcp/docs/troubleshooting) — exact error strings and their fixes.
+- [Changelog](https://web.orkestrate.space/webmcp/docs/changelog) — what changed and the evidence to expect.
 
 ## Built by
 

@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const BASE = "https://agent-webmcp.vercel.app";
+const BASE = "https://web.orkestrate.space/webmcp";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   return [

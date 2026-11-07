@@ -17,24 +17,24 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://agent-webmcp.vercel.app"),
+  metadataBase: new URL("https://web.orkestrate.space/webmcp"),
   title: "agent-webmcp · ultra-light WebMCP browser CLI",
   description:
     "A small engine that turns any web page into an agent's toolkit: page tools, authored custom tools, and codemode over CLI and MCP.",
   icons: {
-    icon: [{ url: "/orkestrate-icon.svg", type: "image/svg+xml" }],
-    apple: "/orkestrate-apple-touch-icon.png",
+    icon: [{ url: "/webmcp/orkestrate-icon.svg", type: "image/svg+xml" }],
+    apple: "/webmcp/orkestrate-apple-touch-icon.png",
   },
   openGraph: {
     title: "agent-webmcp · ultra-light WebMCP browser CLI",
     description:
       "A small engine that turns any web page into an agent's toolkit: page tools, authored custom tools, and codemode over CLI and MCP.",
-    url: "https://agent-webmcp.vercel.app",
+    url: "https://web.orkestrate.space/webmcp",
     siteName: "agent-webmcp",
     type: "website",
     images: [
       {
-        url: "/opengraph-image",
+        url: "/webmcp/opengraph-image",
         width: 1200,
         height: 630,
         alt: "agent-webmcp — turn the web into your agent's toolkit",
@@ -46,7 +46,7 @@ export const metadata: Metadata = {
     title: "agent-webmcp · ultra-light WebMCP browser CLI",
     description:
       "A small engine that turns any web page into an agent's toolkit: page tools, authored custom tools, and codemode over CLI and MCP.",
-    images: ["/opengraph-image"],
+    images: ["/webmcp/opengraph-image"],
   },
 };
 

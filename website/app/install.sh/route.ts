@@ -1,5 +1,5 @@
 // GET /install.sh — the one-line installer. Plain text shell script:
-//   curl -fsSL agent-webmcp.vercel.app/install.sh | bash
+//   curl -fsSL web.orkestrate.space/webmcp/install.sh | bash
 // Interactive when stdout is a TTY (asks, reads /dev/tty); piped or
 // agent-driven runs take env defaults (AGENT_WEBMCP_BROWSER,
 // AGENT_WEBMCP_DIR). set -euo pipefail: any

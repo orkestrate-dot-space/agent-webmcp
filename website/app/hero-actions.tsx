@@ -18,7 +18,7 @@ const SETUP_PROMPT = [
   "Report back: binary version, verification result, headed-vs-headless as requested.",
 ].join("\n");
 
-const INSTALL_CMD = "curl -fsSL https://agent-webmcp.vercel.app/install.sh | bash";
+const INSTALL_CMD = "curl -fsSL https://web.orkestrate.space/webmcp/install.sh | bash";
 
 async function copyText(text: string): Promise<boolean> {
   try {
@@ -119,7 +119,7 @@ export function InstallBlock() {
     <div className="flex w-full max-w-xl items-center gap-4 rounded-xl border border-line bg-[#f0f0f0] px-5 py-4 dark:bg-[#1c1c1c]">
       <code className="min-w-0 flex-1 truncate font-mono text-[15px] text-ink">
         <span className="text-[var(--term-dim)]">$ </span>
-        <span>curl -fsSL agent-webmcp.vercel.app/install.sh | bash</span>
+        <span>curl -fsSL web.orkestrate.space/webmcp/install.sh | bash</span>
       </code>
       <button
         type="button"

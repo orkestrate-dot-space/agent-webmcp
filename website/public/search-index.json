@@ -210,7 +210,7 @@
    {
     "anchor": "staying-current-beta",
     "heading": "Staying current (beta)",
-    "text": "Beta means breaking changes can ship in any release — each one is listed at the top of its changelog entry, with no migration scripts until 1.0. To update a source install in place (pull, gate, compile, reinstall, with a `.prev` backup of your old binary): agent-webmcp upgrade --yes # uses your checkout (walks up to .git) agent-webmcp upgrade --repo /agent-webmcp --yes No checkout on this machine (binary-only install)? Re-run the installer instead: curl -fsSL https://agent-webmcp.vercel.app/install.sh | bash Per-release binaries attach to GitHub releases from 1.0 on; until then source builds plus `upgrade` are the distribution.",
+    "text": "Beta means breaking changes can ship in any release — each one is listed at the top of its changelog entry, with no migration scripts until 1.0. To update a source install in place (pull, gate, compile, reinstall, with a `.prev` backup of your old binary): agent-webmcp upgrade --yes # uses your checkout (walks up to .git) agent-webmcp upgrade --repo /agent-webmcp --yes No checkout on this machine (binary-only install)? Re-run the installer instead: curl -fsSL https://web.orkestrate.space/webmcp/install.sh | bash Per-release binaries attach to GitHub releases from 1.0 on; until then source builds plus `upgrade` are the distribution.",
     "level": 2
    },
    {
@@ -246,7 +246,7 @@
    {
     "anchor": "verify",
     "heading": "Verify",
-    "text": "Check the file resolves with the right content type: curl -sS -D- -o/dev/null https://yourdomain.com/.well-known/agent-webmcp.json curl -sS https://yourdomain.com/.well-known/agent-webmcp.json | jq . Then open `https://agent-webmcp.vercel.app/sites/yourdomain` — the page scans the domain and the row appears, with whatever the scan found. Re-open any time to re-scan; `proof.verified` always shows the last scan. See custom tools for how verbs prove, and security for what never ships.",
+    "text": "Check the file resolves with the right content type: curl -sS -D- -o/dev/null https://yourdomain.com/.well-known/agent-webmcp.json curl -sS https://yourdomain.com/.well-known/agent-webmcp.json | jq . Then open `https://web.orkestrate.space/agents` — the page scans the domain and the row appears, with whatever the scan found. Re-open any time to re-scan; `proof.verified` always shows the last scan. See custom tools for how verbs prove, and security for what never ships.",
     "level": 2
    }
   ]

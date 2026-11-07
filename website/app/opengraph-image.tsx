@@ -97,10 +97,10 @@ export default async function Image() {
               padding: "14px 26px",
             }}
           >
-            $ curl agent-webmcp.vercel.app/install.sh | bash
+            $ curl web.orkestrate.space/webmcp/install.sh | bash
           </div>
           <div style={{ fontFamily: MONO, fontSize: 22, color: "#737373" }}>
-            agent-webmcp.vercel.app
+            web.orkestrate.space/webmcp
           </div>
         </div>
       </div>
