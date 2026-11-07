@@ -16,7 +16,7 @@ export default function SiteNav() {
           aria-label="Primary"
           className="hidden items-center gap-6 lg:flex"
         >
-          <a href="/docs" className={link}>
+          <a href="/webmcp/docs" className={link}>
             Docs
           </a>
           <a href={DIRECTORY} className={link}>

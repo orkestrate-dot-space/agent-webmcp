@@ -3,7 +3,7 @@
 Composition lives on MCP only: `search` ranks page tools
 across sessions, `execute` runs one JS program over them.
 The CLI has no `search` or `execute` — wire the MCP
-server (see [Installation](/docs/installation)) and call
+server (see [Installation](/webmcp/docs/installation)) and call
 them as tools.
 
 ## Search
@@ -99,6 +99,6 @@ Tool-call failures classify into exactly four codes:
 |                  | the schema (`list <handle> <tool>`)       |
 
 `page-refused` and `tool-vanished` mark the tool
-`staleSuspect` (see [Custom tools](/docs/custom-tools)).
+`staleSuspect` (see [Custom tools](/webmcp/docs/custom-tools)).
 `strict: true` tools reject unknown input keys
 host-side before the page ever sees them.

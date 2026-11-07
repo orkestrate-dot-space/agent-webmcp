@@ -1,6 +1,6 @@
 {
- "/": [],
- "/docs": [
+ "/webmcp/": [],
+ "/webmcp/docs": [
   {
    "anchor": "how-it-works",
    "heading": "How it works",
@@ -22,7 +22,7 @@
    "level": 2
   }
  ],
- "/docs/changelog": [
+ "/webmcp/docs/changelog": [
   {
    "anchor": "unreleased-beta",
    "heading": "Unreleased (beta)",
@@ -39,7 +39,7 @@
    "level": 2
   }
  ],
- "/docs/codemode": [
+ "/webmcp/docs/codemode": [
   {
    "anchor": "search",
    "heading": "Search",
@@ -61,7 +61,7 @@
    "level": 2
   }
  ],
- "/docs/commands": [
+ "/webmcp/docs/commands": [
   {
    "anchor": "lifecycle",
    "heading": "Lifecycle",
@@ -83,7 +83,7 @@
    "level": 2
   }
  ],
- "/docs/custom-tools": [
+ "/webmcp/docs/custom-tools": [
   {
    "anchor": "discovery-first",
    "heading": "Discovery first",
@@ -105,7 +105,7 @@
    "level": 2
   }
  ],
- "/docs/installation": [
+ "/webmcp/docs/installation": [
   {
    "anchor": "prerequisites",
    "heading": "Prerequisites",
@@ -132,7 +132,7 @@
    "level": 2
   }
  ],
- "/docs/publishing": [
+ "/webmcp/docs/publishing": [
   {
    "anchor": "the-file",
    "heading": "The file",
@@ -144,7 +144,7 @@
    "level": 2
   }
  ],
- "/docs/quick-start": [
+ "/webmcp/docs/quick-start": [
   {
    "anchor": "open-and-list",
    "heading": "Open and list",
@@ -161,7 +161,7 @@
    "level": 2
   }
  ],
- "/docs/security": [
+ "/webmcp/docs/security": [
   {
    "anchor": "untrusted-page-data",
    "heading": "Untrusted page data",
@@ -178,14 +178,14 @@
    "level": 2
   }
  ],
- "/docs/sessions": [
+ "/webmcp/docs/sessions": [
   {
    "anchor": "close-discipline",
    "heading": "Close discipline",
    "level": 2
   }
  ],
- "/docs/troubleshooting": [
+ "/webmcp/docs/troubleshooting": [
   {
    "anchor": "session-errors",
    "heading": "Session errors",

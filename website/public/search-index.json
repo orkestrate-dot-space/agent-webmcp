@@ -1,7 +1,7 @@
 [
  {
-  "url": "/",
-  "title": "/",
+  "url": "/webmcp/",
+  "title": "/webmcp/",
   "description": "",
   "sections": [
    {
@@ -12,7 +12,7 @@
   ]
  },
  {
-  "url": "/docs",
+  "url": "/webmcp/docs",
   "title": "Docs · agent-webmcp",
   "description": "agent-webmcp turns live pages into an agent's toolkit: seven verbs, authored tools, MCP-only composition.",
   "sections": [
@@ -48,7 +48,7 @@
   ]
  },
  {
-  "url": "/docs/changelog",
+  "url": "/webmcp/docs/changelog",
   "title": "Changelog · agent-webmcp docs",
   "description": "Engine v2 history, starting at 0.1.0.",
   "sections": [
@@ -78,7 +78,7 @@
   ]
  },
  {
-  "url": "/docs/codemode",
+  "url": "/webmcp/docs/codemode",
   "title": "Codemode · agent-webmcp docs",
   "description": "Compose page tools across sessions with search and execute: shapes, budgets, envelopes, failure codes.",
   "sections": [
@@ -114,7 +114,7 @@
   ]
  },
  {
-  "url": "/docs/commands",
+  "url": "/webmcp/docs/commands",
   "title": "Commands · agent-webmcp docs",
   "description": "Every verb and door: lifecycle, authoring, MCP-only composition, utilities, flags, outputs, exits.",
   "sections": [
@@ -150,7 +150,7 @@
   ]
  },
  {
-  "url": "/docs/custom-tools",
+  "url": "/webmcp/docs/custom-tools",
   "title": "Custom tools · agent-webmcp docs",
   "description": "Author page tools with register: discovery first, spec plus plain-JS body, fixture proof, file memory, rot recovery.",
   "sections": [
@@ -186,7 +186,7 @@
   ]
  },
  {
-  "url": "/docs/installation",
+  "url": "/webmcp/docs/installation",
   "title": "Installation · agent-webmcp docs",
   "description": "Build the engine from source, put it on PATH, verify the version.",
   "sections": [
@@ -228,7 +228,7 @@
   ]
  },
  {
-  "url": "/docs/publishing",
+  "url": "/webmcp/docs/publishing",
   "title": "Publishing your site · agent-webmcp docs",
   "description": "Serve agent-webmcp.json on your domain: skills, agents, hooks. Verify, then list.",
   "sections": [
@@ -252,7 +252,7 @@
   ]
  },
  {
-  "url": "/docs/quick-start",
+  "url": "/webmcp/docs/quick-start",
   "title": "Quick start · agent-webmcp docs",
   "description": "The golden path — open, list, register, execute, close — with copy-paste evidence at every step.",
   "sections": [
@@ -282,7 +282,7 @@
   ]
  },
  {
-  "url": "/docs/security",
+  "url": "/webmcp/docs/security",
   "title": "Security · agent-webmcp docs",
   "description": "Untrusted page data, deliberate writes, and the process and file guards behind close and the registry.",
   "sections": [
@@ -312,7 +312,7 @@
   ]
  },
  {
-  "url": "/docs/sessions",
+  "url": "/webmcp/docs/sessions",
   "title": "Sessions · agent-webmcp docs",
   "description": "Owned versus borrowed browser model: lifecycle, close semantics, disk records, and multi-session discipline.",
   "sections": [
@@ -330,7 +330,7 @@
   ]
  },
  {
-  "url": "/docs/troubleshooting",
+  "url": "/webmcp/docs/troubleshooting",
   "title": "Troubleshooting · agent-webmcp docs",
   "description": "Exact error strings and fixes for sessions, authoring, and composition.",
   "sections": [

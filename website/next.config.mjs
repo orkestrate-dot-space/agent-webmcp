@@ -17,6 +17,11 @@ const withMDX = nextMDX({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Served in production under web.orkestrate.space/webmcp (proxied).
+  // basePath keeps _next assets, Link hrefs, and router pushes local.
+  // Raw <a href="/…">, fetch("/…"), and MDX links carry the prefix
+  // explicitly — see site-nav, brand, search-palette, build-search-index.
+  basePath: '/webmcp',
   pageExtensions: ['ts', 'tsx', 'mdx'],
   // Headless-Chrome hydration: the dev server self-identifies as
   // `localhost`, so HMR WebSocket upgrades from `127.0.0.1` origins are

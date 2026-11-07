@@ -19,7 +19,7 @@ export default function NotFound() {
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           <a
-            href="/"
+            href="/webmcp/"
             className="inline-flex min-h-9 items-center justify-center rounded-md border border-ink bg-ink px-4 py-[7px] text-sm font-medium leading-5 text-canvas no-underline hover:opacity-90"
           >
             Go home

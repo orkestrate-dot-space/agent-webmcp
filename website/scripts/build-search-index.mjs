@@ -48,13 +48,17 @@ const clean = (raw) => {
 const preferMdx = (base) =>
   existsSync(join(appDir, `${base}.mdx`)) ? `${base}.mdx` : `${base}.tsx`;
 
-const pageFiles = [{ file: preferMdx("page"), url: "/" }, { file: preferMdx("docs/page"), url: "/docs" }];
+// Served under the /webmcp basePath in production (proxied). Index URLs
+// carry the prefix explicitly: the palette also renders native <a> hrefs
+// (new-tab), which Next does not prefix. router.push tolerates it.
+const BASE = "/webmcp";
+const pageFiles = [{ file: preferMdx("page"), url: `${BASE}/` }, { file: preferMdx("docs/page"), url: `${BASE}/docs` }];
 for (const entry of readdirSync(join(appDir, "docs"), { withFileTypes: true })) {
   if (entry.isDirectory()) {
     for (const candidate of [`docs/${entry.name}/page.mdx`, `docs/${entry.name}/page.tsx`]) {
       try {
         readFileSync(join(appDir, candidate), "utf8");
-        pageFiles.push({ file: candidate, url: `/docs/${entry.name}` });
+        pageFiles.push({ file: candidate, url: `${BASE}/docs/${entry.name}` });
         break;
       } catch {
         // Try the next candidate.

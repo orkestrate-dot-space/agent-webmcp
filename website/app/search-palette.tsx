@@ -126,7 +126,7 @@ export function SearchPalette() {
 
   useEffect(() => {
     if (open && pages === null) {
-      fetch("/search-index.json")
+      fetch("/webmcp/search-index.json")
         .then((r) => (r.ok ? r.json() : []))
         .then((j: IndexPage[]) => setPages(j))
         .catch(() => setPages([]));

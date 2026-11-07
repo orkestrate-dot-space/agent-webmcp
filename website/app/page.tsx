@@ -37,7 +37,7 @@ export default function Home() {
         </main>
         <footer className="flex flex-wrap justify-between gap-2 py-4 text-[13px] text-ink-2">
           <span>
-            MIT license · <a href="/llms.txt">llms.txt</a>
+            MIT license · <a href="/webmcp/llms.txt">llms.txt</a>
           </span>
           <span>© 2026 system1970</span>
         </footer>

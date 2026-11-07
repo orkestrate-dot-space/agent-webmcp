@@ -3,7 +3,7 @@ export default function Brand() {
     <>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/orkestrate-logo-512.png"
+        src="/webmcp/orkestrate-logo-512.png"
         alt=""
         aria-hidden="true"
         width={20}
@@ -20,7 +20,7 @@ export default function Brand() {
         /
       </span>
       <a
-        href="/"
+        href="/webmcp/"
         className="text-sm text-ink-2 no-underline hover:text-ink"
       >
         agent-webmcp
