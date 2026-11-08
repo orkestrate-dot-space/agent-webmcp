@@ -1,6 +1,0 @@
-{
-  "$schema": "https://web.orkestrate.space/webmcp/schemas/agent-webmcp.json",
-  "version": 1,
-  "domain": "web.orkestrate.space",
-  "description": "Turn live web pages into an agent toolkit. Use for browser verbs, page tools, and site proof."
-}
