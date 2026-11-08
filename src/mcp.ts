@@ -5,7 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { buildIndex, searchIndex } from "./index-engine/bm25";
 import { loadIndex } from "./index-engine/store";
-import { ensureBundle } from "./cli";
+import { ensureBundle, saveSite } from "./cli";
 import { installedInitPath } from "./paths";
 import { VERSION } from "./version";
 
@@ -34,8 +34,8 @@ const VERBS = [
   },
   {
     name: "save",
-    description: "Hint for persisting a site toolkit: run `agent-webmcp save <domain> <file.js>` in shell (64KB max, MCP takes content).",
-    inputSchema: { type: "object", properties: { domain: { type: "string" }, content: { type: "string" } }, required: ["domain"], additionalProperties: false },
+    description: "Persist a site toolkit: validates registerTool source and compiles the bundle. Content max 64KB.",
+    inputSchema: { type: "object", properties: { domain: { type: "string" }, content: { type: "string" }, entryUrl: { type: "string" } }, required: ["domain", "content"], additionalProperties: false },
   },
 ];
 
@@ -58,33 +58,26 @@ export function serve(): Server {
     if (req.params.name === "get") {
       const target = typeof args.target === "string" ? args.target : "";
       if (!target) return { content: [{ type: "text", text: "get needs {target} (domain, URL, or domain/tool)." }], isError: true };
-      const merged = loadIndex();
-      const key = target.trim().toLowerCase();
-      const domain = key.includes("://") ? (() => { try { return new URL(key).hostname; } catch { return key; } })() : key.split("/")[0];
-      const entry = merged.domains[domain];
-      const script = ensureBundle(domain, entry);
-      return {
-        content: [{
-          type: "text",
-          text: JSON.stringify({
-            ...(entry ? { domain, entry_url: entry.entryUrl } : { domain, status: "unindexed_domain" }),
-            init_script: script,
-            tools: (entry?.tools ?? []).map((t) => ({ name: t.name, source: t.source, inputSchema: t.inputSchema })),
-          }),
-        }],
-      };
+      try {
+        const { getSite } = await import("./cli");
+        return { content: [{ type: "text", text: JSON.stringify(getSite(target)) }] };
+      } catch (e) {
+        return { content: [{ type: "text", text: `get failed: ${e instanceof Error ? e.message : String(e)}` }], isError: true };
+      }
     }
     if (req.params.name === "save") {
-      const domain = typeof args.domain === "string" ? args.domain : "<domain>";
-      const hasContent = typeof args.content === "string";
-      return {
-        content: [{
-          type: "text",
-          text: hasContent
-            ? `Write the content to a temp file (max 64KB), then run: agent-webmcp save ${domain} <file.js>`
-            : `Run in shell: agent-webmcp save ${domain} <file.js>`,
-        }],
-      };
+      const domain = typeof args.domain === "string" ? args.domain : "";
+      const content = typeof args.content === "string" ? args.content : "";
+      if (!domain) return { content: [{ type: "text", text: "save needs {domain} and {content} (max 64KB)." }], isError: true };
+      if (!content || content.length > 65536) {
+        return { content: [{ type: "text", text: "save needs {content} with 1..65536 chars of registerTool source." }], isError: true };
+      }
+      try {
+        const saved = await saveSite(domain, content, typeof args.entryUrl === "string" ? args.entryUrl : undefined);
+        return { content: [{ type: "text", text: JSON.stringify({ saved: saved.domain, tools: saved.tools, init_script: saved.bundle }) }] };
+      } catch (e) {
+        return { content: [{ type: "text", text: `save failed: ${e instanceof Error ? e.message : String(e)}` }], isError: true };
+      }
     }
     return { content: [{ type: "text", text: `NO_SUCH_TOOL: ${req.params.name}` }], isError: true };
   });

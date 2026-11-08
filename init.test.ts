@@ -18,7 +18,7 @@ function loadWith(native: unknown) {
   run(sandbox.window, sandbox.document, sandbox.navigator, sandbox.Event);
   return sandbox as unknown as {
     window: Record<string, { list(): unknown; call(n: string, a: unknown): Promise<unknown>; define(t: unknown): string }>;
-    document: Record<string, { getTools(): Array<unknown>; executeTool(n: string, a: unknown): Promise<unknown>; registerTool(t: unknown): void }>;
+    document: Record<string, { getTools(): Array<unknown>; executeTool(n: string, a: unknown): Promise<unknown>; registerTool(t: unknown): void; unregisterTool(n: string): void }>;
   };
 }
 
@@ -62,5 +62,18 @@ describe("init.js v0", () => {
     expect(await sb.document.modelContext.executeTool("add", JSON.stringify({ x: 2 }))).toEqual({ got: { x: 2 } });
     // Cached registrations are listed; pre-existing native tools are not.
     expect(await sb.document.modelContext.getTools()).toEqual([{ name: "add", description: "adds" }]);
+  });
+
+  test("binds window.webmcp.<tool> shorthands on define, drops on unregister", async () => {
+    const sb = loadWith(null);
+    sb.window.webmcp.define({ name: "add", execute: async (a: { x: number; y: number }) => ({ sum: a.x + a.y }) });
+    const wm = sb.window.webmcp as unknown as Record<string, (a: unknown) => Promise<unknown>>;
+    expect(typeof wm["add"]).toBe("function");
+    expect(await wm["add"]({ x: 1, y: 2 })).toEqual({ sum: 3 });
+    // Reserved names are never shadowed.
+    sb.window.webmcp.define({ name: "list", execute: async () => ({}) });
+    expect(typeof sb.window.webmcp.list).toBe("function");
+    sb.document.modelContext.unregisterTool("add");
+    expect("add" in sb.window.webmcp).toBe(false);
   });
 });

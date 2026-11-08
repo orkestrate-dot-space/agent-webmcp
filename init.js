@@ -18,6 +18,30 @@
     return input === undefined || input === null ? {} : input;
   }
 
+  // window.webmcp.<toolName> shorthands, bound at register time so the
+  // snippets `get` emits actually resolve. Never shadows list/call/define.
+  function bindShorthand(name) {
+    try {
+      var wm = root.webmcp;
+      if (!wm || typeof name !== "string") return;
+      if (name === "list" || name === "call" || name === "define") return;
+      if (Object.prototype.hasOwnProperty.call(wm, name)) return;
+      Object.defineProperty(wm, name, {
+        value: function (input, opts) { return wm.call(name, input === undefined ? {} : input, opts); },
+        configurable: true,
+        enumerable: true,
+      });
+    } catch (e) {}
+  }
+  function unbindShorthand(name) {
+    try {
+      var wm = root.webmcp;
+      if (!wm || typeof name !== "string") return;
+      if (name === "list" || name === "call" || name === "define") return;
+      try { delete wm[name]; } catch (e) {}
+    } catch (e) {}
+  }
+
   function makeRegistry(native) {
     var tools = new Map();
     // Native handles: Chrome 157+ executeTool takes the registered tool
@@ -47,6 +71,7 @@
             }, function () { return tool; });
             handles.set(tool.name, p);
           } catch (e) {}
+          bindShorthand(tool.name);
           emit();
           if (opts && opts.signal) {
             if (opts.signal.aborted) { try { registry.unregisterTool(tool.name); } catch (e) {} }
@@ -55,16 +80,17 @@
           return r;
         }
         tools.set(tool.name, tool);
+        bindShorthand(tool.name);
         emit();
         if (opts && opts.signal) {
-          if (opts.signal.aborted) tools.delete(tool.name);
-          else opts.signal.addEventListener("abort", function () { tools.delete(tool.name); emit(); }, { once: true });
+          if (opts.signal.aborted) { tools.delete(tool.name); unbindShorthand(tool.name); }
+          else opts.signal.addEventListener("abort", function () { tools.delete(tool.name); unbindShorthand(tool.name); emit(); }, { once: true });
         }
       },
       unregisterTool: function (name) {
-        if (native && native.unregisterTool) { var r = native.unregisterTool.call(native, name); emit(); return r; }
+        if (native && native.unregisterTool) { var r = native.unregisterTool.call(native, name); unbindShorthand(name); emit(); return r; }
         var ok = tools.delete(name);
-        if (ok) emit();
+        if (ok) { unbindShorthand(name); emit(); }
         return ok;
       },
       getTools: function () {
@@ -161,6 +187,12 @@
               return seen[tool.name];
             }, function () { return tool; });
             seen[tool.name] = p;
+            bindShorthand(tool.name);
+            if (opts && opts.signal) {
+              var onAbort = function () { try { delete seen[tool.name]; } catch (e) {} unbindShorthand(tool.name); };
+              if (opts.signal.aborted) onAbort();
+              else opts.signal.addEventListener("abort", onAbort, { once: true });
+            }
           }
         } catch (e) {}
         return r;

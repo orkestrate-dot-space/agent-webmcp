@@ -143,12 +143,21 @@ export function ensureBundle(domain: string, entry: DomainEntry | undefined): st
   return out;
 }
 
-function cmdGet(args: string[]): void {
-  const { positional, bools } = parseArgs(args);
-  const target = positional[0];
-  if (!target) fail("usage: agent-webmcp get <domain|url|domain/tool> [--json]");
+export interface GetResult {
+  domain: string;
+  status?: string;
+  entry_url?: string;
+  platform?: string;
+  init_script: string;
+  tool?: string;
+  tools: Array<{ name: string; source: string; description?: string; read_only: boolean; inputSchema: unknown }>;
+  how_to_run: Record<string, string>;
+  hint?: string;
+}
+
+export function getSite(target: string): GetResult {
   const { domain, tool } = normalizeDomain(target);
-  if (!domain) fail("usage: agent-webmcp get <domain|url|domain/tool> [--json]");
+  if (!domain) throw new Error("usage: agent-webmcp get <domain|url|domain/tool> [--json]");
   const merged = loadIndex();
   let entry = merged.domains[domain];
   if (!entry) {
@@ -161,7 +170,26 @@ function cmdGet(args: string[]): void {
   }
   const tools = (entry?.tools ?? []).filter((t) => !tool || t.name === tool);
   const script = ensureBundle(domain, entry);
-  const payload = {
+  const url = entry?.entryUrl ?? `https://${domain}`;
+  const callName = tool ?? tools[0]?.name ?? "<TOOL_NAME>";
+  const exampleArgs = `{ /* ${callName} arguments */ }`;
+  // Static template, interpolated — not per-driver logic. The Browse block
+  // uses evaluate-inline because script-tag/init-script injection is proven
+  // dead in the execute realm; agent-browser uses --init-script (live-proven).
+  const how_to_run = {
+    opencode_browse:
+      `await page.goto("${url}", { waitUntil: 'domcontentloaded' });\n` +
+      `await page.evaluate(INIT_SOURCE); // init.js bytes of ${script} (\`agent-webmcp init --stdout\`)\n` +
+      `const tools = await page.evaluate(() => window.webmcp.list());\n` +
+      `return await page.evaluate((args) => window.webmcp.${callName}(args), ${exampleArgs});`,
+    agent_browser:
+      `agent-browser --init-script "${script}" open "${url}"\n` +
+      `agent-browser webmcp invoke ${callName} --params '${exampleArgs}'`,
+    playwright_mcp:
+      `browser_navigate -> "${url}"\n` +
+      `browser_evaluate -> load "${script}" bytes and call window.webmcp.${callName}(${exampleArgs})`,
+  };
+  return {
     ...(entry
       ? { domain, entry_url: entry.entryUrl, ...(entry.platform ? { platform: entry.platform } : {}) }
       : { domain, status: "unindexed_domain" }),
@@ -174,10 +202,24 @@ function cmdGet(args: string[]): void {
       read_only: t.annotations?.readOnlyHint === true,
       inputSchema: t.inputSchema,
     })),
+    how_to_run,
     ...(entry
       ? {}
       : { hint: `No indexed tools for ${domain}. The polyfill still exposes live native tools; to persist custom tools run \`agent-webmcp save ${domain} <file.js>\`.` }),
   };
+}
+
+function cmdGet(args: string[]): void {
+  const { positional, bools } = parseArgs(args);
+  const target = positional[0];
+  if (!target) fail("usage: agent-webmcp get <domain|url|domain/tool> [--json]");
+  let payload: GetResult;
+  try {
+    payload = getSite(target);
+  } catch (e) {
+    fail(e instanceof Error ? e.message : String(e));
+    throw new Error("unreachable");
+  }
   if (bools.has("json")) {
     console.log(JSON.stringify(payload));
     return;
@@ -185,28 +227,19 @@ function cmdGet(args: string[]): void {
   console.log(toYamlLines(payload, "").join("\n"));
 }
 
-async function cmdSave(args: string[]): Promise<void> {
-  const { positional, values } = parseArgs(args);
-  const [domainRaw, file] = positional;
-  if (!domainRaw || !file) fail("usage: agent-webmcp save <domain> <file.js> [--entry-url <url>]");
-  const domain = (domainRaw as string).toLowerCase();
-  if (!/^[a-z0-9.-]+(?::\d+)?$/.test(domain)) fail(`bad domain '${domain}'`);
-  let src: string;
-  try {
-    src = readFileSync(file as string, "utf8");
-  } catch {
-    fail(`cannot read ${file}`);
-    throw new Error("unreachable");
-  }
-  if (src.length > 200_000) fail("toolkit too large (max 200KB)");
-  let found;
-  try {
-    found = await extractTools(src);
-  } catch (e) {
-    fail(e instanceof Error ? e.message : String(e));
-    throw new Error("unreachable");
-  }
-  if (found.length === 0) fail("file defines no tools (want document.modelContext.registerTool({...}))");
+export interface SavedSite {
+  domain: string;
+  tools: string[];
+  bundle: string;
+}
+
+/** Shared save pipeline (CLI + MCP): validate, compile, merge. Never runs execute(). */
+export async function saveSite(domainRaw: string, src: string, entryUrl?: string): Promise<SavedSite> {
+  const domain = domainRaw.toLowerCase();
+  if (!/^[a-z0-9.-]+(?::\d+)?$/.test(domain)) throw new Error(`bad domain '${domain}'`);
+  if (src.length > 200_000) throw new Error("toolkit too large (max 200KB)");
+  const found = await extractTools(src);
+  if (found.length === 0) throw new Error("file defines no tools (want document.modelContext.registerTool({...}))");
   ensureDirs();
   mkdirSync(sitesDir(), { recursive: true });
   writeFileSync(join(sitesDir(), `${domain}.js`), src.endsWith("\n") ? src : src + "\n");
@@ -214,7 +247,7 @@ async function cmdSave(args: string[]): Promise<void> {
   const prev = merged.domains[domain];
   const entry: DomainEntry = {
     domain,
-    entryUrl: values["entry-url"] || values["entryUrl"] || prev?.entryUrl || `https://${domain}`,
+    entryUrl: entryUrl || prev?.entryUrl || `https://${domain}`,
     platform: prev?.platform ?? null,
     script: `sites/${domain}.js`,
     updatedAt: new Date().toISOString(),
@@ -228,8 +261,28 @@ async function cmdSave(args: string[]): Promise<void> {
   };
   upsertLocalDomain(domain, entry);
   const bundle = ensureBundle(domain, loadIndex().domains[domain]);
-  console.log(`saved ${domain} (${found.length} tool${found.length === 1 ? "" : "s"}) -> ${bundle}`);
-  console.log(`local index: ${localIndexPath()} | merged index: ${indexPath()}`);
+  return { domain, tools: found.map((t) => t.name), bundle };
+}
+
+async function cmdSave(args: string[]): Promise<void> {
+  const { positional, values } = parseArgs(args);
+  const [domainRaw, file] = positional;
+  if (!domainRaw || !file) fail("usage: agent-webmcp save <domain> <file.js> [--entry-url <url>]");
+  let src: string;
+  try {
+    src = readFileSync(file as string, "utf8");
+  } catch {
+    fail(`cannot read ${file}`);
+    throw new Error("unreachable");
+  }
+  try {
+    const saved = await saveSite(domainRaw as string, src, values["entry-url"] || values["entryUrl"]);
+    console.log(`saved ${saved.domain} (${saved.tools.length} tool${saved.tools.length === 1 ? "" : "s"}) -> ${saved.bundle}`);
+    console.log(`local index: ${localIndexPath()} | merged index: ${indexPath()}`);
+  } catch (e) {
+    fail(e instanceof Error ? e.message : String(e));
+    throw new Error("unreachable");
+  }
 }
 
 async function cmdSync(): Promise<void> {
