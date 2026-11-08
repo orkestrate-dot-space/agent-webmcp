@@ -18,7 +18,7 @@ and the proposed shape. PRs that ignore this will likely be closed.
 ## Commit style
 
 Conventional, scoped, dense: `feat(scope): …`, `fix(scope): …`,
-`docs(scope): …`, `chore(scope): …`. One meaning per commit. Base on `dev`.
+`docs(scope): …`, `chore(scope): …`. One meaning per commit. Base on `main`.
 
 ## Site curation (`registry/`)
 
