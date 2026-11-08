@@ -1,5 +1,17 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+
+/** Installed init.js, seeding it from the base copy on first use. */
+export function ensureInstalledInit(): string {
+  ensureDirs();
+  const installed = installedInitPath();
+  if (!existsSync(installed)) {
+    const base = baseInitPath();
+    if (!existsSync(base)) throw new Error("base init.js not found (reinstall agent-webmcp)");
+    copyFileSync(base, installed);
+  }
+  return installed;
+}
 
 export function dataDir(): string {
   const home = process.env.HOME ?? process.env.USERPROFILE ?? "/tmp";
@@ -37,7 +49,7 @@ export function baseInitPath(): string {
   const repo = repoRoot();
   if (repo) return join(repo, "init.js");
   const home = process.env.HOME ?? process.env.USERPROFILE ?? "/tmp";
-  for (const c of [join(home, ".local", "share", "agent-webmcp", "init.js"), join(dirname(process.execPath), "init.js")]) {
+  for (const c of [join(home, ".local", "share", "agent-webmcp", "init.js"), join(dirname(process.execPath), "agent-webmcp-init.js"), join(dirname(process.execPath), "init.js")]) {
     if (existsSync(c)) return c;
   }
   return join(home, ".local", "share", "agent-webmcp", "init.js");

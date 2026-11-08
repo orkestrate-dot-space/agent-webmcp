@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
-import { installedInitPath } from "../paths";
+import { ensureInstalledInit } from "../paths";
 
-/** The flagless polyfill header (init.js). Single source: the installed copy. */
+/** The flagless polyfill header (init.js). Seeded on first use. */
 export function polyfillHeader(): string {
-  return readFileSync(installedInitPath(), "utf8");
+  return readFileSync(ensureInstalledInit(), "utf8");
 }

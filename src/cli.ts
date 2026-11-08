@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { buildIndex, searchIndex } from "./index-engine/bm25";
 import { loadIndex, upsertLocalDomain } from "./index-engine/store";
@@ -6,7 +6,7 @@ import { syncRegistry } from "./index-engine/sync";
 import { extractTools } from "./compiler/extract-tools";
 import { wrapInit } from "./compiler/wrap-init";
 import { polyfillHeader } from "./runtime/polyfill-header";
-import { baseInitPath, cacheDir, ensureDirs, indexPath, installedInitPath, localIndexPath, sitesDir } from "./paths";
+import { cacheDir, ensureDirs, ensureInstalledInit, indexPath, installedInitPath, localIndexPath, sitesDir } from "./paths";
 import { VERSION } from "./version";
 import type { DomainEntry } from "./types";
 
@@ -41,17 +41,6 @@ function parseArgs(args: string[]): Flags {
     }
   }
   return { positional, bools, values };
-}
-
-function ensureInstalledInit(): string {
-  ensureDirs();
-  const installed = installedInitPath();
-  if (!existsSync(installed)) {
-    const base = baseInitPath();
-    if (!existsSync(base)) fail("base init.js not found (reinstall agent-webmcp)");
-    copyFileSync(base, installed);
-  }
-  return installed;
 }
 
 function cmdInit(args: string[]): void {
