@@ -8,10 +8,11 @@ description: Turn pages into callable toolkits inside your existing browser driv
 agent-webmcp never opens tabs. Your driver owns the browser. This skill
 carries `init.js` (polyfill + `window.webmcp`) into whatever driver you use.
 
-## 1. Mount once per session
+## 1. Search, then get
 
 ```bash
-agent-webmcp init   # prints the installed init.js path
+agent-webmcp search "<intent or domain>"   # BM25 over native + custom tools
+agent-webmcp get <domain>                  # schemas + entry URL + init script
 ```
 
 - OpenCode Browse MCP (your paired browser, code-mode): script-tag and
@@ -44,8 +45,8 @@ driver primitives and projects the result.
 ## 3. Use -> save -> free next visit
 
 ```bash
-agent-webmcp tools "<intent>"   # local search, no browser
-agent-webmcp learn <domain> <file.js>  # persist site toolkit
+agent-webmcp save <domain> <file.js>  # persist site toolkit (was `learn`)
+agent-webmcp sync                     # pull managed index (only network verb)
 ```
 
 Save stubs/paywalls as warnings, not tools.
