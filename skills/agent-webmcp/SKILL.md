@@ -13,7 +13,7 @@ tabs; this skill decides which tool to call before any snapshot.
 Rule: toolkit-first. Run search, then get. Snapshot only on a toolkit miss.
 
 CLI: `agent-webmcp`. Fallback when the binary is not on PATH: prefix every
-command with `npx -y agent-webmcp`.
+command with `npx -y @orkestrate/agent-webmcp`.
 
 ## 1. Search the index
 
