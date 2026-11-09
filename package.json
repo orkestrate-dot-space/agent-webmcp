@@ -1,6 +1,21 @@
 {
   "name": "agent-webmcp",
   "version": "0.1.0",
+  "description": "Turn websites into a searchable, callable WebMCP toolkit for your browser driver.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/orkestrate-dot-space/agent-webmcp.git"
+  },
+  "homepage": "https://github.com/orkestrate-dot-space/agent-webmcp",
+  "keywords": [
+    "webmcp",
+    "mcp",
+    "model-context-protocol",
+    "browser-use",
+    "ai-agents",
+    "agent-skills"
+  ],
   "type": "module",
   "bin": {
     "agent-webmcp": "./dist/cli.js"
