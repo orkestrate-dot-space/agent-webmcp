@@ -40,4 +40,9 @@ Done when: invoke prints the tool result.
 2. `browser_evaluate` the init script bytes, then
    `window.webmcp.TOOL(args)` in the same evaluation.
 
-Done when: the evaluation returns the tool result.
+Done when: the evaluation returns the tool result. Proven live via
+`browser_navigate` + `browser_evaluate` against the MCP server
+(bundle mounts, `list()` returns schemas, `call` executes).
+Caveat: interactive custom tools (e.g. docs assistants) may not stream
+answers to headless automation browsers — same script, headed browser,
+real answers. Mount, do a cheap read-only call first to confirm.
