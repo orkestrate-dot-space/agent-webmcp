@@ -121,4 +121,11 @@ describe("index merge + search", () => {
     seedManaged();
     expect(readFileSync(seeded, "utf8")).toBe("// local edit\n");
   });
+
+  test("unindexed get hint points at sync first", async () => {
+    const { getSite } = await import("../src/cli");
+    const r = getSite("example.com");
+    expect(r.status).toBe("unindexed_domain");
+    expect(r.hint ?? "").toContain("sync");
+  });
 });

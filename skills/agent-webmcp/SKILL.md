@@ -23,7 +23,8 @@ agent-webmcp search "<intent or domain>" [--domain D] [--source native|custom] [
 
 Done when: search returns a match for the task, or returns empty and the
 task still needs the site. Empty is a decision, not a failure — continue
-to get.
+to get. Exception: an empty index on a fresh machine prints a sync hint —
+run `agent-webmcp sync` once, then search again.
 
 ## 2. Fetch the site toolkit
 

@@ -80,8 +80,12 @@ function toYamlLines(value: unknown, indent: string): string[] {
   return out;
 }
 
-function cmdSearch(args: string[]): void {
-  const { positional, bools, values } = parseArgs(args);
+/** True when no index is available (fresh machine, nothing synced or saved yet). */
+export function indexIsEmpty(): boolean {
+  return Object.keys(loadIndex().domains).length === 0;
+}
+
+function cmdSearch(args: string[]): void {  const { positional, bools, values } = parseArgs(args);
   const query = positional.join(" ");
   if (!query) fail("usage: agent-webmcp search <query> [--limit N] [--domain D] [--source native|custom] [--json]");
   const limit = values["limit"] !== undefined ? Number(values["limit"]) : 10;
@@ -104,6 +108,7 @@ function cmdSearch(args: string[]): void {
     lines.push("  ---");
   }
   if (hits.length > 0) lines.push("next_step: Run `agent-webmcp get <domain>` for the init script path and driver commands.");
+  else if (indexIsEmpty()) lines.push("hint: index is empty (fresh machine?) — run `agent-webmcp sync` to pull the managed index, then search again.");
   console.log(lines.join("\n"));
 }
 
@@ -206,7 +211,7 @@ export function getSite(target: string): GetResult {
     how_to_run,
     ...(entry
       ? {}
-      : { hint: `No indexed tools for ${domain}. The polyfill still exposes live native tools; to persist custom tools run \`agent-webmcp save ${domain} <file.js>\`.` }),
+      : { hint: `No indexed tools for ${domain}. Fresh machine? Run \`agent-webmcp sync\` first. To persist your own custom tools, run \`agent-webmcp save ${domain} <file.js>\`.` }),
   };
 }
 
