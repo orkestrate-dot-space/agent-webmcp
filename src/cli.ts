@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { buildIndex, searchIndex } from "./index-engine/bm25";
