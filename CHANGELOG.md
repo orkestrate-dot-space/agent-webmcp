@@ -11,7 +11,7 @@
 - Verified native contract on Chrome 157: async `registerTool`,
   promise `getTools`, handle-based `executeTool`, string outputs parsed back.
 
-## 1.0.0
+## 0.1.0
 
 Complete rewrite from zero. `agent-webmcp` is now a capability layer, not a
 browser driver: flagless `document.modelContext` polyfill + `window.webmcp`
