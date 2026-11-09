@@ -2,7 +2,9 @@ name: gate
 
 on:
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
 
 jobs:
   gate:
@@ -10,5 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
-      - run: bun install
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
       - run: bun run gate

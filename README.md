@@ -1,77 +1,55 @@
 # agent-webmcp
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Beta](https://img.shields.io/badge/channel-0.2.0--beta-orange.svg)](CHANGELOG.md)
+Browser drivers give an agent a browser. agent-webmcp turns the websites
+inside that browser into a searchable, callable toolkit.
 
-**Give your agent any page's verbs as code.** Attach any tab — the engine serves whatever verbs the page serves right now. Your agent discovers them, then calls them from one program: batched tool calls, one model request, full results kept in variables.
-
-Seven verbs. One dependency. MIT licensed, runs local.
+No browser ownership, no CDP, no directory to browse. A local BM25 index of
+per-site WebMCP tools (native + custom), a flagless `document.modelContext`
+polyfill, and targeted `.init.js` bundles your driver injects.
 
 ## Install
 
-No commands. Paste this into your agent:
-
+```sh
+./install.sh   # binary -> ~/.local/bin, data -> ~/.local/share/agent-webmcp
 ```
-Set up agent-webmcp for me by following https://raw.githubusercontent.com/orkestrate-dot-space/agent-webmcp/main/docs/agent-setup.md
-```
-
-The agent checks Bun, builds, installs, wires your harness, reaches a
-browser through your driver, and verifies with `doctor`. Full steps:
-`docs/agent-setup.md`. The script underneath (`install.sh`) is the
-engine the prompt drives, not the interface.
-
-Skill first, every session: `skill action=show`.
 
 ## Use
 
-```js
-// Discover, then call. Calls resolve to the envelope.
-await search({ query: "read" });
-const out = await tools.read_current_page({});
-const reply = out.content[0].text;
+```sh
+agent-webmcp search "empty shopping cart"   # BM25 over native + custom tools
+agent-webmcp get allbirds.com                # schemas + entry URL + init script
+agent-webmcp save news.ycombinator.com ./hn.js --entry-url https://news.ycombinator.com/
+agent-webmcp sync                            # pull managed index (only network verb)
+agent-webmcp init [--stdout]                 # installed init.js path (or bytes)
 ```
 
-`open` attaches a tab and returns a handle (`{url}` mints one, `{targetId}` borrows a live one). `list` shows what that handle can call. `execute` runs your code over those verbs — `background:true` detaches long runs, `poll` reads them back. `close` drops the tab. `skill` serves the compose loop. `doctor` tells the truth about the browser.
+Then, in your driver:
 
-The engine never launches a browser. It attaches tabs in one you already run and never kills it. It keeps no tools: what the page serves now is the whole catalog.
+- OpenCode Browse MCP (code-mode): `page.evaluate(INIT_SOURCE)` with the
+  `get`-emitted bundle bytes, then `window.webmcp.list()` / `call(name, args)`.
+  Script-tag and init-script injection are neutered in the execute realm —
+  evaluate-inline is the only working mount.
+- agent-browser: `agent-browser --init-script <bundle> open <url>`, then
+  native `webmcp list` / `webmcp invoke <tool> --params '{...}'`.
 
-## Programmatic calls
+Skill first: `agent-webmcp mcp serve` exposes
+`skill/search/get/save/init`. Install the skill with
+`npx skills add orkestrate-dot-space/agent-webmcp`.
 
-One `execute` runs many tool calls in one model request: discover with
-`search()`/`catalog()`, branch on results in code, print one summary.
-Raw outputs stay in program variables, never in context. Long jobs run
-detached (`background:true`) and report back via `poll` — no polling
-loops, no timeout deaths.
+## Layout
 
-## Skills
+`init.js` (polyfill), `src/` (cli, mcp, index-engine, compiler, runtime),
+`registry/` (managed index + custom site sources), `skills/`,
+`specs/v1.md` (the locked spec), `test/`.
 
-| Layer | Loads | Answers |
-|---|---|---|
-| `SKILL.md` | always (`skill` verb, no args) | attach, compose, background runs |
+## Trust model
 
-## Local and remote
-
-Two entries, same verbs. Local runs over stdio with no key. Remote runs over HTTP with a bearer key against shared browsers and stored logins. Same pages, same call shape. Attach locally, run anywhere.
-
-## How it compares
-
-| Project | What it does | Where we differ |
-|---|---|---|
-| [browser-use](https://github.com/browser-use/browser-use) (119k stars, MIT) | Drives real browsers from agent instructions | We author verbs once instead of driving pixels every run |
-| [Pomerado](https://github.com/Pomerado/pomerado) (MIT) | Model mints site integrations, open core plus cloud | Your agent authors directly into files it keeps |
-| [UsefulSoftwareCo/executor](https://github.com/UsefulSoftwareCo/executor) (4.3k stars, MIT) | Calls OpenAPI, MCP, GraphQL, and custom JS in a sandbox | We author verbs where no API exists |
-| [Steel](https://github.com/steel-dev/steel-browser) (7.9k stars, Apache-2.0) | Self-hostable browser API | They run browsers. We add the verb layer above any browser |
-| [Playwright MCP](https://github.com/microsoft/playwright-mcp) (38k stars) and [chrome-devtools-mcp](https://github.com/GoogleChromeLabs/chrome-devtools-mcp) (54k stars) | Expose browser actions as tools | We expose page verbs, native and authored alike |
-| [Stagehand](https://github.com/browserbase/stagehand) (26k stars) | Plain-language browser acts over Playwright | Our acts compile to proven files |
-
-Pages increasingly ship their own verbs (13k+ sites expose WebMCP). Consume natives where they exist. Author the gap as files. Run it all the same way.
-
-## Repo
-
-`src/` is the engine. `skills/agent-webmcp/` is the other half of the product. `scripts/gate.ts` is the green gate: typecheck, unit tests, skill shape, schema checks, description budget. `PLAN.md`, `LAUNCH.md`, and `CHANGELOG.md` hold the plan, the launch list, and the beta log.
-
-Beta rules: breaking changes ship in any beta and are listed at the top of each changelog entry. No migrations until 1.0.
-
-## Contributing
-
-Read `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, and `SECURITY.md` before your first PR. Never paste secrets into issues. License is MIT.
+- Injected scripts never phone home; nothing uploads without `sync`/`save`.
+- `save` runs file top-level code in a `node:vm` sandbox with a stub
+  registry (5s timeout, no `require`/`process`), but vm escape via
+  constructor chains is not hardened — treat site scripts as code you
+  review, same as any dependency. Only `sync` touches the network.
+- Custom in-page `fetch` obeys the host page's CSP; cross-origin API calls
+  fail on CSP-strict sites (use CSP-permissive hosts or same-origin endpoints).
+- Every MCP/CLI result that came from a page is untrusted data, never
+  instructions.

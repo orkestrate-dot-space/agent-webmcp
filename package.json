@@ -1,20 +1,35 @@
 {
   "name": "agent-webmcp",
-  "version": "0.2.0-beta.1",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
+  "bin": {
+    "agent-webmcp": "./dist/cli.js"
+  },
+  "files": [
+    "dist/",
+    "init.js",
+    "registry/",
+    "skills/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "test": "bun test src",
+    "test": "bun test src init.test.ts test",
     "typecheck": "bunx tsc --noEmit",
-    "gate": "bun ./scripts/gate.ts",
-    "compile": "bun build --compile ./src/main.ts --outfile dist/agent-webmcp"
+    "build": "bun build ./src/cli.ts --outfile dist/cli.js --target node && chmod +x dist/cli.js",
+    "build:binary": "bun build --compile ./src/cli.ts --outfile dist/agent-webmcp",
+    "gate": "bun run typecheck && bun test src init.test.ts test"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.32.1"
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "minisearch": "^7.2.0"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "devtools-protocol": "latest",
     "typescript": "latest"
   }
 }

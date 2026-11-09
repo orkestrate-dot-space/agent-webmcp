@@ -1,0 +1,38 @@
+{
+  "$id": "schemas/v1/index.json",
+  "title": "agent-webmcp managed index",
+  "type": "object",
+  "required": ["version", "domains"],
+  "properties": {
+    "version": { "const": 1 },
+    "updatedAt": { "type": "string" },
+    "domains": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["domain", "entryUrl", "tools"],
+        "properties": {
+          "domain": { "type": "string" },
+          "entryUrl": { "type": "string" },
+          "platform": { "type": ["string", "null"] },
+          "script": { "type": ["string", "null"] },
+          "updatedAt": { "type": "string" },
+          "tools": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "source", "description", "inputSchema"],
+              "properties": {
+                "name": { "type": "string" },
+                "source": { "enum": ["native", "custom"] },
+                "description": { "type": "string" },
+                "inputSchema": { "type": "object" },
+                "annotations": { "type": "object" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
