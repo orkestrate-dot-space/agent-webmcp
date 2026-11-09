@@ -1,52 +1,63 @@
 ---
 name: agent-webmcp
-description: Turn pages into callable toolkits inside your existing browser driver. Mount init.js once, check webmcp before snapshot.
+description: >
+  Turn the web into a callable toolkit for your browser driver. Use when a task needs an external service, docs, store, or web app: search the index, load site tools via get, execute in one call, save the miss.
 ---
 
-# agent-webmcp — toolkits alongside drivers
+# agent-webmcp — toolkit-first web access
 
-agent-webmcp never opens tabs. Your driver owns the browser. This skill
-carries `init.js` (polyfill + `window.webmcp`) into whatever driver you use.
+`agent-webmcp` is a capability index plus a `document.modelContext` /
+`window.webmcp` polyfill. It never touches the browser. Your driver owns
+tabs; this skill decides which tool to call before any snapshot.
 
-## 1. Search, then get
+Rule: toolkit-first. Run search, then get. Snapshot only on a toolkit miss.
 
-```bash
-agent-webmcp search "<intent or domain>"   # BM25 over native + custom tools
-agent-webmcp get <domain>                  # schemas + entry URL + init script
-```
+CLI: `agent-webmcp`. Fallback when the binary is not on PATH: prefix every
+command with `npx -y agent-webmcp`.
 
-- OpenCode Browse MCP (your paired browser, code-mode): script-tag and
-  init-script injection are neutered in the execute realm, so the polyfill
-  rides in as an evaluated expression. Paste the whole block:
-  ```js
-  await page.goto(URL, { waitUntil: 'domcontentloaded' });
-  await page.evaluate(INIT_SOURCE);   // init.js bytes from `agent-webmcp init --stdout`
-  const tools = await page.evaluate(() => window.webmcp.list());
-  ```
-  Then `window.webmcp.call(name, args)`; `handoff()` for logins/2FA.
-- agent-browser MCP: `open` the URL, then its native `webmcp list` /
-  `webmcp invoke <tool>` verbs. The init script populated
-  `document.modelContext`, so its engine sees the tools automatically.
-
-## 2. goto -> webmcp.list() before snapshot()
-
-```js
-await page.goto(URL);
-const tools = await page.evaluate(() => window.webmcp.list());
-```
-
-Match → 1-turn `window.webmcp.call(name, args)`. Else snapshot, solve
-with driver primitives, then save it (step 3).
-
-Reads run in-page. Writes run as driver plans: the toolkit returns
-targets + values + a verification read; the agent executes with trusted
-driver primitives and projects the result.
-
-## 3. Use -> save -> free next visit
+## 1. Search the index
 
 ```bash
-agent-webmcp save <domain> <file.js>  # persist site toolkit (was `learn`)
-agent-webmcp sync                     # pull managed index (only network verb)
+agent-webmcp search "<intent or domain>" [--domain D] [--source native|custom] [--limit N]
 ```
 
-Save stubs/paywalls as warnings, not tools.
+Done when: search returns a match for the task, or returns empty and the
+task still needs the site. Empty is a decision, not a failure — continue
+to get.
+
+## 2. Fetch the site toolkit
+
+```bash
+agent-webmcp get <domain>
+```
+
+Done when: get returns `entry_url`, `init_script`, a `tools` list, and
+`how_to_run`. The `inputSchema` values are the only valid arguments.
+
+Unindexed domains still return `init_script` plus a `hint`. The polyfill
+exposes live native tools on the page even with zero indexed tools.
+
+## 3. Execute through your driver
+
+Follow the `how_to_run` block that get returned for the active driver.
+Full playbooks live in `references/drivers.md` — load only the active
+driver's section.
+
+Done when: the tool returns its result, or the driver reports
+auth/2FA/confirmation and a human completes it first. The toolkit reads
+the page; the driver performs anything consequential.
+
+## 4. Persist the miss
+
+When no tool covered the task and driver primitives solved it, save the
+flow so the next visit is one call. Contract and skeleton live in
+`references/authoring.md`.
+
+```bash
+agent-webmcp save <domain> <file.js> [--entry-url <url>]
+```
+
+Done when: save prints `saved <domain> (<tools>) -> <bundle>` and a
+repeat `get <domain>` lists the new tool.
+
+Only `sync` touches the network. Everything else reads local files.
