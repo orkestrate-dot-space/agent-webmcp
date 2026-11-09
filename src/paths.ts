@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 /** Installed init.js, seeding it from the base copy on first use. */
@@ -84,4 +84,14 @@ export function seedManaged(): void {
   if (!existsSync(localIndexPath())) {
     writeFileSync(localIndexPath(), JSON.stringify({ version: 1, updatedAt: "", domains: {} }));
   }
+  // Seed managed site scripts (custom tool bodies) on first run.
+  // Never overwrites: a local file means the user owns that domain.
+  try {
+    const seeds = join(reg, "sites");
+    for (const f of readdirSync(seeds)) {
+      if (!f.endsWith(".js")) continue;
+      const dest = join(sitesDir(), f);
+      if (!existsSync(dest)) copyFileSync(join(seeds, f), dest);
+    }
+  } catch { /* no seed scripts: native-only index, polyfill covers it */ }
 }

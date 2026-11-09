@@ -1,7 +1,6 @@
 {
   "name": "agent-webmcp",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "bin": {
     "agent-webmcp": "./dist/cli.js"
