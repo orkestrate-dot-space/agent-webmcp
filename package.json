@@ -1,5 +1,5 @@
 {
-  "name": "agent-webmcp",
+  "name": "@orkestrate/agent-webmcp",
   "version": "0.1.0",
   "description": "Turn websites into a searchable, callable WebMCP toolkit for your browser driver.",
   "license": "MIT",
@@ -18,7 +18,7 @@
   ],
   "type": "module",
   "bin": {
-    "agent-webmcp": "./dist/cli.js"
+    "agent-webmcp": "dist/cli.js"
   },
   "files": [
     "dist/",

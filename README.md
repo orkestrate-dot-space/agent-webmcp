@@ -10,7 +10,7 @@ polyfill, and targeted `.init.js` bundles your driver injects.
 ## Install
 
 ```sh
-npm i -g agent-webmcp
+npm i -g @orkestrate/agent-webmcp
 npx skills add orkestrate-dot-space/agent-webmcp
 agent-webmcp search "docs"   # verify: must return matches, no setup needed
 ```
