@@ -106,20 +106,18 @@ describe("index merge + search", () => {
     expect(raw).toContain("registerTool");
   });
 
-  test("first run seeds managed index + site scripts, never overwrites locals", async () => {
+  test("first run seeds managed index + local files, never overwrites locals", async () => {
     const { seedManaged } = await import("../src/paths");
     const { existsSync, writeFileSync } = await import("node:fs");
     seedManaged();
     const dir = join(home, ".local", "share", "agent-webmcp");
     expect(existsSync(join(dir, "index.json"))).toBe(true);
     expect(existsSync(join(dir, "local-index.json"))).toBe(true);
-    // Custom script bodies seed alongside the index (clean-HOME get must work).
-    const seeded = join(dir, "sites", "docs.stripe.com.js");
-    expect(existsSync(seeded)).toBe(true);
-    // Local edits win: a second seed must not clobber.
-    writeFileSync(seeded, "// local edit\n");
+    // A site script placed by the user is never clobbered by a later seed.
+    const custom = join(dir, "sites", "example.com.js");
+    writeFileSync(custom, "// local edit\n");
     seedManaged();
-    expect(readFileSync(seeded, "utf8")).toBe("// local edit\n");
+    expect(readFileSync(custom, "utf8")).toBe("// local edit\n");
   });
 
   test("unindexed get hint points at sync first", async () => {

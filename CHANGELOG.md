@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Registry emptied to zero: the hand-proven seed (upstash, allbirds,
+  docs.stripe.com) is retired until the supply pipeline decides what
+  (re)populates it. Verified-only rule stands.
 - Polyfill shorthands: `window.webmcp.<tool>(args)` bound at register time,
   unbound on unregister/abort. `get` emits `how_to_run` blocks (Browse
   evaluate-inline, agent-browser `--init-script`, Playwright MCP).
