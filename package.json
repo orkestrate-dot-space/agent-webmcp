@@ -1,6 +1,6 @@
 {
   "name": "@orkestrate/agent-webmcp",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Turn websites into a searchable, callable WebMCP toolkit for your browser driver.",
   "license": "MIT",
   "repository": {
