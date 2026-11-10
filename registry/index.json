@@ -108,7 +108,8 @@
         }
       ],
       "blurb": "Search docs, read pages as Markdown, navigate.",
-      "name": "LaunchDarkly"
+      "name": "LaunchDarkly",
+      "category": "Developer tools"
     },
     "auth0.com": {
       "domain": "auth0.com",
@@ -216,7 +217,8 @@
         }
       ],
       "blurb": "Search docs, read pages as Markdown, navigate.",
-      "name": "Auth0"
+      "name": "Auth0",
+      "category": "Developer tools"
     },
     "nanit.com": {
       "domain": "nanit.com",
@@ -621,7 +623,8 @@
         }
       ],
       "blurb": "Search products, manage the cart, start checkout.",
-      "name": "Nanit"
+      "name": "Nanit",
+      "category": "Shopping"
     },
     "wyze.com": {
       "domain": "wyze.com",
@@ -1026,7 +1029,8 @@
         }
       ],
       "blurb": "Search products, manage the cart, start checkout.",
-      "name": "Wyze"
+      "name": "Wyze",
+      "category": "Shopping"
     },
     "developer.themoviedb.org": {
       "domain": "developer.themoviedb.org",
@@ -1089,7 +1093,8 @@
         }
       ],
       "blurb": "Search the API reference, open pages.",
-      "name": "TMDB"
+      "name": "TMDB",
+      "category": "Developer tools"
     },
     "posthog.com": {
       "domain": "posthog.com",
@@ -1238,7 +1243,8 @@
         }
       ],
       "blurb": "Search docs and handbook, read skill guides.",
-      "name": "PostHog"
+      "name": "PostHog",
+      "category": "Developer tools"
     },
     "mintlify.com": {
       "domain": "mintlify.com",
@@ -1346,7 +1352,8 @@
         }
       ],
       "blurb": "Search docs, read pages as Markdown, navigate.",
-      "name": "Mintlify"
+      "name": "Mintlify",
+      "category": "Developer tools"
     }
   }
 }
