@@ -107,7 +107,7 @@
           }
         }
       ],
-      "blurb": "Search docs, read pages as Markdown, navigate.",
+      "blurb": "Search feature flag documentation, read guides, explore the docs outline and retrieve agent skills.",
       "name": "LaunchDarkly",
       "category": "Developer tools"
     },
@@ -216,7 +216,7 @@
           }
         }
       ],
-      "blurb": "Search docs, read pages as Markdown, navigate.",
+      "blurb": "Search Auth0 documentation, read pages and retrieve agent skill guides.",
       "name": "Auth0",
       "category": "Developer tools"
     },
@@ -622,7 +622,7 @@
           }
         }
       ],
-      "blurb": "Search products, manage the cart, start checkout.",
+      "blurb": "Find products, manage the cart, review policies and start checkout.",
       "name": "Nanit",
       "category": "Shopping"
     },
@@ -1028,7 +1028,7 @@
           }
         }
       ],
-      "blurb": "Search products, manage the cart, start checkout.",
+      "blurb": "Search devices, choose product variants, manage the cart and start checkout.",
       "name": "Wyze",
       "category": "Shopping"
     },
@@ -1092,7 +1092,7 @@
           }
         }
       ],
-      "blurb": "Search the API reference, open pages.",
+      "blurb": "Search the API reference, open pages and read guides.",
       "name": "TMDB",
       "category": "Developer tools"
     },
@@ -1242,7 +1242,7 @@
           }
         }
       ],
-      "blurb": "Search docs and handbook, read skill guides.",
+      "blurb": "Search the docs and handbook, read skill guides and ask the docs assistant.",
       "name": "PostHog",
       "category": "Developer tools"
     },
@@ -1351,7 +1351,7 @@
           }
         }
       ],
-      "blurb": "Search docs, read pages as Markdown, navigate.",
+      "blurb": "Search documentation, explore the site structure and read with citations.",
       "name": "Mintlify",
       "category": "Developer tools"
     }
