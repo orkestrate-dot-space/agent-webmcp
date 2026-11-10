@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Registry re-seeded from zero: 6 domains, 45 native tools, every entry
+  read live from the page via agent-browser (Mintlify docs, Shopify
+  stores, ReadMe, PostHog). radar.cloudflare.com excluded (bot wall, no
+  tools observable); sentry.io excluded (docs expose none, welcome page
+  a single router).
+
 - Registry emptied to zero: the hand-proven seed (upstash, allbirds,
   docs.stripe.com) is retired until the supply pipeline decides what
   (re)populates it. Verified-only rule stands.
