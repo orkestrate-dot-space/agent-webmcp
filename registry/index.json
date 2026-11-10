@@ -1,5 +1,1232 @@
 {
   "version": 1,
-  "updatedAt": "2026-11-09T21:29:06Z",
-  "domains": {}
+  "updatedAt": "2026-11-10T00:53:53Z",
+  "domains": {
+    "launchdarkly.com": {
+      "domain": "launchdarkly.com",
+      "entryUrl": "https://launchdarkly.com/docs",
+      "platform": "mintlify",
+      "script": null,
+      "updatedAt": "2026-11-10T00:53:53Z",
+      "tools": [
+        {
+          "name": "get_site_overview",
+          "source": "native",
+          "description": "Get an outline of the LaunchDarkly documentation, grouped by section, with a short description of each page. May be truncated for large sites; use search_docs to find pages not listed.",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {},
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "navigate_page",
+          "source": "native",
+          "description": "Navigate the current browser tab to a LaunchDarkly documentation page.",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "description": "Path or URL of the page, as returned by search_docs",
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "read_page",
+          "source": "native",
+          "description": "Read the full content of a LaunchDarkly documentation page as markdown.",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "description": "Path or URL of the page, as returned by search_docs",
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "read_skill",
+          "source": "native",
+          "description": "Read a LaunchDarkly agent skill document by name.",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "skill_name": {
+                "description": "The slug of the skill to read",
+                "type": "string"
+              }
+            },
+            "required": [
+              "skill_name"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "search_docs",
+          "source": "native",
+          "description": "Search the LaunchDarkly documentation for relevant pages and content.",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "query": {
+                "description": "Search query",
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        }
+      ]
+    },
+    "auth0.com": {
+      "domain": "auth0.com",
+      "entryUrl": "https://auth0.com/docs",
+      "platform": "mintlify",
+      "script": null,
+      "updatedAt": "2026-11-10T00:53:53Z",
+      "tools": [
+        {
+          "name": "get_site_overview",
+          "source": "native",
+          "description": "Get an outline of the Auth0 Docs documentation, grouped by section, with a short description of each page. May be truncated for large sites; use search_docs to find pages not listed.",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {},
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "navigate_page",
+          "source": "native",
+          "description": "Navigate the current browser tab to a Auth0 Docs documentation page.",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "description": "Path or URL of the page, as returned by search_docs",
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "read_page",
+          "source": "native",
+          "description": "Read the full content of a Auth0 Docs documentation page as markdown.",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "description": "Path or URL of the page, as returned by search_docs",
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "read_skill",
+          "source": "native",
+          "description": "Read a Auth0 Docs agent skill document by name.",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "skill_name": {
+                "description": "The slug of the skill to read",
+                "type": "string"
+              }
+            },
+            "required": [
+              "skill_name"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "search_docs",
+          "source": "native",
+          "description": "Search the Auth0 Docs documentation for relevant pages and content.",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "query": {
+                "description": "Search query",
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        }
+      ]
+    },
+    "nanit.com": {
+      "domain": "nanit.com",
+      "entryUrl": "https://www.nanit.com",
+      "platform": "shopify",
+      "script": null,
+      "updatedAt": "2026-11-10T00:53:53Z",
+      "tools": [
+        {
+          "name": "ask_business",
+          "source": "native",
+          "description": "Ask the store a question about its policies and services: returns, refunds and exchanges, shipping and delivery, privacy, terms, subscriptions, contact details and opening hours, or FAQ topics such as gift wrapping. The store answers it: from its own knowledge base when the store offers Ask, otherwise from its published policies, FAQ pages and articles. Put the shopper's question in ask.query in their own words, one question per call; name the topic when the shopper only implies it (e.g. a question about sending back a gift is a returns question). Read-only: it does not change the cart, place orders, or start returns. For products, prices and availability, use search_catalog or get_product.\nExamples of questions:\n  - What is your return policy?\n  - How long does shipping to Canada take?\n  - What is your phone number?\n  - What are your hours of operation?\n  - Do you offer gift wrapping?\n",
+          "inputSchema": {
+            "properties": {
+              "ask": {
+                "description": "The question and optional buyer context.",
+                "properties": {
+                  "context": {
+                    "additionalProperties": true,
+                    "description": "Optional buyer context, such as the shopper's country or language. Send only what the question needs.",
+                    "properties": {
+                      "address_country": {
+                        "description": "The buyer's country, e.g. \"US\".",
+                        "type": "string"
+                      },
+                      "address_region": {
+                        "description": "The buyer's state or region, e.g. \"CA\".",
+                        "type": "string"
+                      },
+                      "intent": {
+                        "description": "What the shopper is trying to do, when it adds to the question (e.g. \"returning a gift they received\").",
+                        "type": "string"
+                      },
+                      "language": {
+                        "description": "The preferred language, e.g. \"en\".",
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "query": {
+                    "description": "The shopper's question, in natural language.",
+                    "maxLength": 10000,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "query"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "ask"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "browse_store",
+          "source": "native",
+          "description": "Browse OR navigate to store collections. Set navigate=true whenever the user wants to be taken to a collection page in the browser (triggers: \"browse to\", \"go to\", \"show me\", \"open\", \"take me to\", \"navigate to\" a collection or category). With navigate=false (default), returns collection or product data without changing the page \u2014 use this only when the user is asking a question about the catalog, not asking to view it. Without a collection handle, lists all collections. With a handle, returns products from that collection; use \"all\" to browse everything. Does NOT add anything to the cart; use create_cart or update_cart for cart changes. Prefer this over search_catalog when the user names a category, collection, or wants to explore. With navigate=true this MOVES the browser to the collection page; the tool result confirms the destination, and no further navigation is needed to show it.",
+          "inputSchema": {
+            "properties": {
+              "collection": {
+                "description": "Collection handle to browse (e.g. \"best-sellers\", \"new-arrivals\"). Omit to list all collections. Use \"all\" to browse every product.",
+                "type": "string"
+              },
+              "navigate": {
+                "description": "When true, navigate the browser to the collection page after loading data. Set true for user intents like \"browse to\", \"go to\", \"show me\", \"open\", \"take me to\" a collection. Requires a collection handle. Defaults to false.",
+                "type": "boolean"
+              },
+              "page": {
+                "description": "Page number for pagination (starts at 1). Each page returns up to 30 products.",
+                "type": "number"
+              },
+              "sort_by": {
+                "description": "Sort order. Options: best-selling (default), price-ascending, price-descending, title-ascending, title-descending, created-descending, created-ascending.",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "cancel_cart",
+          "source": "native",
+          "description": "Remove all items from the cart in one step. Use when the user wants to empty their cart or start over.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "create_cart",
+          "source": "native",
+          "description": "Create the shopper's cart with the given items, for a shopper whose cart has no items yet. It is the tool for a shopper asking to add or buy something when the cart is empty, and that request is all the authorization it needs. Each line item names a ProductVariant GID in item.id (variant_id from search_catalog or browse_store, or variants[].id from get_product for specific options) and a quantity; every item from one request fits in one call. When the cart already has items, nothing is created or changed: the result is that existing cart with an error message, and update_cart can extend it with its current lines plus the new ones. Returns the whole resulting cart, including its id and line ids. Repeating a call with the same items leaves the cart as it is.",
+          "inputSchema": {
+            "properties": {
+              "cart": {
+                "properties": {
+                  "line_items": {
+                    "description": "The items the new cart holds.",
+                    "items": {
+                      "properties": {
+                        "item": {
+                          "properties": {
+                            "id": {
+                              "description": "ProductVariant GID, e.g. \"gid://shopify/ProductVariant/123\": variant_id from search_catalog or browse_store, variants[].id from get_product, or line_items[].item.id from a cart result.",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id"
+                          ],
+                          "type": "object"
+                        },
+                        "quantity": {
+                          "description": "How many of this item the line holds.",
+                          "minimum": 1,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "item",
+                        "quantity"
+                      ],
+                      "type": "object"
+                    },
+                    "maxItems": 100,
+                    "minItems": 1,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "line_items"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "cart"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "get_cart",
+          "source": "native",
+          "description": "Get the shopper's current cart: its id, every line (line id, product and variant titles, variant id, handle, URL, image, unit price, quantity, line price) and the totals. Everything needed to describe the cart to the user in natural language, without a follow-up get_product call per line. It is also where a change to an existing cart starts from: update_cart takes the cart's id and the complete set of lines the cart should hold, and create_cart applies only to a cart with no items. Works from any page.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "get_product",
+          "source": "native",
+          "description": "Get product details, OR navigate the browser to the product page. Set catalog.navigate=true whenever the user wants to see/view the product in the browser (triggers: \"show me\", \"open\", \"view\", \"go to\", \"take me to\", \"navigate to\" a product). Set catalog.navigate=false (default) only when you need data (description, options, variants, prices, availability) to answer a question or to prepare a cart change \u2014 the browser stays on the current page. Defaults to the current page's product if no catalog.id is provided. Does NOT add anything to the cart; use create_cart or update_cart for that. To view a specific variant (color/size/etc.) in the browser, use show_variant instead \u2014 it accepts partial option selections like \"purple\" without needing every option. To add a specific variant to the cart, call get_product with catalog.selected_options to get its variant id. With catalog.navigate=true this MOVES the browser to the product page; the tool result confirms the destination, and no further navigation is needed to show it.",
+          "inputSchema": {
+            "properties": {
+              "catalog": {
+                "description": "Product detail parameters.",
+                "properties": {
+                  "id": {
+                    "description": "Storefront API Product GID, product handle, or product URL path. Custom app product paths and Shopify standard /products/<handle> paths are supported. The id field from search_catalog or browse_store can be passed directly. If omitted, uses the current page's product.",
+                    "type": "string"
+                  },
+                  "navigate": {
+                    "description": "When true, navigate the browser to the product page after fetching details. Set true for user intents like \"show me\", \"open\", \"view\", \"go to\", \"take me to\" a product. Defaults to false. If the user specified partial options (e.g. only a color), prefer show_variant with selected_options instead.",
+                    "type": "boolean"
+                  },
+                  "selected_options": {
+                    "description": "Known product option selections to filter available_options. Use exact option names and values from search_catalog options or a prior get_product available_options entry.",
+                    "items": {
+                      "properties": {
+                        "name": {
+                          "description": "Option name, e.g. \"Size\" or \"Color\".",
+                          "type": "string"
+                        },
+                        "value": {
+                          "description": "Option value, e.g. \"160cm\" or \"Fiberglass\".",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "value"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "get_ucp_profile",
+          "source": "native",
+          "description": "Get this store's Universal Commerce Protocol (UCP) profile, as served at /.well-known/ucp: the UCP version, the services the store offers with their endpoints (e.g. the store's UCP MCP server), its capabilities, and its payment handlers. Use it to discover how to continue a purchase with this store over UCP, or to check which platform operates the store. Read-only; works from any page.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "manage_orders",
+          "source": "native",
+          "description": "Navigate to the customer's order history page. Use when the user asks about past orders, order status, tracking, or returns. The user will be prompted to log in if not already authenticated. This MOVES the browser to the order history page; the tool result confirms the destination, and no further navigation is needed to show it.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "proceed_to_checkout",
+          "source": "native",
+          "description": "Proceed to checkout. Verifies the cart is not empty, then MOVES the browser to the checkout page. The tool result confirms the destination, and no further navigation is needed to show it.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "search_catalog",
+          "source": "native",
+          "description": "Search the store catalog for products, collections, articles, and pages. Does NOT add anything to the cart; use create_cart or update_cart for cart changes. Each product carries variant_id, its selected or first available variant. If the user asks for a specific product variant, call get_product after search_catalog to get that variant's id, or use show_variant to display it.",
+          "inputSchema": {
+            "properties": {
+              "catalog": {
+                "properties": {
+                  "pagination": {
+                    "properties": {
+                      "limit": {
+                        "default": 5,
+                        "description": "Max results per type (1-10). Defaults to 5.",
+                        "maximum": 10,
+                        "minimum": 1,
+                        "type": "integer"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "query": {
+                    "description": "Search query string.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "query"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "catalog"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "show_variant",
+          "source": "native",
+          "description": "Navigate the browser to a product page, with a specific variant OR a partial option filter selected. Use for view intents: \"show me\", \"open\", \"view\", \"go to\", \"take me to\" a specific product configuration. Accepts EITHER variant_id (fully specified variant) OR selected_options (partial, e.g. only Color=Purple) \u2014 with partial options the first matching available variant is picked automatically, so DO NOT ask the user for missing options when their intent is to view. Does NOT add anything to the cart; use create_cart or update_cart for cart changes. For cart operations you still need a full variant_id \u2014 call get_product with the full option combination first. This MOVES the browser to the exact variant page with the variant pre-selected; the tool result confirms the destination, and no further navigation is needed to show it.",
+          "inputSchema": {
+            "properties": {
+              "catalog": {
+                "description": "Provide EITHER variant_id OR selected_options. Handle is required unless the user is already on the product page.",
+                "properties": {
+                  "handle": {
+                    "description": "Product handle. If omitted, uses the current product page's handle.",
+                    "type": "string"
+                  },
+                  "selected_options": {
+                    "description": "Partial (or full) option selections, e.g. [{\"name\":\"Color\",\"value\":\"Purple\"}]. Use when the user names some options but not all (e.g. \"show me the purple shoe\" \u2014 pass only Color). The first matching available variant will be selected automatically. Use exact option names and values from get_product available_options or search_catalog options.",
+                    "items": {
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "variant_id": {
+                    "description": "ProductVariant ID from get_product variants[].id, e.g. \"gid://shopify/ProductVariant/123\", or the numeric variant ID. Use when the user picked a specific fully-specified variant. Omit when using selected_options.",
+                    "type": [
+                      "string",
+                      "number"
+                    ]
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "required": [
+              "catalog"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "update_cart",
+          "source": "native",
+          "description": "Set the shopper's cart to exactly the given line items. This is a full replacement, not a patch: afterwards the cart holds these lines and only these.\n- A listed line with its line_items[].id keeps its place and is set to the given quantity, which is absolute (2 means 2, not 2 more).\n- A listed item without a line id is added, or, when that variant is already on one line of the cart, sets that line's quantity.\n- A line in the cart that is not listed is removed.\nIt takes the cart's lines as most recently returned by get_cart, create_cart or update_cart. When the cart has changed since then (for example, the shopper edited it on the page, or a new cart replaced it), or an id is given that is not the shopper's current cart, nothing changes and the result is the current cart with an error message. Since the outcome depends only on the lines sent, repeating a call leaves the cart as it is. An empty line_items list empties the cart; leaving line_items out leaves the lines as they are. Returns the whole resulting cart, including its line ids, and messages about the call.",
+          "inputSchema": {
+            "properties": {
+              "cart": {
+                "properties": {
+                  "line_items": {
+                    "description": "The complete set of lines the cart holds afterwards. Empty empties the cart; absent leaves the lines as they are.",
+                    "items": {
+                      "properties": {
+                        "id": {
+                          "description": "Existing cart line id (line_items[].id from a cart result). Absent for an item that is not in the cart yet.",
+                          "type": "string"
+                        },
+                        "item": {
+                          "properties": {
+                            "id": {
+                              "description": "ProductVariant GID, e.g. \"gid://shopify/ProductVariant/123\": variant_id from search_catalog or browse_store, variants[].id from get_product, or line_items[].item.id from a cart result.",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id"
+                          ],
+                          "type": "object"
+                        },
+                        "quantity": {
+                          "description": "How many of this item the line holds.",
+                          "minimum": 1,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "item",
+                        "quantity"
+                      ],
+                      "type": "object"
+                    },
+                    "maxItems": 100,
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              },
+              "id": {
+                "description": "Optional: the page has one cart, the shopper's, and update_cart always acts on it. When given (the id from a cart result), it is compared with the current cart, and a mismatch changes nothing.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "cart"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        }
+      ]
+    },
+    "wyze.com": {
+      "domain": "wyze.com",
+      "entryUrl": "https://www.wyze.com",
+      "platform": "shopify",
+      "script": null,
+      "updatedAt": "2026-11-10T00:53:53Z",
+      "tools": [
+        {
+          "name": "ask_business",
+          "source": "native",
+          "description": "Ask the store a question about its policies and services: returns, refunds and exchanges, shipping and delivery, privacy, terms, subscriptions, contact details and opening hours, or FAQ topics such as gift wrapping. The store answers it: from its own knowledge base when the store offers Ask, otherwise from its published policies, FAQ pages and articles. Put the shopper's question in ask.query in their own words, one question per call; name the topic when the shopper only implies it (e.g. a question about sending back a gift is a returns question). Read-only: it does not change the cart, place orders, or start returns. For products, prices and availability, use search_catalog or get_product.\nExamples of questions:\n  - What is your return policy?\n  - How long does shipping to Canada take?\n  - What is your phone number?\n  - What are your hours of operation?\n  - Do you offer gift wrapping?\n",
+          "inputSchema": {
+            "properties": {
+              "ask": {
+                "description": "The question and optional buyer context.",
+                "properties": {
+                  "context": {
+                    "additionalProperties": true,
+                    "description": "Optional buyer context, such as the shopper's country or language. Send only what the question needs.",
+                    "properties": {
+                      "address_country": {
+                        "description": "The buyer's country, e.g. \"US\".",
+                        "type": "string"
+                      },
+                      "address_region": {
+                        "description": "The buyer's state or region, e.g. \"CA\".",
+                        "type": "string"
+                      },
+                      "intent": {
+                        "description": "What the shopper is trying to do, when it adds to the question (e.g. \"returning a gift they received\").",
+                        "type": "string"
+                      },
+                      "language": {
+                        "description": "The preferred language, e.g. \"en\".",
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "query": {
+                    "description": "The shopper's question, in natural language.",
+                    "maxLength": 10000,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "query"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "ask"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "browse_store",
+          "source": "native",
+          "description": "Browse OR navigate to store collections. Set navigate=true whenever the user wants to be taken to a collection page in the browser (triggers: \"browse to\", \"go to\", \"show me\", \"open\", \"take me to\", \"navigate to\" a collection or category). With navigate=false (default), returns collection or product data without changing the page \u2014 use this only when the user is asking a question about the catalog, not asking to view it. Without a collection handle, lists all collections. With a handle, returns products from that collection; use \"all\" to browse everything. Does NOT add anything to the cart; use create_cart or update_cart for cart changes. Prefer this over search_catalog when the user names a category, collection, or wants to explore. With navigate=true this MOVES the browser to the collection page; the tool result confirms the destination, and no further navigation is needed to show it.",
+          "inputSchema": {
+            "properties": {
+              "collection": {
+                "description": "Collection handle to browse (e.g. \"best-sellers\", \"new-arrivals\"). Omit to list all collections. Use \"all\" to browse every product.",
+                "type": "string"
+              },
+              "navigate": {
+                "description": "When true, navigate the browser to the collection page after loading data. Set true for user intents like \"browse to\", \"go to\", \"show me\", \"open\", \"take me to\" a collection. Requires a collection handle. Defaults to false.",
+                "type": "boolean"
+              },
+              "page": {
+                "description": "Page number for pagination (starts at 1). Each page returns up to 30 products.",
+                "type": "number"
+              },
+              "sort_by": {
+                "description": "Sort order. Options: best-selling (default), price-ascending, price-descending, title-ascending, title-descending, created-descending, created-ascending.",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "cancel_cart",
+          "source": "native",
+          "description": "Remove all items from the cart in one step. Use when the user wants to empty their cart or start over.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "create_cart",
+          "source": "native",
+          "description": "Create the shopper's cart with the given items, for a shopper whose cart has no items yet. It is the tool for a shopper asking to add or buy something when the cart is empty, and that request is all the authorization it needs. Each line item names a ProductVariant GID in item.id (variant_id from search_catalog or browse_store, or variants[].id from get_product for specific options) and a quantity; every item from one request fits in one call. When the cart already has items, nothing is created or changed: the result is that existing cart with an error message, and update_cart can extend it with its current lines plus the new ones. Returns the whole resulting cart, including its id and line ids. Repeating a call with the same items leaves the cart as it is.",
+          "inputSchema": {
+            "properties": {
+              "cart": {
+                "properties": {
+                  "line_items": {
+                    "description": "The items the new cart holds.",
+                    "items": {
+                      "properties": {
+                        "item": {
+                          "properties": {
+                            "id": {
+                              "description": "ProductVariant GID, e.g. \"gid://shopify/ProductVariant/123\": variant_id from search_catalog or browse_store, variants[].id from get_product, or line_items[].item.id from a cart result.",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id"
+                          ],
+                          "type": "object"
+                        },
+                        "quantity": {
+                          "description": "How many of this item the line holds.",
+                          "minimum": 1,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "item",
+                        "quantity"
+                      ],
+                      "type": "object"
+                    },
+                    "maxItems": 100,
+                    "minItems": 1,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "line_items"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "cart"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "get_cart",
+          "source": "native",
+          "description": "Get the shopper's current cart: its id, every line (line id, product and variant titles, variant id, handle, URL, image, unit price, quantity, line price) and the totals. Everything needed to describe the cart to the user in natural language, without a follow-up get_product call per line. It is also where a change to an existing cart starts from: update_cart takes the cart's id and the complete set of lines the cart should hold, and create_cart applies only to a cart with no items. Works from any page.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "get_product",
+          "source": "native",
+          "description": "Get product details, OR navigate the browser to the product page. Set catalog.navigate=true whenever the user wants to see/view the product in the browser (triggers: \"show me\", \"open\", \"view\", \"go to\", \"take me to\", \"navigate to\" a product). Set catalog.navigate=false (default) only when you need data (description, options, variants, prices, availability) to answer a question or to prepare a cart change \u2014 the browser stays on the current page. Defaults to the current page's product if no catalog.id is provided. Does NOT add anything to the cart; use create_cart or update_cart for that. To view a specific variant (color/size/etc.) in the browser, use show_variant instead \u2014 it accepts partial option selections like \"purple\" without needing every option. To add a specific variant to the cart, call get_product with catalog.selected_options to get its variant id. With catalog.navigate=true this MOVES the browser to the product page; the tool result confirms the destination, and no further navigation is needed to show it.",
+          "inputSchema": {
+            "properties": {
+              "catalog": {
+                "description": "Product detail parameters.",
+                "properties": {
+                  "id": {
+                    "description": "Storefront API Product GID, product handle, or product URL path. Custom app product paths and Shopify standard /products/<handle> paths are supported. The id field from search_catalog or browse_store can be passed directly. If omitted, uses the current page's product.",
+                    "type": "string"
+                  },
+                  "navigate": {
+                    "description": "When true, navigate the browser to the product page after fetching details. Set true for user intents like \"show me\", \"open\", \"view\", \"go to\", \"take me to\" a product. Defaults to false. If the user specified partial options (e.g. only a color), prefer show_variant with selected_options instead.",
+                    "type": "boolean"
+                  },
+                  "selected_options": {
+                    "description": "Known product option selections to filter available_options. Use exact option names and values from search_catalog options or a prior get_product available_options entry.",
+                    "items": {
+                      "properties": {
+                        "name": {
+                          "description": "Option name, e.g. \"Size\" or \"Color\".",
+                          "type": "string"
+                        },
+                        "value": {
+                          "description": "Option value, e.g. \"160cm\" or \"Fiberglass\".",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "value"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "get_ucp_profile",
+          "source": "native",
+          "description": "Get this store's Universal Commerce Protocol (UCP) profile, as served at /.well-known/ucp: the UCP version, the services the store offers with their endpoints (e.g. the store's UCP MCP server), its capabilities, and its payment handlers. Use it to discover how to continue a purchase with this store over UCP, or to check which platform operates the store. Read-only; works from any page.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "manage_orders",
+          "source": "native",
+          "description": "Navigate to the customer's order history page. Use when the user asks about past orders, order status, tracking, or returns. The user will be prompted to log in if not already authenticated. This MOVES the browser to the order history page; the tool result confirms the destination, and no further navigation is needed to show it.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "proceed_to_checkout",
+          "source": "native",
+          "description": "Proceed to checkout. Verifies the cart is not empty, then MOVES the browser to the checkout page. The tool result confirms the destination, and no further navigation is needed to show it.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "search_catalog",
+          "source": "native",
+          "description": "Search the store catalog for products, collections, articles, and pages. Does NOT add anything to the cart; use create_cart or update_cart for cart changes. Each product carries variant_id, its selected or first available variant. If the user asks for a specific product variant, call get_product after search_catalog to get that variant's id, or use show_variant to display it.",
+          "inputSchema": {
+            "properties": {
+              "catalog": {
+                "properties": {
+                  "pagination": {
+                    "properties": {
+                      "limit": {
+                        "default": 5,
+                        "description": "Max results per type (1-10). Defaults to 5.",
+                        "maximum": 10,
+                        "minimum": 1,
+                        "type": "integer"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "query": {
+                    "description": "Search query string.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "query"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "catalog"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "show_variant",
+          "source": "native",
+          "description": "Navigate the browser to a product page, with a specific variant OR a partial option filter selected. Use for view intents: \"show me\", \"open\", \"view\", \"go to\", \"take me to\" a specific product configuration. Accepts EITHER variant_id (fully specified variant) OR selected_options (partial, e.g. only Color=Purple) \u2014 with partial options the first matching available variant is picked automatically, so DO NOT ask the user for missing options when their intent is to view. Does NOT add anything to the cart; use create_cart or update_cart for cart changes. For cart operations you still need a full variant_id \u2014 call get_product with the full option combination first. This MOVES the browser to the exact variant page with the variant pre-selected; the tool result confirms the destination, and no further navigation is needed to show it.",
+          "inputSchema": {
+            "properties": {
+              "catalog": {
+                "description": "Provide EITHER variant_id OR selected_options. Handle is required unless the user is already on the product page.",
+                "properties": {
+                  "handle": {
+                    "description": "Product handle. If omitted, uses the current product page's handle.",
+                    "type": "string"
+                  },
+                  "selected_options": {
+                    "description": "Partial (or full) option selections, e.g. [{\"name\":\"Color\",\"value\":\"Purple\"}]. Use when the user names some options but not all (e.g. \"show me the purple shoe\" \u2014 pass only Color). The first matching available variant will be selected automatically. Use exact option names and values from get_product available_options or search_catalog options.",
+                    "items": {
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "variant_id": {
+                    "description": "ProductVariant ID from get_product variants[].id, e.g. \"gid://shopify/ProductVariant/123\", or the numeric variant ID. Use when the user picked a specific fully-specified variant. Omit when using selected_options.",
+                    "type": [
+                      "string",
+                      "number"
+                    ]
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "required": [
+              "catalog"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "update_cart",
+          "source": "native",
+          "description": "Set the shopper's cart to exactly the given line items. This is a full replacement, not a patch: afterwards the cart holds these lines and only these.\n- A listed line with its line_items[].id keeps its place and is set to the given quantity, which is absolute (2 means 2, not 2 more).\n- A listed item without a line id is added, or, when that variant is already on one line of the cart, sets that line's quantity.\n- A line in the cart that is not listed is removed.\nIt takes the cart's lines as most recently returned by get_cart, create_cart or update_cart. When the cart has changed since then (for example, the shopper edited it on the page, or a new cart replaced it), or an id is given that is not the shopper's current cart, nothing changes and the result is the current cart with an error message. Since the outcome depends only on the lines sent, repeating a call leaves the cart as it is. An empty line_items list empties the cart; leaving line_items out leaves the lines as they are. Returns the whole resulting cart, including its line ids, and messages about the call.",
+          "inputSchema": {
+            "properties": {
+              "cart": {
+                "properties": {
+                  "line_items": {
+                    "description": "The complete set of lines the cart holds afterwards. Empty empties the cart; absent leaves the lines as they are.",
+                    "items": {
+                      "properties": {
+                        "id": {
+                          "description": "Existing cart line id (line_items[].id from a cart result). Absent for an item that is not in the cart yet.",
+                          "type": "string"
+                        },
+                        "item": {
+                          "properties": {
+                            "id": {
+                              "description": "ProductVariant GID, e.g. \"gid://shopify/ProductVariant/123\": variant_id from search_catalog or browse_store, variants[].id from get_product, or line_items[].item.id from a cart result.",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id"
+                          ],
+                          "type": "object"
+                        },
+                        "quantity": {
+                          "description": "How many of this item the line holds.",
+                          "minimum": 1,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "item",
+                        "quantity"
+                      ],
+                      "type": "object"
+                    },
+                    "maxItems": 100,
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              },
+              "id": {
+                "description": "Optional: the page has one cart, the shopper's, and update_cart always acts on it. When given (the id from a cart result), it is compared with the current cart, and a mismatch changes nothing.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "cart"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        }
+      ]
+    },
+    "developer.themoviedb.org": {
+      "domain": "developer.themoviedb.org",
+      "entryUrl": "https://developer.themoviedb.org/docs",
+      "platform": "readme",
+      "script": null,
+      "updatedAt": "2026-11-10T00:53:53Z",
+      "tools": [
+        {
+          "name": "get_current_page_content",
+          "source": "native",
+          "description": "Return the current documentation page as markdown so the agent can reason about what the user is currently reading.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "navigate_to_page",
+          "source": "native",
+          "description": "Navigate the browser to a specific documentation page by path. Use search_docs first to find candidate paths.",
+          "inputSchema": {
+            "properties": {
+              "path": {
+                "description": "Relative path, e.g. \"/docs/getting-started\" or \"/reference/create-widget\".",
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "search_docs",
+          "source": "native",
+          "description": "Search the documentation site for The Movie Database (TMDB). Returns a list of relevant pages with titles and excerpts.",
+          "inputSchema": {
+            "properties": {
+              "query": {
+                "description": "Search query string.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        }
+      ]
+    },
+    "posthog.com": {
+      "domain": "posthog.com",
+      "entryUrl": "https://posthog.com/docs",
+      "platform": null,
+      "script": null,
+      "updatedAt": "2026-11-10T00:53:53Z",
+      "tools": [
+        {
+          "name": "ask_max",
+          "source": "native",
+          "description": "Ask PostHog AI (Max), the assistant on posthog.com, a question about PostHog. Opens the chat panel on the page and sends the question. The answer appears in the chat panel for the user to read. This tool does not return the answer.",
+          "inputSchema": {
+            "properties": {
+              "question": {
+                "description": "The question, in plain language.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "question"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "get_install_instructions",
+          "source": "native",
+          "description": "Explain how to install PostHog in a codebase. Returns the PostHog wizard command that the developer runs locally, and what the wizard does.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "get_mcp_connection_info",
+          "source": "native",
+          "description": "Explain how to connect an MCP (Model Context Protocol) client, such as Claude Code, Cursor, or Codex, to the hosted PostHog MCP server. Returns the server URL, the authentication method, and the setup command.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "get_site_overview",
+          "source": "native",
+          "description": "Get a short Markdown overview of the PostHog platform: its products, tools, and how they fit together, with links. Start here to orient before searching.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "navigate_page",
+          "source": "native",
+          "description": "Open a posthog.com page in this tab. Pass a path, for example /docs/session-replay. Paths on other sites are refused.",
+          "inputSchema": {
+            "properties": {
+              "path": {
+                "description": "Page path or full posthog.com URL.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "read_page",
+          "source": "native",
+          "description": "Read a posthog.com page as Markdown. Pass the page path, for example /docs/feature-flags. Omit path to read the page that is open now. Markdown exists for pages under: /docs, /handbook, /blog, /newsletter, /changelog, /learn, /pricing.",
+          "inputSchema": {
+            "properties": {
+              "path": {
+                "description": "Page path or full posthog.com URL.",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "read_skill",
+          "source": "native",
+          "description": "List and read PostHog agent skills (SKILL.md files that teach an agent to do a job with PostHog). Call with no arguments to list products. Pass \"product\" to list the skills of one product. Pass \"name\" to read one skill in full.",
+          "inputSchema": {
+            "properties": {
+              "name": {
+                "description": "Exact skill name, as listed.",
+                "type": "string"
+              },
+              "product": {
+                "description": "Product folder name, as listed.",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "search_docs",
+          "source": "native",
+          "description": "Search posthog.com. Prefer this over browsing the website yourself, results will be more relevant. Returns up to 8 matching pages as JSON with title, url, type, and excerpt. Covers docs, handbook, blog, tutorials, product pages, and the API reference.",
+          "inputSchema": {
+            "properties": {
+              "query": {
+                "description": "Search terms.",
+                "type": "string"
+              },
+              "type": {
+                "description": "Optional. Restrict results to one content type, for example docs, handbook, blog, or tutorial.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        }
+      ]
+    }
+  }
 }
