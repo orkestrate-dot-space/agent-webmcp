@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-11-10T00:53:53Z",
+  "updatedAt": "2026-11-10T08:07:12Z",
   "domains": {
     "launchdarkly.com": {
       "domain": "launchdarkly.com",
@@ -1214,6 +1214,112 @@
               },
               "type": {
                 "description": "Optional. Restrict results to one content type, for example docs, handbook, blog, or tutorial.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        }
+      ]
+    },
+    "mintlify.com": {
+      "domain": "mintlify.com",
+      "entryUrl": "https://mintlify.com/docs",
+      "platform": "mintlify",
+      "script": null,
+      "updatedAt": "2026-11-10T08:07:12Z",
+      "tools": [
+        {
+          "name": "get_site_overview",
+          "source": "native",
+          "description": "Get an outline of the Mintlify documentation, grouped by section, with a short description of each page. May be truncated for large sites; use search_docs to find pages not listed.",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {},
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "navigate_page",
+          "source": "native",
+          "description": "Navigate the current browser tab to a Mintlify documentation page.",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "description": "Path or URL of the page, as returned by search_docs",
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "read_page",
+          "source": "native",
+          "description": "Read the full content of a Mintlify documentation page as markdown.",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "description": "Path or URL of the page, as returned by search_docs",
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "read_skill",
+          "source": "native",
+          "description": "Read a Mintlify agent skill document by name.",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "skill_name": {
+                "description": "The slug of the skill to read",
+                "type": "string"
+              }
+            },
+            "required": [
+              "skill_name"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "search_docs",
+          "source": "native",
+          "description": "Search the Mintlify documentation for relevant pages and content.",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "query": {
+                "description": "Search query",
                 "type": "string"
               }
             },

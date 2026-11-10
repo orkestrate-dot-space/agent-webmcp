@@ -2,9 +2,9 @@
 
 ## Unreleased
 
-- Registry re-seeded from zero: 6 domains, 45 native tools, every entry
-  read live from the page via agent-browser (Mintlify docs, Shopify
-  stores, ReadMe, PostHog). radar.cloudflare.com excluded (bot wall, no
+- Registry re-seeded from zero: 7 domains, 50 native tools, every entry
+  read live from the page via agent-browser (Mintlify docs x3, Shopify
+  stores x2, ReadMe, PostHog). radar.cloudflare.com excluded (bot wall, no
   tools observable); sentry.io excluded (docs expose none, welcome page
   a single router).
 
