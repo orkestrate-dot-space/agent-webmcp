@@ -21,7 +21,9 @@ export interface ToolEntry {
 export interface DomainEntry {
   domain: string;
   entryUrl: string;
-  platform?: string | null;
+  /** Platforms whose tool signatures this site carries (e.g. mintlify, shopify).
+      A site keeps its own tools alongside — e.g. posthog mixes mintlify docs tools with custom ones. */
+  platforms?: string[];
   script: string | null;
   updatedAt?: string;
   tools: ToolEntry[];

@@ -24,8 +24,8 @@ const VERBS = [
   { name: "init", description: "Installed init.js path (mount once via your driver). No browser touched.", inputSchema: { type: "object", properties: {}, additionalProperties: false } },
   {
     name: "search",
-    description: "Search indexed capabilities (native + custom) by intent. No browser touched.",
-    inputSchema: { type: "object", properties: { query: { type: "string" }, limit: { type: "number" }, domain: { type: "string" }, source: { type: "string" } }, required: ["query"], additionalProperties: false },
+    description: "Search indexed capabilities (native + custom) by intent. Filter by platform (e.g. mintlify, shopify). No browser touched.",
+    inputSchema: { type: "object", properties: { query: { type: "string" }, limit: { type: "number" }, domain: { type: "string" }, source: { type: "string" }, platform: { type: "string" } }, required: ["query"], additionalProperties: false },
   },
   {
     name: "get",
@@ -52,7 +52,8 @@ export function serve(): Server {
       const limit = typeof args.limit === "number" ? args.limit : 10;
       const domain = typeof args.domain === "string" ? args.domain : undefined;
       const source = args.source === "native" || args.source === "custom" ? args.source : undefined;
-      const hits = searchIndex(buildIndex(loadIndex()), q, { limit, ...(domain ? { domain } : {}), ...(source ? { source } : {}) });
+      const platform = typeof args.platform === "string" ? args.platform : undefined;
+      const hits = searchIndex(buildIndex(loadIndex()), q, { limit, ...(domain ? { domain } : {}), ...(source ? { source } : {}), ...(platform ? { platform } : {}) });
       return { content: [{ type: "text", text: JSON.stringify({ init: installedInitPath(), matches: hits }) }] };
     }
     if (req.params.name === "get") {

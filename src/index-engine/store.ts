@@ -55,7 +55,7 @@ export function loadIndex(): WebMcpIndex {
       ...base,
       ...entry,
       entryUrl: entry.entryUrl || base.entryUrl,
-      platform: entry.platform ?? base.platform,
+      platforms: entry.platforms ?? base.platforms ?? [],
       script: entry.script ?? base.script,
       tools,
     };
