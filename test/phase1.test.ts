@@ -61,7 +61,7 @@ describe("index merge + search", () => {
     upsertLocalDomain("docs.example.com", {
       domain: "docs.example.com",
       entryUrl: "https://docs.example.com",
-      platform: null,
+      platforms: [],
       script: "sites/docs.example.com.js",
       updatedAt: "",
       tools: tools.map((t) => ({ name: t.name, source: t.source, description: t.description, inputSchema: t.inputSchema, ...(t.annotations ? { annotations: t.annotations } : {}) })),
@@ -81,14 +81,14 @@ describe("index merge + search", () => {
         "shop.example.com": {
           domain: "shop.example.com",
           entryUrl: "https://shop.example.com",
-          platform: "shopify",
+          platforms: ["shopify"],
           script: null,
           tools: [{ name: "cancel_cart", source: "native", description: "Empty the shopping cart", inputSchema: { type: "object", properties: {} } }],
         },
         "docs.example.com": {
           domain: "docs.example.com",
           entryUrl: "https://docs.example.com",
-          platform: null,
+          platforms: [],
           script: null,
           tools: [{ name: "search_docs", source: "native", description: "Search documentation guides", inputSchema: { type: "object", properties: {} } }],
         },

@@ -86,8 +86,10 @@ export function indexIsEmpty(): boolean {
 }
 
 function cmdSearch(args: string[]): void {  const { positional, bools, values } = parseArgs(args);
-  const query = positional.join(" ");
-  if (!query) fail("usage: agent-webmcp search <query> [--limit N] [--domain D] [--source native|custom] [--json]");
+  let query = positional.join(" ");
+  const platform = values["platform"];
+  if (!query && !platform) fail("usage: agent-webmcp search <query> [--limit N] [--domain D] [--source native|custom] [--platform P] [--json]");
+  if (!query && platform) query = platform;
   const limit = values["limit"] !== undefined ? Number(values["limit"]) : 10;
   if (!Number.isInteger(limit) || limit < 1) fail("--limit wants a positive integer");
   const source = values["source"];
@@ -97,6 +99,7 @@ function cmdSearch(args: string[]): void {  const { positional, bools, values } 
     limit,
     ...(values["domain"] ? { domain: values["domain"] } : {}),
     ...(source ? { source: source as "native" | "custom" } : {}),
+    ...(platform ? { platform } : {}),
   });
   if (bools.has("json")) {
     console.log(JSON.stringify({ query, matches: hits }));
@@ -153,7 +156,7 @@ export interface GetResult {
   domain: string;
   status?: string;
   entry_url?: string;
-  platform?: string;
+  platforms?: string[];
   init_script: string;
   tool?: string;
   tools: Array<{ name: string; source: string; description?: string; read_only: boolean; inputSchema: unknown }>;
@@ -197,7 +200,7 @@ export function getSite(target: string): GetResult {
   };
   return {
     ...(entry
-      ? { domain, entry_url: entry.entryUrl, ...(entry.platform ? { platform: entry.platform } : {}) }
+      ? { domain, entry_url: entry.entryUrl, ...(entry.platforms?.length ? { platforms: entry.platforms } : {}) }
       : { domain, status: "unindexed_domain" }),
     init_script: script,
     ...(tool ? { tool } : {}),
@@ -254,7 +257,7 @@ export async function saveSite(domainRaw: string, src: string, entryUrl?: string
   const entry: DomainEntry = {
     domain,
     entryUrl: entryUrl || prev?.entryUrl || `https://${domain}`,
-    platform: prev?.platform ?? null,
+    platforms: prev?.platforms ?? [],
     script: `sites/${domain}.js`,
     updatedAt: new Date().toISOString(),
     tools: found.map((t) => ({
@@ -309,7 +312,7 @@ function usage(): void {
   console.log(
     `agent-webmcp ${VERSION}\nusage: agent-webmcp <init|search|get|save|sync|mcp>\n` +
       `  init [--stdout]              print installed init.js path (or source)\n` +
-      `  search <q> [--limit N] [--domain D] [--source native|custom] [--json]\n` +
+      `  search <q> [--limit N] [--domain D] [--source native|custom] [--platform P] [--json]\n` +
       `  get <domain|url|domain/tool> [--json]\n` +
       `  save <domain> <f> [--entry-url <u>]\n` +
       `  sync                         pull managed index (only network verb)\n` +
