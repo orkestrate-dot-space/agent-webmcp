@@ -42,7 +42,9 @@ exposes live native tools on the page even with zero indexed tools.
 
 Follow the `how_to_run` block that get returned for the active driver.
 Full playbooks live in `references/drivers.md` — load only the active
-driver's section.
+driver's section. `list()`/`call()` are async (always await inside the
+evaluation); `call(name, args)` is the robust form. Honor each tool's
+`timeout_ms` — askers settle on the page's schedule.
 
 Done when: the tool returns its result, or the driver reports
 auth/2FA/confirmation and a human completes it first. The toolkit reads

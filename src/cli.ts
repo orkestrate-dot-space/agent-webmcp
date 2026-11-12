@@ -107,7 +107,7 @@ function cmdSearch(args: string[]): void {  const { positional, bools, values } 
   }
   const lines = [`query: "${query}"`, "matches:"];
   for (const h of hits) {
-    for (const l of toYamlLines({ id: h.id, domain: h.domain, source: h.source, entry_url: h.entryUrl, description: h.description, score: Math.round(h.score * 100) / 100 }, "  ")) lines.push(l);
+    for (const l of toYamlLines({ id: h.id, domain: h.domain, source: h.source, platform: h.platform === "" ? "(none)" : h.platform, entry_url: h.entryUrl, description: h.description, score: Math.round(h.score * 100) / 100 }, "  ")) lines.push(l);
     lines.push("  ---");
   }
   if (hits.length > 0) lines.push("next_step: Run `agent-webmcp get <domain>` for the init script path and driver commands.");
@@ -159,9 +159,14 @@ export interface GetResult {
   platforms?: string[];
   init_script: string;
   tool?: string;
-  tools: Array<{ name: string; source: string; description?: string; read_only: boolean; inputSchema: unknown }>;
+  tools: Array<{ name: string; source: string; description?: string; read_only: boolean; inputSchema: unknown; timeout_ms: number }>;
   how_to_run: Record<string, string>;
   hint?: string;
+}
+
+/** Suggested driver timeout per tool. Askers settle on the page's schedule. */
+export function timeoutFor(toolName: string): number {
+  return toolName.startsWith("ask_") ? 180_000 : 60_000;
 }
 
 export function getSite(target: string): GetResult {
@@ -185,18 +190,31 @@ export function getSite(target: string): GetResult {
   // Static template, interpolated — not per-driver logic. The Browse block
   // uses evaluate-inline because script-tag/init-script injection is proven
   // dead in the execute realm; agent-browser uses --init-script (live-proven).
+  // list()/call() are async: every snippet awaits inside the evaluation, and
+  // call(name, args) is the robust form (pre-existing native tools have no
+  // window.webmcp.<tool> shorthand — shorthands bind only at register time).
+  const staged = `${domain}.init.js`;
   const how_to_run = {
     opencode_browse:
+      `# terminal first: cp "${script}" "<files.dir>/${staged}"\n` +
+      `#   (files.dir comes from one execute: \`return { dir: files.dir }\` —\n` +
+      `#   shared /tmp paths are rejected, use that private dir)\n` +
+      `# then a single execute block:\n` +
+      `const src = await files.read(files.path("${staged}"), "utf8");\n` +
       `await page.goto("${url}", { waitUntil: 'domcontentloaded' });\n` +
-      `await page.evaluate(INIT_SOURCE); // init.js bytes of ${script} (\`agent-webmcp init --stdout\`)\n` +
-      `const tools = await page.evaluate(() => window.webmcp.list());\n` +
-      `return await page.evaluate((args) => window.webmcp.${callName}(args), ${exampleArgs});`,
+      `try { await page.waitForFunction(() => typeof document.modelContext !== "undefined" && typeof document.modelContext.getTools === "function", null, { timeout: 15000 }); } catch (e) { /* custom-only surface: mount anyway */ }\n` +
+      `await page.waitForTimeout(2000); // settle: natives register during hydration\n` +
+      `await page.evaluate(src); // mount (evaluate-inline; re-mount after every nav)\n` +
+      `const tools = await page.evaluate(() => window.webmcp.list()); // await: list() is async\n` +
+      `return await page.evaluate((args) => window.webmcp.call("${callName}", args), ${exampleArgs});`,
     agent_browser:
       `agent-browser --init-script "${script}" open "${url}"\n` +
       `agent-browser webmcp invoke ${callName} --params '${exampleArgs}'`,
     playwright_mcp:
       `browser_navigate -> "${url}"\n` +
-      `browser_evaluate -> load "${script}" bytes and call window.webmcp.${callName}(${exampleArgs})`,
+      `wait until document.modelContext exists (poll via browser_evaluate; skip on timeout: custom-only surface)\n` +
+      `browser_evaluate -> load "${script}" bytes, then in the same evaluation:\n` +
+      `  await window.webmcp.call("${callName}", ${exampleArgs}) // call() is the robust form; always await`,
   };
   return {
     ...(entry
@@ -210,6 +228,7 @@ export function getSite(target: string): GetResult {
       ...(typeof t.description === "string" && t.description !== "" ? { description: t.description } : {}),
       read_only: t.annotations?.readOnlyHint === true,
       inputSchema: t.inputSchema,
+      timeout_ms: timeoutFor(t.name),
     })),
     how_to_run,
     ...(entry
