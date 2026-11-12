@@ -46,12 +46,13 @@ describe("init.js v0", () => {
     const seen: Array<unknown> = [];
     const tool = { name: "add", description: "adds", execute: async (a: { x: number }) => ({ v: a.x }) };
     const handle = { name: "add", description: "adds", origin: "https://example.com" };
+    const preexisting = { name: "search_docs", description: "search", origin: "https://example.com" };
     const native = {
       registerTool(t: unknown) { seen.push(t); return Promise.resolve(undefined); },
-      async getTools() { return [handle]; },
+      async getTools() { return [handle, preexisting]; },
       async executeTool(t: unknown, a: unknown) {
         if (typeof t === "string") throw new TypeError("The provided value is not of type 'RegisteredTool'");
-        if (t !== handle) throw new TypeError("Failed to read the 'origin' property from 'RegisteredTool'");
+        if (t !== handle && t !== preexisting) throw new TypeError("Failed to read the 'origin' property from 'RegisteredTool'");
         return JSON.stringify({ got: a });
       },
     };
@@ -60,8 +61,35 @@ describe("init.js v0", () => {
     expect(seen).toEqual([tool]);
     expect(await sb.document.modelContext.executeTool("add", { x: 1 })).toEqual({ got: { x: 1 } });
     expect(await sb.document.modelContext.executeTool("add", JSON.stringify({ x: 2 }))).toEqual({ got: { x: 2 } });
-    // Cached registrations are listed; pre-existing native tools are not.
-    expect(await sb.document.modelContext.getTools()).toEqual([{ name: "add", description: "adds" }]);
+    // Merged listing: local registration first, pre-existing natives kept.
+    expect(await sb.document.modelContext.getTools()).toEqual([
+      { name: "add", description: "adds" },
+      { name: "search_docs", description: "search" },
+    ]);
+  });
+
+  test("local registration wins getTools collisions, upstream survivors listed", async () => {
+    const tool = { name: "ask_docs", description: "local asker", execute: async () => ({}) };
+    const native = {
+      registerTool() { return Promise.resolve(undefined); },
+      async getTools() {
+        return [
+          { name: "ask_docs", description: "stale upstream copy", origin: "https://example.com" },
+          { name: "read_page", description: "read", origin: "https://example.com" },
+        ];
+      },
+      async executeTool() { return {}; },
+    };
+    const sb = loadWith(native);
+    expect(await sb.document.modelContext.getTools()).toEqual([
+      { name: "ask_docs", description: "stale upstream copy" },
+      { name: "read_page", description: "read" },
+    ]);
+    sb.document.modelContext.registerTool(tool);
+    expect(await sb.document.modelContext.getTools()).toEqual([
+      { name: "ask_docs", description: "local asker" },
+      { name: "read_page", description: "read" },
+    ]);
   });
 
   test("binds window.webmcp.<tool> shorthands on define, drops on unregister", async () => {
@@ -75,5 +103,25 @@ describe("init.js v0", () => {
     expect(typeof sb.window.webmcp.list).toBe("function");
     sb.document.modelContext.unregisterTool("add");
     expect("add" in sb.window.webmcp).toBe(false);
+  });
+
+  test("late native modelContext merges into list, call falls through", async () => {
+    const sb = loadWith(null);
+    sb.window.webmcp.define({ name: "ask_docs", description: "local", execute: async () => ({ a: 1 }) });
+    expect(await sb.window.webmcp.list()).toEqual([
+      expect.objectContaining({ name: "ask_docs" }),
+    ]);
+    // Page hydrates AFTER mount, replacing document.modelContext.
+    const late = {
+      getTools: () => [{ name: "search_docs", description: "native search" }],
+      executeTool: async (n: string) => ({ ran: n }),
+    };
+    (sb.document as unknown as Record<string, unknown>).modelContext = late;
+    expect(await sb.window.webmcp.list()).toEqual([
+      expect.objectContaining({ name: "ask_docs" }),
+      { name: "search_docs", description: "native search" },
+    ]);
+    expect(await sb.window.webmcp.call("ask_docs", {})).toEqual({ a: 1 });
+    expect(await sb.window.webmcp.call("search_docs", { q: "x" })).toEqual({ ran: "search_docs" });
   });
 });

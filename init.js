@@ -18,6 +18,26 @@
     return input === undefined || input === null ? {} : input;
   }
 
+  // Merge locally cached tool summaries with an upstream native list.
+  // First list wins on name collisions; upstream entries never shadow local.
+  function mergeToolLists(cached, upstream) {
+    var arr = Array.isArray(upstream) ? upstream : [];
+    var have = {};
+    var i, t, n, c;
+    for (i = 0; i < cached.length; i++) have[cached[i].name] = true;
+    var merged = cached.slice();
+    for (i = 0; i < arr.length; i++) {
+      t = arr[i];
+      n = t && t.name;
+      if (typeof n !== "string" || have[n]) continue;
+      have[n] = true;
+      c = { name: n };
+      if (typeof t.description === "string") c.description = t.description;
+      merged.push(c);
+    }
+    return merged;
+  }
+
   // window.webmcp.<toolName> shorthands, bound at register time so the
   // snippets `get` emits actually resolve. Never shadows list/call/define.
   function bindShorthand(name) {
@@ -44,6 +64,13 @@
 
   function makeRegistry(native) {
     var tools = new Map();
+    // Custom tools registered through this header carry their own execute().
+    // Native executeTool takes a browser-blessed handle (with .origin), so a
+    // custom def must run locally, never via native.executeTool.
+    var custom = {};
+    // Local descriptions win getTools() collisions against same-named
+    // upstream entries (the re-found handle may predate this registration).
+    var localDesc = {};
     // Native handles: Chrome 157+ executeTool takes the registered tool
     // object, not its name. Cache name -> handle at register time, since
     // native getTools() is opaque and pre-existing tools are unresolvable.
@@ -58,6 +85,8 @@
     var registry = {
       registerTool: function (tool, opts) {
         if (!tool || typeof tool.name !== "string") throw new Error("registerTool needs {name}");
+        if (typeof tool.execute === "function") { try { custom[tool.name] = tool; } catch (e) {} }
+        if (typeof tool.description === "string") { try { localDesc[tool.name] = tool.description; } catch (e) {} }
         if (native) {
           var r = native.registerTool.call(native, tool, opts);
           try {
@@ -88,6 +117,8 @@
         }
       },
       unregisterTool: function (name) {
+        try { delete custom[name]; } catch (e) {}
+        try { delete localDesc[name]; } catch (e) {}
         if (native && native.unregisterTool) { var r = native.unregisterTool.call(native, name); unbindShorthand(name); emit(); return r; }
         var ok = tools.delete(name);
         if (ok) { unbindShorthand(name); emit(); }
@@ -95,13 +126,23 @@
       },
       getTools: function () {
         if (native) {
-          // Opaque upstream: report what we cached at register time.
-          // Tools registered before this script loaded are not visible here.
-          return Array.from(handles.values()).map(function (t) {
-            var c = { name: t.name };
-            if (typeof t.description === "string") c.description = t.description;
-            return c;
+          // Merge upstream natives with locally cached registrations (local
+          // wins on name collisions). Never leak pending Promise handles.
+          var cached = [];
+          handles.forEach(function (t, n) {
+            var c0 = { name: n };
+            // Local description first: synchronous at register time, so the
+            // listing is correct even while the handle promise is pending.
+            if (Object.prototype.hasOwnProperty.call(localDesc, n)) c0.description = localDesc[n];
+            else if (t && typeof t.then !== "function" && typeof t.description === "string") c0.description = t.description;
+            cached.push(c0);
           });
+          var up;
+          try { up = native.getTools.call(native); } catch (e) { up = null; }
+          if (up === null) return Promise.resolve(cached);
+          return Promise.resolve(up).then(function (list) {
+            return mergeToolLists(cached, list);
+          }, function () { return cached; });
         }
         return Array.from(tools.values()).map(function (t) {
           var c = {};
@@ -134,6 +175,14 @@
           try { out = await native.executeTool.call(native, target, args); }
           catch (e) {
             var msg = String((e && e.message) || e);
+            // Custom defs registered through this header are plain objects
+            // without a browser-blessed .origin: native rejects them. Run
+            // the captured local execute() instead of failing the call.
+            if (/origin|RegisteredTool/i.test(msg)) {
+              var fallback = null;
+              try { fallback = custom[name] || null; } catch (e2) {}
+              if (fallback && typeof fallback.execute === "function") return await fallback.execute(args);
+            }
             if (/not of type ['"]?object['"]?|Failed to parse input arguments/i.test(msg) && typeof input !== "string") {
               out = await native.executeTool.call(native, target, JSON.stringify(args));
             } else throw e;
@@ -165,6 +214,8 @@
       // executeTool takes the tool handle (with .origin filled in), not
       // its name. Cache name -> handle at register time by re-listing.
       var seen = {};
+      var customTools = {};
+      var localDesc157 = {};
       var origReg = doc.modelContext.registerTool.bind(doc.modelContext);
       var origList = doc.modelContext.getTools.bind(doc.modelContext);
       var origExec = doc.modelContext.executeTool.bind(doc.modelContext);
@@ -182,6 +233,8 @@
         var r = origReg(tool, opts);
         try {
           if (tool && typeof tool.name === "string") {
+            if (typeof tool.execute === "function") { try { customTools[tool.name] = tool; } catch (e) {} }
+            if (typeof tool.description === "string") { try { localDesc157[tool.name] = tool.description; } catch (e) {} }
             var p = Promise.resolve(r).then(function () { return findHandle(tool.name); }).then(function (h) {
               seen[tool.name] = h || tool;
               return seen[tool.name];
@@ -189,7 +242,7 @@
             seen[tool.name] = p;
             bindShorthand(tool.name);
             if (opts && opts.signal) {
-              var onAbort = function () { try { delete seen[tool.name]; } catch (e) {} unbindShorthand(tool.name); };
+              var onAbort = function () { try { delete seen[tool.name]; } catch (e) {} try { delete customTools[tool.name]; } catch (e) {} try { delete localDesc157[tool.name]; } catch (e) {} unbindShorthand(tool.name); };
               if (opts.signal.aborted) onAbort();
               else opts.signal.addEventListener("abort", onAbort, { once: true });
             }
@@ -212,6 +265,11 @@
         try { out = await origExec(target, args); }
         catch (e) {
           var m2 = String((e && e.message) || e);
+          if (/origin|RegisteredTool/i.test(m2)) {
+            var fb = null;
+            try { fb = customTools[name] || null; } catch (e3) {}
+            if (fb && typeof fb.execute === "function") return await fb.execute(args);
+          }
           if (/not of type ['"]?object['"]?|Failed to parse input arguments/i.test(m2) && typeof input !== "string") {
             out = await origExec(target, JSON.stringify(args));
           } else throw e;
@@ -223,16 +281,23 @@
       };
       Object.defineProperty(doc.modelContext, "__awLenient", { value: true, configurable: true });
       doc.modelContext.getTools = function () {
-        var names = Object.keys(seen);
-        if (names.length > 0) {
-          return Promise.resolve(names.map(function (n) {
-            var t = seen[n];
-            var c = { name: n };
-            if (t && typeof t.description === "string") c.description = t.description;
-            return c;
-          }));
-        }
-        try { return origList(); } catch (e) { return Promise.resolve([]); }
+        // Merge upstream natives with locally registered tools (local wins
+        // on collisions). Pre-existing native tools stay visible after mount.
+        var cached = Object.keys(seen).map(function (n) {
+          var t = seen[n];
+          var c = { name: n };
+          // Local description first: synchronous at register time, so the
+          // listing is correct even while the handle promise is pending.
+          if (Object.prototype.hasOwnProperty.call(localDesc157, n)) c.description = localDesc157[n];
+          else if (t && typeof t.then !== "function" && typeof t.description === "string") c.description = t.description;
+          return c;
+        });
+        var upstream;
+        try { upstream = origList(); } catch (e) { upstream = null; }
+        if (upstream === null) return Promise.resolve(cached);
+        return Promise.resolve(upstream).then(function (list) {
+          return mergeToolLists(cached, list);
+        }, function () { return cached; });
       };
       ["registerTool", "getTools"].forEach(function (k) {
         if (typeof registry[k] === "function" && typeof doc.modelContext[k] !== "function") {
@@ -248,9 +313,46 @@
   } catch (e) {}
 
   var mc = doc.modelContext;
+  // Late native: the page may define or replace document.modelContext AFTER
+  // mount (hydration races, SPA re-renders). When the live context differs
+  // from the captured one, list() merges both registries (local wins) and
+  // call() falls through to the live context on unknown-tool. When they are
+  // the same object — the normal path — behavior is untouched.
+  function liveCtx() {
+    try {
+      var cur = doc.modelContext;
+      if (cur && cur !== mc && typeof cur.getTools === "function") return cur;
+    } catch (e) {}
+    return null;
+  }
   var facade = {
-    list: function () { return mc.getTools(); },
-    call: function (name, args) { return mc.executeTool(name, args === undefined ? {} : args); },
+    list: function () {
+      var live = liveCtx();
+      var ours;
+      try { ours = mc.getTools(); } catch (e) { ours = []; }
+      if (!live) return ours;
+      return Promise.resolve(ours).then(function (a) {
+        var base = Array.isArray(a) ? a : [];
+        var b;
+        try { b = live.getTools(); } catch (e) { return base; }
+        return Promise.resolve(b).then(function (bl) {
+          return mergeToolLists(base, bl);
+        }, function () { return base; });
+      }, function () {
+        try { return live.getTools(); } catch (e) { return []; }
+      });
+    },
+    call: function (name, args) {
+      var a = args === undefined ? {} : args;
+      var live = liveCtx();
+      var p;
+      try { p = mc.executeTool(name, a); } catch (e) { p = Promise.reject(e); }
+      if (!live || typeof live.executeTool !== "function") return p;
+      return Promise.resolve(p).then(null, function (e) {
+        if (/unknown tool/i.test(String((e && e.message) || e))) return live.executeTool(name, a);
+        throw e;
+      });
+    },
     define: function (tool) { mc.registerTool(tool); return tool.name; },
   };
   try {
