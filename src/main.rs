@@ -1,4 +1,6 @@
+use agent_webmcp::agent_browser::AgentBrowser;
 use agent_webmcp::catalog::{Catalog, Kind, Source};
+use agent_webmcp::engine;
 use agent_webmcp::index::Index;
 use clap::{Parser, Subcommand};
 
@@ -38,13 +40,25 @@ enum Command {
 async fn main() -> anyhow::Result<()> {
     match Cli::parse().command {
         Command::Find { query, limit } => find(&query.join(" "), limit)?,
-        Command::Call { id, args, yes } => {
-            println!("not implemented: call {id} {args} (yes={yes})");
-        }
+        Command::Call { id, args, yes } => call(&id, &args, yes).await?,
         Command::Mcp => {
             eprintln!("not implemented: mcp");
         }
     }
+    Ok(())
+}
+
+async fn call(id: &str, args: &str, yes: bool) -> anyhow::Result<()> {
+    let catalog = Catalog::load()?;
+    let args: serde_json::Value =
+        serde_json::from_str(args).map_err(|e| anyhow::anyhow!("arguments are not valid JSON: {e}"))?;
+    // One browser session per call, so a call never lands in a daemon that a previous
+    // call is still closing.
+    let browser = AgentBrowser::connect(&format!("agent-webmcp-{}", std::process::id())).await?;
+    let opts = engine::Options { approved: yes, ..Default::default() };
+    let result = engine::call(&browser, &catalog, id, args, &opts).await;
+    browser.shutdown(true).await?;
+    println!("{}", serde_json::to_string_pretty(&result?)?);
     Ok(())
 }
 
