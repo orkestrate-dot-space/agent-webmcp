@@ -8,7 +8,6 @@ use std::time::Duration;
 
 use anyhow::Result;
 use serde_json::{Value, json};
-use tokio::sync::broadcast::error::RecvError;
 
 use crate::cdp::{Client, Event};
 use crate::lint;
@@ -77,7 +76,20 @@ async fn scan_in_target(client: &Client, target: &str, url: &str, opts: &Options
         .unwrap_or_default()
         .to_string();
     let s = Some(session.as_str());
-    let mut events = client.subscribe();
+    let mut events = client.subscribe(&session);
+    let result = listen(client, s, url, opts, out, &mut events).await;
+    client.unsubscribe(&session);
+    result
+}
+
+async fn listen(
+    client: &Client,
+    s: Option<&str>,
+    url: &str,
+    opts: &Options,
+    out: &mut PageResult,
+    events: &mut tokio::sync::mpsc::UnboundedReceiver<Event>,
+) -> Result<()> {
 
     client.send("Page.enable", json!({}), s, CMD).await?;
     client.send("Runtime.enable", json!({}), s, CMD).await?;
@@ -96,13 +108,9 @@ async fn scan_in_target(client: &Client, target: &str, url: &str, opts: &Options
         let deadline = if loaded { settle_deadline } else { load_deadline };
         let event = match tokio::time::timeout_at(deadline, events.recv()).await {
             Err(_) => break,
-            Ok(Err(RecvError::Lagged(_))) => continue,
-            Ok(Err(RecvError::Closed)) => anyhow::bail!("the browser connection closed"),
-            Ok(Ok(ev)) => ev,
+            Ok(None) => anyhow::bail!("the browser connection closed"),
+            Ok(Some(ev)) => ev,
         };
-        if event.session_id.as_deref() != s {
-            continue;
-        }
         match event.method.as_str() {
             "Page.loadEventFired" if !loaded => {
                 loaded = true;

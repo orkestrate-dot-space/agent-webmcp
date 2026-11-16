@@ -9,7 +9,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, anyhow, bail};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
-use tokio::sync::{Mutex, broadcast, oneshot};
+use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio_tungstenite::tungstenite::Message;
 
 /// A CDP event, tagged with the session it belongs to.
@@ -21,12 +21,15 @@ pub struct Event {
 }
 
 type Pending = Arc<Mutex<HashMap<u64, oneshot::Sender<Result<Value>>>>>;
+/// Each attached session gets its own unbounded queue, so a busy tab can
+/// never make another tab's listener drop events.
+type Routes = Arc<std::sync::Mutex<HashMap<String, mpsc::UnboundedSender<Event>>>>;
 
 #[derive(Clone)]
 pub struct Client {
     tx: tokio::sync::mpsc::UnboundedSender<Message>,
     pending: Pending,
-    events: broadcast::Sender<Event>,
+    routes: Routes,
     next_id: Arc<AtomicU64>,
 }
 
@@ -39,7 +42,7 @@ impl Client {
         let (mut sink, mut source) = stream.split();
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Message>();
         let pending: Pending = Arc::default();
-        let (events, _) = broadcast::channel(4096);
+        let routes: Routes = Arc::default();
 
         tokio::spawn(async move {
             while let Some(msg) = rx.recv().await {
@@ -50,7 +53,7 @@ impl Client {
         });
 
         let pending_reader = pending.clone();
-        let events_reader = events.clone();
+        let routes_reader = routes.clone();
         tokio::spawn(async move {
             while let Some(Ok(msg)) = source.next().await {
                 let Message::Text(text) = msg else { continue };
@@ -67,11 +70,16 @@ impl Client {
                         let _ = reply.send(result);
                     }
                 } else if let Some(method) = v.get("method").and_then(Value::as_str) {
-                    let _ = events_reader.send(Event {
-                        method: method.to_string(),
-                        params: v.get("params").cloned().unwrap_or(Value::Null),
-                        session_id: v.get("sessionId").and_then(Value::as_str).map(str::to_string),
-                    });
+                    let session_id = v.get("sessionId").and_then(Value::as_str).map(str::to_string);
+                    let Some(sid) = &session_id else { continue };
+                    let routes = routes_reader.lock().expect("routes lock");
+                    if let Some(tx) = routes.get(sid) {
+                        let _ = tx.send(Event {
+                            method: method.to_string(),
+                            params: v.get("params").cloned().unwrap_or(Value::Null),
+                            session_id: session_id.clone(),
+                        });
+                    }
                 }
             }
             // The socket closed: fail everything still waiting.
@@ -80,11 +88,18 @@ impl Client {
             }
         });
 
-        Ok(Self { tx, pending, events, next_id: Arc::new(AtomicU64::new(1)) })
+        Ok(Self { tx, pending, routes, next_id: Arc::new(AtomicU64::new(1)) })
     }
 
-    pub fn subscribe(&self) -> broadcast::Receiver<Event> {
-        self.events.subscribe()
+    /// Receive every event for `session_id`, from now until `unsubscribe`.
+    pub fn subscribe(&self, session_id: &str) -> mpsc::UnboundedReceiver<Event> {
+        let (tx, rx) = mpsc::unbounded_channel();
+        self.routes.lock().expect("routes lock").insert(session_id.to_string(), tx);
+        rx
+    }
+
+    pub fn unsubscribe(&self, session_id: &str) {
+        self.routes.lock().expect("routes lock").remove(session_id);
     }
 
     /// Send a command and wait for its reply.
