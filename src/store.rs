@@ -10,7 +10,8 @@ use crate::model::{Index, SCHEMA_VERSION};
 /// Refresh the local index when it is older than this.
 pub const STALE_AFTER: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
-pub const DEFAULT_INDEX_URL: &str = "https://web.orkestrate.space/webmcp/index.json";
+pub const DEFAULT_INDEX_URL: &str =
+    "https://raw.githubusercontent.com/orkestrate-dot-space/agent-webmcp/main/index/index.json";
 
 pub fn data_dir() -> PathBuf {
     if let Some(dir) = std::env::var_os("AGENT_WEBMCP_HOME") {
