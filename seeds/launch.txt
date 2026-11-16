@@ -1,0 +1,301 @@
+# Launch seed list for agent-webmcp scans.
+# One host per line; a path only when the site lives under it.
+# "seen" marks hosts a public directory lists as having tools. Every host is
+# checked by our own scan; nothing is copied from those directories.
+
+# WebMCP demos
+googlechromelabs.github.io/webmcp-tools/demos/react-flightsearch  # seen
+googlechromelabs.github.io/webmcp-tools/demos/pizza-maker  # seen
+googlechromelabs.github.io/webmcp-tools/demos/french-bistro  # seen
+googlechromelabs.github.io/webmcp-tools/demos/appointment-booking  # seen
+
+# Cloud, hosting, edge
+cloudflare.com  # seen
+developers.cloudflare.com  # seen
+vercel.com  # seen
+netlify.com
+docs.netlify.com
+render.com  # seen
+fly.io  # seen
+railway.com
+docs.railway.com
+heroku.com
+digitalocean.com
+docs.digitalocean.com
+hetzner.com
+bunny.net  # seen
+hostinger.com  # seen
+fastly.com
+docs.fastly.com
+aws.amazon.com
+docs.aws.amazon.com
+cloud.google.com
+developers.google.com
+learn.microsoft.com
+
+# CI, observability, flags, analytics
+sentry.io  # seen
+docs.sentry.io
+datadoghq.com
+docs.datadoghq.com
+newrelic.com
+docs.newrelic.com
+grafana.com
+pagerduty.com
+circleci.com  # seen
+buildkite.com
+launchdarkly.com  # seen
+flagsmith.com
+posthog.com  # seen
+amplitude.com  # seen
+mixpanel.com
+optimizely.com  # seen
+checklyhq.com  # seen
+betterstack.com
+honeycomb.io
+
+# Auth
+auth0.com  # seen
+clerk.com  # seen
+stytch.com  # seen
+workos.com  # seen
+developer.okta.com
+fusionauth.io
+supertokens.com
+descope.com
+kinde.com
+
+# Payments
+stripe.com
+docs.stripe.com  # seen
+stripe.dev  # seen
+razorpay.com  # seen
+developer.paypal.com
+docs.adyen.com
+developer.squareup.com
+paddle.com
+lemonsqueezy.com
+chargebee.com
+forter.com  # seen
+checkout.com
+mollie.com
+
+# Email, messaging
+resend.com  # seen
+postmarkapp.com  # seen
+mailgun.com
+documentation.mailgun.com  # seen
+sendgrid.com
+customer.io  # seen
+docs.customer.io  # seen
+loops.so  # seen
+courier.com  # seen
+knock.app  # seen
+onesignal.com
+ably.com
+twilio.com
+telnyx.com  # seen
+vonage.com
+plivo.com
+
+# AI APIs and agent infrastructure
+developers.openai.com  # seen
+platform.openai.com
+claude.com  # seen
+code.claude.com  # seen
+docs.anthropic.com
+ai.google.dev
+cohere.com
+docs.mistral.ai
+openrouter.ai  # seen
+replicate.com  # seen
+huggingface.co
+together.ai
+fireworks.ai
+console.groq.com
+inference-docs.cerebras.ai  # seen
+fal.ai  # seen
+portkey.ai  # seen
+exa.ai  # seen
+docs.exa.ai
+assemblyai.com  # seen
+context7.com  # seen
+modelcontextprotocol.io  # seen
+docs.kapa.ai  # seen
+docs.langchain.com
+docs.llamaindex.ai
+perplexity.ai
+docs.perplexity.ai
+elevenlabs.io
+docs.livekit.io
+vapi.ai
+cursor.com
+docs.cursor.com
+
+# Code hosting, registries, developer utilities
+github.com
+docs.github.com
+gitlab.com
+docs.gitlab.com
+npmjs.com
+pypi.org
+crates.io
+pkg.go.dev
+docs.docker.com
+kubernetes.io
+developer.hashicorp.com
+pulumi.com
+ngrok.com  # seen
+pipedream.com  # seen
+zapier.com  # seen
+docs.zapier.com  # seen
+postman.com
+apollographql.com  # seen
+confluent.io
+
+# Databases, search, storage
+supabase.com
+planetscale.com  # seen
+neon.tech
+turso.tech
+clickhouse.com  # seen
+mongodb.com
+redis.io
+meilisearch.com  # seen
+algolia.com
+typesense.org
+weaviate.io
+pinecone.io
+qdrant.tech
+xata.io  # seen
+firebase.google.com
+appwrite.io
+convex.dev
+
+# Docs platforms and developer docs
+mintlify.com  # seen
+1password.dev  # seen
+agentskills.io  # seen
+docs.anaconda.com
+arize.com  # seen
+astronomer.io  # seen
+braintrust.dev  # seen
+cerebrium.ai  # seen
+chatbase.co  # seen
+dev.writer.com  # seen
+docs.discord.com  # seen
+docs.semgrep.dev  # seen
+docs.whop.com  # seen
+dub.co  # seen
+dynamic.xyz  # seen
+gofastmcp.com  # seen
+graphite.com  # seen
+infisical.com  # seen
+kernel.sh  # seen
+nango.dev  # seen
+plain.com  # seen
+polar.sh  # seen
+skyvern.com  # seen
+supermemory.ai  # seen
+trigger.dev  # seen
+daytona.io
+prefect.io
+gitbook.com  # seen
+docs.n8n.io
+docs.getdbt.com
+docs.snyk.io
+docs.retool.com
+developer.themoviedb.org  # seen
+dev.frontapp.com  # seen
+readme.com  # seen
+developers.hubspot.com
+developer.box.com  # seen
+developers.asana.com
+developers.notion.com
+developers.intercom.com
+api.slack.com
+developers.zoom.us
+developer.intuit.com
+react.dev
+nextjs.org
+nuxt.com
+vuejs.org
+angular.dev
+svelte.dev
+docs.astro.build
+tailwindcss.com
+mui.com
+ant.design  # seen
+playwright.dev
+vitest.dev
+vite.dev
+typescriptlang.org
+nodejs.org
+deno.com
+bun.sh
+docs.python.org
+go.dev
+doc.rust-lang.org
+docs.expo.dev
+tauri.app
+bazel.build  # seen
+pnpm.io
+nx.dev
+eslint.org
+
+# Work tools
+monday.com  # seen
+asana.com
+notion.so
+linear.app
+clickup.com
+airtable.com
+coda.io
+attio.com  # seen
+deel.com  # seen
+docs.gusto.com  # seen
+workable.com  # seen
+slack.com
+figma.com
+miro.com
+canva.com
+framer.com
+webflow.com
+wordpress.org
+playground.wordpress.net  # seen
+elementor.com  # seen
+shopify.dev
+shop.dev  # seen
+
+# Consumer, large sites only
+amazon.com
+target.com  # seen
+walmart.com
+ebay.com
+etsy.com
+ikea.com  # seen
+bestbuy.com
+booking.com
+expedia.com
+airbnb.com
+kayak.com
+skyscanner.com
+tripadvisor.com
+united.com
+turkishairlines.com  # seen
+uber.com
+doordash.com  # seen
+instacart.com
+openstreetmap.org
+yelp.com
+opentable.com
+ticketmaster.com
+eventbrite.com
+feverup.com  # seen
+redbus.in  # seen
+blinkit.com  # seen
+nike.com
+apple.com
+asus.com  # seen
+netgear.com  # seen
+wyze.com  # seen

@@ -1,10 +1,9 @@
-pub mod agent_browser;
-pub mod approval;
-pub mod backend;
-pub mod catalog;
-pub mod engine;
+pub mod cdp;
+pub mod chrome;
 pub mod index;
-pub mod ledger;
+pub mod lint;
 pub mod mcp;
-pub mod policy;
-pub mod validate;
+pub mod model;
+pub mod platform;
+pub mod scan;
+pub mod store;
