@@ -1,7 +1,7 @@
 use agent_webmcp::index::Search;
 use agent_webmcp::lint;
 use agent_webmcp::model::{Annotations, Index, SCHEMA_VERSION, Site, Status, Tool};
-use agent_webmcp::scan::{PageResult, RawTool, assemble, pick_pages};
+use agent_webmcp::scan::{PageResult, RawTool, assemble, carry_forward, pick_pages};
 use agent_webmcp::store;
 use serde_json::json;
 
@@ -26,6 +26,7 @@ fn site(host: &str, platform: Option<&str>, tools: Vec<Tool>) -> Site {
         platform: platform.map(str::to_string),
         tools,
         note: None,
+        missed: 0,
     }
 }
 
@@ -210,4 +211,33 @@ fn naming_the_site_ranks_that_site_first() {
     idx.sites.push(site("docs.stripe.com", None, vec![tool("search_docs", "Search the documentation.", "https://docs.stripe.com/")]));
     let s = Search::build(idx).unwrap();
     assert_eq!(s.find("search stripe docs", 3).unwrap()[0].site, "docs.stripe.com");
+}
+
+#[test]
+fn a_site_that_misses_one_check_keeps_its_tools_and_is_dropped_after_two() {
+    let had = site("x.com", None, vec![tool("t", "Does t.", "https://x.com/")]);
+    let mut now = vec![assemble("x.com", &[PageResult { final_url: "https://x.com/".into(), ..Default::default() }])];
+    assert_eq!(carry_forward(&mut now, std::slice::from_ref(&had)), 1);
+    assert_eq!(now[0].status, Status::Verified);
+    assert_eq!(now[0].tools.len(), 1);
+    assert_eq!(now[0].missed, 1);
+
+    let previous = now.clone();
+    let mut again = vec![assemble("x.com", &[PageResult { final_url: "https://x.com/".into(), ..Default::default() }])];
+    assert_eq!(carry_forward(&mut again, &previous), 0);
+    assert_eq!(again[0].status, Status::NoTools);
+}
+
+#[test]
+fn a_site_that_shows_tools_again_resets_its_misses() {
+    let mut prev = site("x.com", None, vec![tool("t", "Does t.", "https://x.com/")]);
+    prev.missed = 1;
+    let fresh = assemble("x.com", &[PageResult {
+        final_url: "https://x.com/".into(),
+        tools: vec![raw("t")],
+        ..Default::default()
+    }]);
+    let mut now = vec![fresh];
+    assert_eq!(carry_forward(&mut now, &[prev]), 0);
+    assert_eq!(now[0].missed, 0);
 }

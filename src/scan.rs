@@ -277,5 +277,38 @@ pub fn assemble(host: &str, pages: &[PageResult]) -> Site {
         platform: crate::platform::detect(&tools.values().map(|t| t.name.as_str()).collect::<Vec<_>>()),
         tools: tools.into_values().collect(),
         note,
+        missed: 0,
     }
+}
+
+/// Runs in a row a site may show no tools before it is dropped.
+pub const DROP_AFTER_MISSES: u32 = 2;
+
+/// A site that had tools before and shows none now keeps its last tools,
+/// marked with how many checks it has missed, until it misses
+/// `DROP_AFTER_MISSES` in a row. One slow load should not delist a site.
+/// Returns how many sites were kept this way.
+pub fn carry_forward(sites: &mut [Site], previous: &[Site]) -> usize {
+    let mut kept = 0;
+    for site in sites.iter_mut() {
+        if site.status == Status::Verified {
+            continue;
+        }
+        let Some(prev) = previous.iter().find(|p| p.host == site.host && p.status == Status::Verified) else {
+            continue;
+        };
+        let missed = prev.missed + 1;
+        if missed >= DROP_AFTER_MISSES {
+            continue;
+        }
+        let note = site.note.take().unwrap_or_else(|| "no tools seen at the last check".to_string());
+        *site = Site {
+            missed,
+            note: Some(format!("{note}; showing tools from {}", prev.checked_at)),
+            checked_at: site.checked_at.clone(),
+            ..prev.clone()
+        };
+        kept += 1;
+    }
+    kept
 }

@@ -43,6 +43,14 @@ pub struct Site {
     /// Why the check did not produce tools, when it did not.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    /// Consecutive checks that saw no tools after the site last had some.
+    /// The site keeps its last tools until this reaches the drop limit.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub missed: u32,
+}
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

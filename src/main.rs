@@ -52,6 +52,10 @@ enum Command {
         /// Seconds to keep listening for tools after the page loads
         #[arg(long, default_value_t = 5)]
         settle: u64,
+        /// An earlier index: a site it had tools for keeps them if this run
+        /// sees none, until it misses this many runs in a row
+        #[arg(long)]
+        previous: Option<PathBuf>,
     },
     /// Download the latest index now
     Update,
@@ -65,8 +69,8 @@ enum Command {
 async fn main() -> Result<()> {
     match Cli::parse().command {
         Command::Find { query, limit, json } => find(&query.join(" "), limit, json),
-        Command::Scan { sites, list, out, cdp, concurrency, pages, settle } => {
-            scan_cmd(sites, list, out, cdp, concurrency, pages, settle).await
+        Command::Scan { sites, list, out, cdp, concurrency, pages, settle, previous } => {
+            scan_cmd(sites, list, out, cdp, concurrency, pages, settle, previous).await
         }
         Command::Update => {
             let index = tokio::task::spawn_blocking(store::refresh).await??;
@@ -144,6 +148,7 @@ fn read_list(sites: Vec<String>, list: Option<PathBuf>) -> Result<Vec<String>> {
     Ok(hosts)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn scan_cmd(
     sites: Vec<String>,
     list: Option<PathBuf>,
@@ -152,6 +157,7 @@ async fn scan_cmd(
     concurrency: usize,
     pages: usize,
     settle: u64,
+    previous: Option<PathBuf>,
 ) -> Result<()> {
     let hosts = read_list(sites, list)?;
     anyhow::ensure!(!hosts.is_empty(), "nothing to scan: pass hosts or --list <file>");
@@ -190,7 +196,14 @@ async fn scan_cmd(
 
     let mut sites: Vec<(usize, Site)> = std::mem::take(&mut *results.lock().await);
     sites.sort_by_key(|(i, _)| *i);
-    let sites: Vec<Site> = sites.into_iter().map(|(_, s)| s).collect();
+    let mut sites: Vec<Site> = sites.into_iter().map(|(_, s)| s).collect();
+    if let Some(path) = previous {
+        let prev = store::parse(&std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?)?;
+        let kept = scan::carry_forward(&mut sites, &prev.sites);
+        if kept > 0 {
+            eprintln!("kept {kept} sites from the previous index that this run saw no tools on");
+        }
+    }
     let verified = sites.iter().filter(|s| s.status == Status::Verified).count();
     eprintln!("checked {total} sites: {verified} with tools");
 
