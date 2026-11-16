@@ -102,7 +102,7 @@ impl Search {
             return Ok(Vec::new());
         };
         let mut stmt = self.conn.prepare(
-            "SELECT rowid FROM tools WHERE tools MATCH ?1 ORDER BY bm25(tools, 3.0, 5.0, 2.0, 1.0) LIMIT ?2",
+            "SELECT rowid FROM tools WHERE tools MATCH ?1 ORDER BY bm25(tools, 8.0, 5.0, 2.0, 1.0) LIMIT ?2",
         )?;
         let wanted = (limit * 20).max(200) as i64;
         let ids: Vec<i64> = stmt
@@ -116,10 +116,17 @@ impl Search {
             let row = &self.rows[(id - 1) as usize];
             let site = &self.index.sites[row.site];
             let tool = &site.tools[row.tool];
-            let platform = site.platform.as_ref().map(|p| {
-                Platform { name: p.clone(), sites: self.platform_sites.get(p).copied().unwrap_or(1) }
+            // Only a platform's own shared tools collapse into one hit. A site's
+            // extra tools (PostHog's `ask_max` next to Mintlify's set) stay its own.
+            let shared = site
+                .platform
+                .as_ref()
+                .filter(|p| crate::platform::is_shared(p, &tool.name));
+            let platform = shared.map(|p| Platform {
+                name: p.clone(),
+                sites: self.platform_sites.get(p).copied().unwrap_or(1),
             });
-            if let Some(p) = &site.platform {
+            if let Some(p) = shared {
                 let key = (p.clone(), tool.name.clone());
                 if seen_platform_tools.contains(&key) {
                     continue;

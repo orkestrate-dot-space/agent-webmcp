@@ -224,7 +224,15 @@ pub fn pick_pages(home: &str, links: &[String], max: usize) -> Vec<String> {
 pub async fn scan_site(client: &Client, entry: &str, opts: &Options) -> Site {
     let host = entry.split('/').next().unwrap_or(entry);
     let home = format!("https://{}/", entry.trim_end_matches('/'));
-    let first = scan_page(client, &home, opts).await;
+    let mut first = scan_page(client, &home, opts).await;
+    // A start page that loads but registers nothing gets one more look:
+    // registration during hydration sometimes misses a busy first load.
+    if first.error.is_none() && !first.blocked && first.tools.is_empty() {
+        let again = scan_page(client, &home, opts).await;
+        if !again.tools.is_empty() {
+            first = again;
+        }
+    }
     let mut pages = vec![first];
     if pages[0].error.is_none() && !pages[0].blocked {
         for url in pick_pages(&pages[0].final_url, &pages[0].links, opts.max_pages) {

@@ -192,3 +192,22 @@ fn store_rejects_an_index_with_another_schema_version() {
     let err = store::parse(&text).unwrap_err().to_string();
     assert!(err.contains("update agent-webmcp"), "{err}");
 }
+
+#[test]
+fn a_site_s_own_tools_are_not_hidden_behind_its_platform() {
+    let mut idx = index();
+    let posthog = idx.sites.iter_mut().find(|s| s.host == "docs.a.com").unwrap();
+    posthog.tools.push(tool("ask_max", "Ask Max, the product assistant, a question.", "https://docs.a.com/"));
+    let s = Search::build(idx).unwrap();
+    let hits = s.find("ask the product assistant", 5).unwrap();
+    let ask = hits.iter().find(|h| h.tool == "ask_max").expect("ask_max is findable");
+    assert!(ask.platform.is_none(), "ask_max is the site's own tool, not Mintlify's");
+}
+
+#[test]
+fn naming_the_site_ranks_that_site_first() {
+    let mut idx = index();
+    idx.sites.push(site("docs.stripe.com", None, vec![tool("search_docs", "Search the documentation.", "https://docs.stripe.com/")]));
+    let s = Search::build(idx).unwrap();
+    assert_eq!(s.find("search stripe docs", 3).unwrap()[0].site, "docs.stripe.com");
+}
