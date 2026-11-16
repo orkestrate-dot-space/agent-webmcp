@@ -1,6 +1,8 @@
 use agent_webmcp::agent_browser::AgentBrowser;
+use agent_webmcp::approval::{AllowAll, Terminal};
 use agent_webmcp::catalog::{Catalog, Kind, Source};
 use agent_webmcp::engine;
+use agent_webmcp::ledger::Ledger;
 use agent_webmcp::index::Index;
 use clap::{Parser, Subcommand};
 
@@ -55,8 +57,13 @@ async fn call(id: &str, args: &str, yes: bool) -> anyhow::Result<()> {
     // One browser session per call, so a call never lands in a daemon that a previous
     // call is still closing.
     let browser = AgentBrowser::connect(&format!("agent-webmcp-{}", std::process::id())).await?;
-    let opts = engine::Options { approved: yes, ..Default::default() };
-    let result = engine::call(&browser, &catalog, id, args, &opts).await;
+    let ledger = Ledger::default_location();
+    let opts = engine::Options::default();
+    let result = if yes {
+        engine::call(&browser, &AllowAll, &ledger, &catalog, id, args, &opts).await
+    } else {
+        engine::call(&browser, &Terminal, &ledger, &catalog, id, args, &opts).await
+    };
     browser.shutdown(true).await?;
     println!("{}", serde_json::to_string_pretty(&result?)?);
     Ok(())

@@ -103,6 +103,10 @@ pub fn parse_tools(data: &Value) -> Vec<PageTool> {
                             .pointer("/annotations/readOnly")
                             .and_then(Value::as_bool)
                             .unwrap_or(false),
+                        consequential: t
+                            .pointer("/annotations/consequential")
+                            .and_then(Value::as_bool)
+                            .unwrap_or(false),
                         input_schema: t.get("inputSchema").cloned().unwrap_or(Value::Null),
                     })
                 })

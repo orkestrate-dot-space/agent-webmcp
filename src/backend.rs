@@ -18,6 +18,8 @@ pub struct PageTool {
     pub frame_id: String,
     pub origin: Option<String>,
     pub read_only: bool,
+    /// The page marks the tool as one that takes a consequential action.
+    pub consequential: bool,
     pub input_schema: Value,
 }
 
