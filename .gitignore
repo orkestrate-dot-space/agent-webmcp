@@ -1,0 +1,15 @@
+# build
+/target/
+/dist/
+node_modules/
+
+# local secrets and state
+.env
+*.local.json
+
+# local working dirs (screenshots, scratch, installed skills)
+.shots/
+.tmp/
+.preview/
+.agents/
+skills-lock.json
