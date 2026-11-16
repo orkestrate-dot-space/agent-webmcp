@@ -33,10 +33,13 @@ impl Request<'_> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Decision {
     Granted,
-    /// The user said no.
+    /// The user was asked and said no.
     Declined,
-    /// Nobody could be asked.
+    /// There is nobody to ask: no terminal, and the client cannot prompt.
     Unavailable,
+    /// The user was asked, but there was no usable answer: dismissed, timed
+    /// out, or the reply could not be understood.
+    Unanswered,
 }
 
 /// Asks the user for permission. Implemented per front end: the terminal, an MCP client.

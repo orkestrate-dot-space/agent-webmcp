@@ -11,6 +11,7 @@ use crate::backend::{Backend, PageTool};
 use crate::catalog::{Catalog, Entry, Source};
 use crate::ledger::{Ledger, Outcome as Verdict, Record};
 use crate::policy::{self, Reason};
+use crate::validate::validate_args;
 
 #[derive(Debug, Clone)]
 pub struct Options {
@@ -37,9 +38,11 @@ pub struct Outcome {
 #[derive(Debug)]
 pub enum CallError {
     UnknownTool(String),
-    BadArguments,
-    /// The tool needs approval and nobody could be asked.
+    BadArguments { id: String, reason: String },
+    /// The tool needs approval and there is nobody to ask.
     ApprovalUnavailable { id: String },
+    /// Approval was asked for, but there was no usable answer.
+    ApprovalUnanswered { id: String },
     /// The user was asked and said no.
     Declined { id: String },
     Failed(anyhow::Error),
@@ -49,10 +52,14 @@ impl fmt::Display for CallError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UnknownTool(id) => write!(f, "unknown tool {id:?}; use `find` to see tool ids"),
-            Self::BadArguments => write!(f, "arguments must be a JSON object"),
+            Self::BadArguments { id, reason } => write!(f, "arguments for {id} are invalid: {reason}"),
             Self::ApprovalUnavailable { id } => write!(
                 f,
                 "{id} needs the user's approval, and there is no way to ask them here. Nothing was run."
+            ),
+            Self::ApprovalUnanswered { id } => write!(
+                f,
+                "asked for approval to run {id}, but there was no answer. Nothing was run."
             ),
             Self::Declined { id } => write!(f, "the user declined {id}. Nothing was run."),
             Self::Failed(e) => write!(f, "{e:#}"),
@@ -86,6 +93,7 @@ pub async fn call<B: Backend, A: Approver>(
     let (outcome, origin, duration_ms, error) = match &result {
         Ok(o) => (Verdict::Ok, Some(o.origin.clone()), o.duration_ms, None),
         Err(CallError::ApprovalUnavailable { .. }) => (Verdict::ApprovalRequired, None, None, None),
+        Err(CallError::ApprovalUnanswered { .. }) => (Verdict::Unanswered, None, None, None),
         Err(CallError::Declined { .. }) => (Verdict::Declined, None, None, None),
         Err(e) => (Verdict::Error, None, None, Some(e.to_string())),
     };
@@ -109,8 +117,8 @@ async fn run<B: Backend, A: Approver>(
     approved: &mut bool,
 ) -> Result<Outcome, CallError> {
     let entry = catalog.get(id).ok_or_else(|| CallError::UnknownTool(id.to_string()))?;
-    if !args.is_object() {
-        return Err(CallError::BadArguments);
+    if let Err(reason) = validate_args(&entry.input_schema, args) {
+        return Err(CallError::BadArguments { id: id.to_string(), reason });
     }
 
     // The catalog's own verdict comes first, before any browser is touched.
@@ -158,6 +166,7 @@ async fn ask<A: Approver>(approver: &A, entry: &Entry, args: &Value, reason: Rea
         Decision::Granted => Ok(()),
         Decision::Declined => Err(CallError::Declined { id: entry.id.clone() }),
         Decision::Unavailable => Err(CallError::ApprovalUnavailable { id: entry.id.clone() }),
+        Decision::Unanswered => Err(CallError::ApprovalUnanswered { id: entry.id.clone() }),
     }
 }
 

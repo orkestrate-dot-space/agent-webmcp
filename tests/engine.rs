@@ -130,7 +130,7 @@ async fn native_tool_opens_the_page_and_calls_without_injecting() {
         &fake,
         &catalog(),
         "googlechromelabs.github.io/searchFlights",
-        json!({ "origin": "SFO" }),
+        json!({ "origin": "SFO", "destination": "JFK", "tripType": "one-way", "outboundDate": "2027-02-10", "inboundDate": "2027-02-17", "passengers": 1 }),
         &fast(),
     )
     .await
@@ -159,14 +159,14 @@ async fn community_tool_is_injected_before_it_is_called() {
 async fn waits_for_a_page_that_registers_its_tool_late() {
     let fake = Fake::new(vec![tool("searchFlights", "https://googlechromelabs.github.io")], vec![]);
     *fake.late_by.lock().unwrap() = 2;
-    let out = call(&fake, &catalog(), "googlechromelabs.github.io/searchFlights", json!({}), &fast()).await;
+    let out = call(&fake, &catalog(), "googlechromelabs.github.io/searchFlights", json!({ "origin": "SFO", "destination": "JFK", "tripType": "one-way", "outboundDate": "2027-02-10", "inboundDate": "2027-02-17", "passengers": 1 }), &fast()).await;
     assert!(out.is_ok(), "{out:?}");
 }
 
 #[tokio::test]
 async fn gives_up_and_names_the_tools_the_page_does_have() {
     let fake = Fake::new(vec![tool("other", "https://example.com")], vec![]);
-    let err = call(&fake, &catalog(), "example.com/say_hello", json!({}), &fast())
+    let err = call(&fake, &catalog(), "example.com/say_hello", json!({ "name": "x" }), &fast())
         .await
         .unwrap_err()
         .to_string();
@@ -177,7 +177,7 @@ async fn gives_up_and_names_the_tools_the_page_does_have() {
 #[tokio::test]
 async fn refuses_a_tool_registered_by_another_origin() {
     let fake = Fake::new(vec![tool("say_hello", "https://evil.example")], vec![]);
-    let err = call(&fake, &catalog(), "example.com/say_hello", json!({}), &fast())
+    let err = call(&fake, &catalog(), "example.com/say_hello", json!({ "name": "x" }), &fast())
         .await
         .unwrap_err()
         .to_string();
@@ -188,7 +188,29 @@ async fn refuses_a_tool_registered_by_another_origin() {
 #[tokio::test]
 async fn accepts_a_www_redirect_of_the_same_site() {
     let fake = Fake::new(vec![tool("say_hello", "https://www.example.com")], vec![]);
-    assert!(call(&fake, &catalog(), "example.com/say_hello", json!({}), &fast()).await.is_ok());
+    assert!(call(&fake, &catalog(), "example.com/say_hello", json!({ "name": "x" }), &fast()).await.is_ok());
+}
+
+#[tokio::test]
+async fn an_unanswered_prompt_stops_the_call_and_says_there_was_no_answer() {
+    let fake = Fake::new(vec![], vec![tool("leave_note", "https://example.com")]);
+    let dir = tempfile::tempdir().unwrap();
+    let approver = Scripted::new(Decision::Unanswered);
+    let err = engine::call(
+        &fake,
+        &approver,
+        &ledger_in(&dir),
+        &catalog(),
+        "example.com/leave_note",
+        json!({ "text": "hi" }),
+        &fast(),
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(err, CallError::ApprovalUnanswered { .. }), "{err}");
+    assert!(err.to_string().contains("no answer"), "{err}");
+    assert!(fake.log().is_empty(), "no browser activity without an answer");
+    assert_eq!(ledger_in(&dir).read_all().unwrap()[0].outcome, Verdict::Unanswered);
 }
 
 #[tokio::test]
@@ -197,7 +219,25 @@ async fn unknown_ids_and_bad_arguments_are_rejected_before_the_browser() {
     let e1 = call(&fake, &catalog(), "nope.com/x", json!({}), &fast()).await.unwrap_err();
     assert!(matches!(e1, CallError::UnknownTool(_)), "{e1}");
     let e2 = call(&fake, &catalog(), "example.com/say_hello", json!(["a"]), &fast()).await.unwrap_err();
-    assert!(matches!(e2, CallError::BadArguments), "{e2}");
+    assert!(matches!(e2, CallError::BadArguments { .. }), "{e2}");
+    assert!(e2.to_string().contains("JSON object"), "{e2}");
+    assert!(fake.log().is_empty());
+}
+
+#[tokio::test]
+async fn arguments_that_violate_the_schema_are_rejected_before_the_browser() {
+    let fake = Fake::new(vec![], vec![tool("say_hello", "https://example.com")]);
+    let err = call(&fake, &catalog(), "example.com/say_hello", json!({ "name": 3 }), &fast())
+        .await
+        .unwrap_err();
+    assert!(matches!(err, CallError::BadArguments { .. }), "{err}");
+    assert!(err.to_string().contains("must be string"), "{err}");
+    assert!(fake.log().is_empty(), "no browser activity for bad arguments");
+
+    let err = call(&fake, &catalog(), "example.com/say_hello", json!({}), &fast())
+        .await
+        .unwrap_err();
+    assert!(err.to_string().contains("missing required field"), "{err}");
     assert!(fake.log().is_empty());
 }
 
@@ -328,7 +368,7 @@ async fn a_page_that_says_not_read_only_does_not_trigger_a_question() {
         &ledger_in(&dir),
         &catalog(),
         "googlechromelabs.github.io/searchFlights",
-        json!({}),
+        json!({ "origin": "SFO", "destination": "JFK", "tripType": "one-way", "outboundDate": "2027-02-10", "inboundDate": "2027-02-17", "passengers": 1 }),
         &fast(),
     )
     .await;

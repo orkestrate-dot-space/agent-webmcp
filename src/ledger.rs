@@ -12,8 +12,10 @@ use sha2::{Digest, Sha256};
 pub enum Outcome {
     Ok,
     Error,
-    /// The call was stopped because it needs the user's approval.
+    /// The call needs approval and there was nobody to ask.
     ApprovalRequired,
+    /// Approval was asked for, but there was no usable answer.
+    Unanswered,
     /// The user was asked and said no.
     Declined,
 }

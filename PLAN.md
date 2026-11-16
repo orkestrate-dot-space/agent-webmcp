@@ -165,10 +165,14 @@ Each step ends with something you can run.
 5. **`call` for community tools.** Inject the script after open, then list
    and invoke. Check: `call example.com/say_hello '{"name":"Ada"}'` returns
    `hello Ada`.
-6. **Policy and ledger.** Read tools run; write tools need approval (CLI:
-   `--yes` or deny; MCP: elicitation). Every call appended to the ledger.
-   Check: unit tests for the decision table; a write call without approval is
-   denied and logged.
+6. **Policy, ledger and argument checks.** Arguments are validated against the
+   tool's `input_schema` before a browser opens. Read tools run; write tools
+   need approval (CLI: `--yes` or ask on the terminal; MCP: elicitation). A
+   question with no answer is recorded as `unanswered`, distinct from
+   `approval_required` where nobody could be asked. Every call is appended to
+   the ledger. Check: unit tests for the decision table and the validator; a
+   write call without approval is denied and logged; bad arguments never reach
+   a browser.
 7. **MCP server.** Expose `find` and `call` over stdio with `rmcp`, with
    output schemas. Check: add it to OpenCode, ask "search flights from SFO to
    JFK" in a fresh session, and the agent uses `find` then `call` without

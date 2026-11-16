@@ -233,11 +233,33 @@ async fn declining_the_prompt_stops_the_call_before_the_browser_opens() {
 }
 
 #[tokio::test]
-async fn cancelling_the_prompt_also_stops_the_call() {
+async fn cancelling_the_prompt_stops_the_call_without_an_answer() {
     let h = start(Some(ElicitationAction::Cancel), true).await;
     let r = call_tool(&h, "call", json!({ "id": "example.com/leave_note", "args": { "text": "hi" } })).await;
     assert_eq!(r.is_error, Some(true));
+    assert!(text(&r).contains("no answer"), "{}", text(&r));
     assert!(h.log.lock().unwrap().is_empty());
+    assert_eq!(h.ledger.read_all().unwrap()[0].outcome, Outcome::Unanswered);
+}
+
+#[tokio::test]
+async fn a_broken_approval_channel_stops_the_call_with_no_answer() {
+    // Elicitation is declared, but the client errors instead of answering.
+    let h = start(None, true).await;
+    let r = call_tool(&h, "call", json!({ "id": "example.com/leave_note", "args": { "text": "hi" } })).await;
+    assert_eq!(r.is_error, Some(true));
+    assert!(text(&r).contains("no answer"), "{}", text(&r));
+    assert!(h.log.lock().unwrap().is_empty());
+    assert_eq!(h.ledger.read_all().unwrap()[0].outcome, Outcome::Unanswered);
+}
+
+#[tokio::test]
+async fn arguments_that_violate_the_schema_are_rejected() {
+    let h = start(None, false).await;
+    let r = call_tool(&h, "call", json!({ "id": "example.com/say_hello", "args": { "name": 3 } })).await;
+    assert_eq!(r.is_error, Some(true));
+    assert!(text(&r).contains("must be string"), "{}", text(&r));
+    assert!(h.log.lock().unwrap().is_empty(), "no browser activity for bad arguments");
 }
 
 #[tokio::test]

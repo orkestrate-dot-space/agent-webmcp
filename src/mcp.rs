@@ -237,9 +237,11 @@ impl Approver for McpApprover {
             .await
         {
             Ok(Some(c)) if c.approve => Decision::Granted,
-            Ok(_) => Decision::Declined,
-            Err(ElicitationError::UserDeclined | ElicitationError::UserCancelled) => Decision::Declined,
-            Err(_) => Decision::Unavailable,
+            // The form was answered with the box unticked, or the client
+            // explicitly declined: the user said no.
+            Ok(_) | Err(ElicitationError::UserDeclined) => Decision::Declined,
+            // Dismissed, timed out, or an unreadable reply: asked, no answer.
+            Err(_) => Decision::Unanswered,
         }
     }
 }

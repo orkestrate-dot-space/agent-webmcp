@@ -7,3 +7,4 @@ pub mod index;
 pub mod ledger;
 pub mod mcp;
 pub mod policy;
+pub mod validate;
