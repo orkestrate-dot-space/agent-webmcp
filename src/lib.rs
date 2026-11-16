@@ -5,4 +5,5 @@ pub mod catalog;
 pub mod engine;
 pub mod index;
 pub mod ledger;
+pub mod mcp;
 pub mod policy;

@@ -6,6 +6,7 @@ use rmcp::{RoleClient, ServiceExt};
 use serde_json::{Value, json};
 
 use crate::backend::{Backend, Invocation, PageTool, Tab};
+use crate::mcp::Provider;
 
 /// agent-browser, used as an MCP client of `agent-browser mcp --tools core,webmcp`.
 pub struct AgentBrowser {
@@ -152,5 +153,26 @@ impl Backend for AgentBrowser {
             )
             .await?;
         parse_invocation(&data)
+    }
+}
+
+/// Starts a fresh agent-browser session for each call and closes it afterwards.
+#[derive(Default)]
+pub struct AgentBrowserProvider {
+    next: std::sync::atomic::AtomicU64,
+}
+
+impl Provider for AgentBrowserProvider {
+    type B = AgentBrowser;
+
+    async fn connect(&self) -> Result<AgentBrowser> {
+        let n = self.next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        AgentBrowser::connect(&format!("agent-webmcp-{}-{n}", std::process::id())).await
+    }
+
+    async fn finish(&self, backend: AgentBrowser) {
+        if let Err(e) = backend.shutdown(true).await {
+            eprintln!("agent-webmcp: closing the browser failed: {e:#}");
+        }
     }
 }

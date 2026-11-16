@@ -1,8 +1,9 @@
-use agent_webmcp::agent_browser::AgentBrowser;
+use agent_webmcp::agent_browser::{AgentBrowser, AgentBrowserProvider};
 use agent_webmcp::approval::{AllowAll, Terminal};
 use agent_webmcp::catalog::{Catalog, Kind, Source};
 use agent_webmcp::engine;
 use agent_webmcp::ledger::Ledger;
+use agent_webmcp::mcp::Server;
 use agent_webmcp::index::Index;
 use clap::{Parser, Subcommand};
 
@@ -43,10 +44,16 @@ async fn main() -> anyhow::Result<()> {
     match Cli::parse().command {
         Command::Find { query, limit } => find(&query.join(" "), limit)?,
         Command::Call { id, args, yes } => call(&id, &args, yes).await?,
-        Command::Mcp => {
-            eprintln!("not implemented: mcp");
-        }
+        Command::Mcp => serve().await?,
     }
+    Ok(())
+}
+
+async fn serve() -> anyhow::Result<()> {
+    use rmcp::ServiceExt;
+    let server = Server::new(Catalog::load()?, AgentBrowserProvider::default(), Ledger::default_location())?;
+    let running = server.serve(rmcp::transport::stdio()).await?;
+    running.waiting().await?;
     Ok(())
 }
 

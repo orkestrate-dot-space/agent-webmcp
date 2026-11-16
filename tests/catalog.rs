@@ -10,7 +10,7 @@ fn entry(id: &str, extra: &str) -> String {
     let (site, name) = id.split_once('/').unwrap();
     format!(
         r#"{{"id":"{id}","site":"{site}","url":"https://{site}/","name":"{name}",
-        "description":"Does a thing.","kind":"read"{extra}}}"#
+        "description":"Does a thing.","kind":"read","input_schema":{{"type":"object"}}{extra}}}"#
     )
 }
 
@@ -45,7 +45,7 @@ fn community_entry_resolves_its_script() {
 #[test]
 fn rejects_id_that_does_not_match_site_and_name() {
     let json = r#"[{"id":"wrong","site":"a.com","url":"https://a.com/","name":"t",
-        "description":"x","kind":"read","source":"native"}]"#;
+        "description":"x","kind":"read","source":"native","input_schema":{"type":"object"}}]"#;
     let err = Catalog::parse(json, scripts()).unwrap_err().to_string();
     assert!(err.contains("id must be"), "{err}");
 }
@@ -84,7 +84,7 @@ fn rejects_native_entry_with_script() {
 #[test]
 fn rejects_non_http_url() {
     let json = r#"[{"id":"a.com/t","site":"a.com","url":"javascript:alert(1)","name":"t",
-        "description":"x","kind":"read","source":"native"}]"#;
+        "description":"x","kind":"read","source":"native","input_schema":{"type":"object"}}]"#;
     let err = Catalog::parse(json, scripts()).unwrap_err().to_string();
     assert!(err.contains("url must start"), "{err}");
 }
@@ -92,7 +92,24 @@ fn rejects_non_http_url() {
 #[test]
 fn rejects_empty_description() {
     let json = r#"[{"id":"a.com/t","site":"a.com","url":"https://a.com/","name":"t",
-        "description":"  ","kind":"read","source":"native"}]"#;
+        "description":"  ","kind":"read","source":"native","input_schema":{"type":"object"}}]"#;
     let err = Catalog::parse(json, scripts()).unwrap_err().to_string();
     assert!(err.contains("description is empty"), "{err}");
+}
+
+#[test]
+fn rejects_an_input_schema_that_is_not_an_object_schema() {
+    let json = r#"[{"id":"a.com/t","site":"a.com","url":"https://a.com/","name":"t",
+        "description":"x","kind":"read","source":"native","input_schema":{"type":"string"}}]"#;
+    let err = Catalog::parse(json, scripts()).unwrap_err().to_string();
+    assert!(err.contains("input_schema"), "{err}");
+}
+
+#[test]
+fn every_embedded_entry_has_a_usable_schema() {
+    let c = Catalog::embedded().unwrap();
+    let flights = c.get("googlechromelabs.github.io/searchFlights").unwrap();
+    let required = flights.input_schema["required"].as_array().unwrap();
+    assert!(required.iter().any(|r| r == "origin"));
+    assert_eq!(flights.input_schema["properties"]["tripType"]["enum"][0], "one-way");
 }

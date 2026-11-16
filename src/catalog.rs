@@ -35,6 +35,8 @@ pub struct Entry {
     pub description: String,
     pub kind: Kind,
     pub source: Source,
+    /// JSON Schema for the arguments. This is the contract the agent sees in `find`.
+    pub input_schema: serde_json::Value,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub script: Option<String>,
 }
@@ -114,6 +116,9 @@ fn validate(entries: &[Entry], scripts: &HashMap<String, String>) -> Result<()> 
         }
         if e.description.trim().is_empty() {
             bail!("entry {:?}: description is empty", e.id);
+        }
+        if e.input_schema.get("type").and_then(|t| t.as_str()) != Some("object") {
+            bail!("entry {:?}: input_schema must be a JSON Schema with \"type\": \"object\"", e.id);
         }
         match (e.source, &e.script) {
             (Source::Community, None) => {
