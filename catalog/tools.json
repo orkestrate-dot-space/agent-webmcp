@@ -1,0 +1,31 @@
+[
+  {
+    "id": "googlechromelabs.github.io/searchFlights",
+    "site": "googlechromelabs.github.io",
+    "url": "https://googlechromelabs.github.io/webmcp-tools/demos/react-flightsearch/",
+    "name": "searchFlights",
+    "description": "Search for flights between two airports on given dates, one way or round trip.",
+    "kind": "read",
+    "source": "native"
+  },
+  {
+    "id": "example.com/say_hello",
+    "site": "example.com",
+    "url": "https://example.com/",
+    "name": "say_hello",
+    "description": "Say hello to someone by name.",
+    "kind": "read",
+    "source": "community",
+    "script": "scripts/example.com.js"
+  },
+  {
+    "id": "example.com/leave_note",
+    "site": "example.com",
+    "url": "https://example.com/",
+    "name": "leave_note",
+    "description": "Leave a short note on the page. Changes the page, so it needs approval.",
+    "kind": "write",
+    "source": "community",
+    "script": "scripts/example.com.js"
+  }
+]
