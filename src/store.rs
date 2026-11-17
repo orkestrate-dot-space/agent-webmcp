@@ -25,7 +25,12 @@ const FIRST_TIMEOUT: Duration = Duration::from_secs(30);
 /// Largest index file the client will accept.
 const MAX_INDEX_BYTES: u64 = 64 * 1024 * 1024;
 
-pub const DEFAULT_POINTER_URL: &str = "https://agent-webmcp-index.agent-webmcp.workers.dev/index.json";
+/// The public address, then the Worker behind it. If the website's rewrite is
+/// ever broken or moved, the CLI still reaches the index.
+pub const POINTER_URLS: &[&str] = &[
+    "https://web.orkestrate.space/webmcp/index.json",
+    "https://agent-webmcp-index.agent-webmcp.workers.dev/index.json",
+];
 
 #[derive(Debug, Deserialize)]
 pub struct Pointer {
@@ -54,8 +59,13 @@ fn state_path() -> PathBuf {
     data_dir().join("index.state")
 }
 
-pub fn pointer_url() -> String {
-    std::env::var("AGENT_WEBMCP_INDEX_URL").unwrap_or_else(|_| DEFAULT_POINTER_URL.to_string())
+/// Addresses to try, in order: an explicit override, or the public address
+/// followed by the Worker behind it.
+pub fn pointer_urls() -> Vec<String> {
+    match std::env::var("AGENT_WEBMCP_INDEX_URL") {
+        Ok(url) if !url.is_empty() => vec![url],
+        _ => POINTER_URLS.iter().map(|u| u.to_string()).collect(),
+    }
 }
 
 pub fn parse(text: &str) -> Result<Index> {
@@ -124,16 +134,32 @@ fn agent(timeout: Duration) -> ureq::Agent {
 }
 
 fn refresh_with(timeout: Duration) -> Result<Index> {
-    let url = pointer_url();
+    let candidates = pointer_urls();
+    let mut first_error = None;
+    for url in &candidates {
+        match refresh_from(url, timeout) {
+            Ok(index) => return Ok(index),
+            Err(e) => {
+                first_error.get_or_insert_with(|| e.context(format!("fetching {url}")));
+            }
+        }
+    }
+    Err(first_error.unwrap_or_else(|| anyhow::anyhow!("no index address configured")))
+}
+
+fn refresh_from(url: &str, timeout: Duration) -> Result<Index> {
     let agent = agent(timeout);
     let path = index_path();
-    let (stored_etag, stored_sha) = read_state();
+    let state = read_state();
 
-    let mut req = agent.get(&url);
-    if let (Some(etag), true) = (&stored_etag, path.exists()) {
+    // An ETag is only meaningful for the origin that issued it.
+    let mut req = agent.get(url);
+    if let (Some(etag), Some(origin), true) = (&state.etag, &state.origin, path.exists())
+        && origin == url
+    {
         req = req.header("If-None-Match", etag);
     }
-    let mut resp = req.call().with_context(|| format!("fetching {url}"))?;
+    let mut resp = req.call()?;
     let status = resp.status().as_u16();
 
     if status == 304 && path.exists() {
@@ -141,20 +167,20 @@ fn refresh_with(timeout: Duration) -> Result<Index> {
         return parse(&std::fs::read_to_string(&path)?);
     }
     if status != 200 {
-        bail!("{url} answered HTTP {status}");
+        bail!("HTTP {status}");
     }
     let etag = resp.headers().get("etag").and_then(|v| v.to_str().ok()).map(str::to_string);
     let pointer: Pointer = serde_json::from_str(&resp.body_mut().read_to_string().context("reading the pointer")?)
         .context("the pointer file is not valid")?;
 
-    if path.exists() && stored_sha.as_deref() == Some(pointer.sha256.as_str()) {
-        write_state(etag.as_deref(), &pointer.sha256);
+    if path.exists() && state.sha.as_deref() == Some(pointer.sha256.as_str()) {
+        write_state(etag.as_deref(), &pointer.sha256, url);
         touch(&path);
         return parse(&std::fs::read_to_string(&path)?);
     }
 
-    let file_url = resolve(&url, &pointer.url);
-    let mut file = agent.get(&file_url).call().with_context(|| format!("fetching {file_url}"))?;
+    let file_url = resolve(url, &pointer.url);
+    let mut file = agent.get(&file_url).call()?;
     if file.status().as_u16() != 200 {
         bail!("{file_url} answered HTTP {}", file.status().as_u16());
     }
@@ -177,7 +203,7 @@ fn refresh_with(timeout: Duration) -> Result<Index> {
     let tmp = path.with_extension("json.tmp");
     std::fs::write(&tmp, &text)?;
     std::fs::rename(&tmp, &path)?;
-    write_state(etag.as_deref(), &pointer.sha256);
+    write_state(etag.as_deref(), &pointer.sha256, url);
     Ok(index)
 }
 
@@ -188,16 +214,22 @@ fn touch(path: &PathBuf) {
     }
 }
 
-fn read_state() -> (Option<String>, Option<String>) {
-    let Ok(text) = std::fs::read_to_string(state_path()) else {
-        return (None, None);
-    };
-    let mut lines = text.lines();
-    let etag = lines.next().filter(|l| !l.is_empty()).map(str::to_string);
-    let sha = lines.next().filter(|l| !l.is_empty()).map(str::to_string);
-    (etag, sha)
+#[derive(Default)]
+struct State {
+    etag: Option<String>,
+    sha: Option<String>,
+    origin: Option<String>,
 }
 
-fn write_state(etag: Option<&str>, sha: &str) {
-    let _ = std::fs::write(state_path(), format!("{}\n{sha}\n", etag.unwrap_or("")));
+fn read_state() -> State {
+    let Ok(text) = std::fs::read_to_string(state_path()) else {
+        return State::default();
+    };
+    let mut lines = text.lines();
+    let field = |l: Option<&str>| l.filter(|v| !v.is_empty()).map(str::to_string);
+    State { etag: field(lines.next()), sha: field(lines.next()), origin: field(lines.next()) }
+}
+
+fn write_state(etag: Option<&str>, sha: &str, origin: &str) {
+    let _ = std::fs::write(state_path(), format!("{}\n{sha}\n{origin}\n", etag.unwrap_or("")));
 }

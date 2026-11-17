@@ -52,7 +52,7 @@ async fn main() -> Result<()> {
                 search.tools(),
                 search.generated_at(),
                 file.display(),
-                store::pointer_url()
+                store::pointer_urls().join(" then ")
             );
             Ok(())
         }
