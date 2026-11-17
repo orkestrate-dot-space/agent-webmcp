@@ -215,3 +215,13 @@ fn one_host_with_several_records_does_not_repeat_a_tool() {
     let hits = s.find("search flights", 5).unwrap();
     assert_eq!(hits.iter().filter(|h| h.tool == "searchFlights").count(), 1, "{hits:#?}");
 }
+
+#[test]
+fn a_brand_with_several_domains_still_narrows() {
+    let mut idx = index();
+    idx.sites.push(site("stripe.dev", None, vec![]));
+    idx.sites.last_mut().unwrap().status = Status::NoTools;
+    let s = Search::build(idx).unwrap();
+    // Stripe has no tools here, and its neighbours are not the answer.
+    assert!(s.find("search stripe docs", 3).unwrap().is_empty());
+}

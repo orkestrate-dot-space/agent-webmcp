@@ -234,33 +234,43 @@ impl Search {
         Ok(rows)
     }
 
-    /// The word in the query that names a site, when exactly one site family
-    /// does. "stripe" matches `docs.stripe.com`; "docs" matches nothing here
-    /// because it is not a host label.
+    /// The word in the query that names a site, when exactly one brand does.
+    /// A word qualifies when every site family it matches begins with it:
+    /// "stripe" covers stripe.com, docs.stripe.com and stripe.dev, while
+    /// "docs" matches docs.whop.com only through a subdomain and never
+    /// qualifies. Sites we checked without finding tools count too: naming one
+    /// means "not that site's neighbours either".
     fn site_filter(&self, words: &[String]) -> Option<String> {
-        let mut hits: Vec<&str> = Vec::new();
-        for s in self.index.sites.iter().filter(|s| s.status == crate::model::Status::Verified) {
-            if s.host.split(['.', '-']).any(|label| words.iter().any(|w| w == label)) {
-                hits.push(&s.host);
+        let mut best: Option<(usize, String)> = None;
+        for word in words {
+            let mut families: Vec<String> = Vec::new();
+            for site in self.index.sites.iter() {
+                if site.host.split(['.', '-']).any(|label| label == word) {
+                    let family = host_family(&site.host);
+                    if !families.contains(&family) {
+                        families.push(family);
+                    }
+                }
+            }
+            if families.is_empty() {
+                continue;
+            }
+            let names_the_brand = families.iter().all(|f| f.split('.').next() == Some(word.as_str()));
+            if !names_the_brand {
+                continue;
+            }
+            if best.as_ref().is_none_or(|(count, _)| families.len() < *count) {
+                best = Some((families.len(), word.clone()));
             }
         }
-        let first = hits.first()?;
-        // More than one site family named: let the words decide, not the filter.
-        let family = host_family(first);
-        if hits.iter().any(|h| host_family(h) != family) {
-            return None;
-        }
-        words.iter().find(|w| family.split(['.', '-']).any(|l| l == *w)).cloned()
+        best.map(|(_, word)| word)
     }
 }
 
-/// One query word as an FTS5 term. Words long enough to survive truncation
-/// match by prefix, so "deploy" finds "deployment" and "document" finds
-/// "documentation"; stems alone do not connect those.
+/// One query word as an FTS5 term. Bare, not quoted: quoting turns stemming
+/// off in FTS5, and a prefix from three characters up covers the inflections
+/// that matter ("deploy" finds "deployment").
 fn term(word: &str) -> String {
-    // Bare, not quoted: quoting a term in FTS5 turns stemming off, so
-    // "deploy" would stop matching "deployment". `words()` already removed
-    // everything that is not alphanumeric, so no escaping is needed.
     if word.chars().count() >= 3 {
         format!("{word}*")
     } else {
