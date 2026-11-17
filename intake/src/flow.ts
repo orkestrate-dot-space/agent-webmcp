@@ -15,7 +15,9 @@ import {
 } from "./index-store";
 import { parseHost, validateRecord, validateSubmission } from "./validate";
 
-const SCAN_TIMEOUT_MS = 10 * 60 * 1000;
+// Generous: a free box can pause for a cooldown mid-scan and resume with the
+// job still running, so a late callback is normal, not a failure.
+const SCAN_TIMEOUT_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 2;
 const REBUILD_EVERY_MS = 7 * 24 * 60 * 60 * 1000;
 

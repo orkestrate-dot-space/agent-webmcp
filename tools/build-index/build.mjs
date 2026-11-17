@@ -31,6 +31,9 @@ const WORKERS = Math.max(1, Number(args.workers ?? 4));
 // the weekly run several times faster.
 const RETRIES = Number(args.retries ?? 2);
 const SETTLE_MS = Number(args.settle ?? 2500);
+// The network-idle wait is what makes a scan slow on pages with analytics or
+// chat widgets. A rebuild can skip it and lean on the fixed settle instead.
+const WAIT_IDLE = !args["skip-networkidle"];
 const ONLY = args.only ? new Set(String(args.only).split(",").map((h) => h.trim())) : null;
 
 const ENGINES = new Set(String(args.engines ?? "lightpanda,agent-browser").split(",").map((e) => e.trim()));
@@ -314,7 +317,7 @@ async function agentBrowserPage(session, url) {
   const commands = [
     ["open", url],
     ["wait", "--load", "load"],
-    ["wait", "--load", "networkidle"],
+    ...(WAIT_IDLE ? [["wait", "--load", "networkidle"]] : []),
     ["webmcp", "list"],
     ["wait", String(SETTLE_MS)],
     ["webmcp", "list"],
@@ -350,8 +353,9 @@ async function agentBrowserPage(session, url) {
   }
   if (opened?.url) out.final_url = opened.url;
 
-  const first = result(3)?.tools ?? [];
-  const second = result(5)?.tools ?? [];
+  const base = WAIT_IDLE ? 3 : 2;
+  const first = result(base)?.tools ?? [];
+  const second = result(base + 2)?.tools ?? [];
   const fromOpen = opened?.webmcp?.tools ?? [];
   const tools = [fromOpen, first, second].reduce((best, list) => (list.length > best.length ? list : best), []);
   out.tools = tools.map((t) => ({
@@ -362,12 +366,12 @@ async function agentBrowserPage(session, url) {
     annotations: normAnnotations(t.annotations),
   }));
 
-  const links = result(6)?.result;
+  const links = result(base + 3)?.result;
   out.links = Array.isArray(links) ? links : [];
-  const now = result(7);
+  const now = result(base + 4);
   const finalUrl = typeof now === "string" ? now : now?.url ?? "";
   if (/^https?:\/\//.test(finalUrl)) out.final_url = finalUrl;
-  const apiRaw = result(8)?.result;
+  const apiRaw = result(base + 5)?.result;
   const apiValue = apiRaw && typeof apiRaw === "object" && "result" in apiRaw ? apiRaw.result : apiRaw;
   if (apiValue === "object") out.api = true;
   else if (typeof apiValue === "string") out.api = false;
