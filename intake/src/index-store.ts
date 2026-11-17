@@ -99,6 +99,24 @@ export async function readSeeds(env: Env): Promise<string> {
   return (await env.INDEX.get(SEEDS_KEY)) ?? "";
 }
 
+/// A listing must survive the next rebuild, which only scans the seed list.
+/// Call this whenever a site is listed outside a rebuild.
+export async function addSeed(env: Env, entry: string): Promise<boolean> {
+  const seeds = await readSeeds(env);
+  const present = seeds.split("\n").some((l) => {
+    const t = l
+      .replace(/(^|\s)#\s.*$/, "")
+      .trim()
+      .replace(/^https?:\/\//, "")
+      .replace(/\/$/, "");
+    return t === entry;
+  });
+  if (present) return false;
+  const block = seeds.includes("# Submissions") ? "" : "\n# Submissions (added automatically when a site is listed)\n";
+  await writeSeeds(env, `${seeds.replace(/\n?$/, "\n")}${block}${entry}\n`);
+  return true;
+}
+
 export async function writeSeeds(env: Env, text: string): Promise<void> {
   await env.INDEX.put(SEEDS_KEY, text);
 }

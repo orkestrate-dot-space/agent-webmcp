@@ -3,6 +3,7 @@
 import type { Env, IndexFile, SiteRecord } from "./env";
 import { boxes, startRebuildShard, startScan } from "./box";
 import {
+  addSeed,
   listingBlockers,
   publishIndex,
   readDenylist,
@@ -13,7 +14,7 @@ import {
   touchGeneratedAt,
   writeDenylist,
 } from "./index-store";
-import { parseHost, validateRecord, validateSubmission } from "./validate";
+import { entryFor, parseHost, validateRecord, validateSubmission } from "./validate";
 
 // Generous: a free box can pause for a cooldown mid-scan and resume with the
 // job still running, so a late callback is normal, not a failure.
@@ -245,6 +246,9 @@ export async function receiveResult(
       spliceRecord(index, rec);
       touchGeneratedAt(index);
       await publishIndex(env, index);
+      // The rebuild only scans the seed list: without this the listing would
+      // vanish on the next rebuild (lost cookiebot.com and cal.com that way).
+      await addSeed(env, entryFor(rec.pages_checked[0] ?? rec.host));
       listed = true;
       message = `Listed with ${rec.tools.length} tool${rec.tools.length === 1 ? "" : "s"}.`;
     }
@@ -498,7 +502,7 @@ export async function receiveRebuild(
   // A rebuild is not a bypass: a record that could not be listed through a
   // submission (bad host, flagged description) must not enter through here.
   const kept: SiteRecord[] = [];
-  let quarantined = 0;
+  const quarantined: string[] = [];
   for (const site of merged.sites) {
     if (denylist.includes(site.host)) continue;
     const entry = site.pages_checked[0]
@@ -506,22 +510,26 @@ export async function receiveRebuild(
       : site.host;
     const checked = validateRecord(site, entry);
     if (!checked.ok) {
-      quarantined += 1;
+      quarantined.push(`${site.host} (invalid: ${checked.reason})`);
       continue;
     }
-    if (site.status === "verified" && listingBlockers(site, denylist).length) {
-      quarantined += 1;
+    const blockers = site.status === "verified" ? listingBlockers(site, denylist) : [];
+    if (blockers.length) {
+      quarantined.push(`${site.host} (${blockers.slice(0, 3).join("; ")})`);
       continue;
     }
     kept.push(site);
   }
   merged.sites = kept;
-  if (quarantined) console.error(`rebuild: quarantined ${quarantined} record(s) that failed listing rules`);
+  const quarantineNote = quarantined.length
+    ? ` Quarantined ${quarantined.length}: ${quarantined.slice(0, 10).join(", ")}${quarantined.length > 10 ? ", …" : ""}.`
+    : "";
+  if (quarantined.length) console.error(`rebuild: quarantined ${quarantined.join(", ")}`);
   await publishIndex(env, merged);
   await env.DB.prepare("UPDATE requests SET state='done', outcome='rebuilt', message=?, updated_at=? WHERE id=?")
     .bind(
-      `Rebuilt: ${merged.sites.length} sites, ${verifiedNow} verified, ${merged.sites.reduce((n, s) => n + s.tools.length, 0)} tools` +
-        (quarantined ? `, ${quarantined} quarantined.` : "."),
+      `Rebuilt: ${merged.sites.length} sites, ${verifiedNow} verified, ${merged.sites.reduce((n, s) => n + s.tools.length, 0)} tools.` +
+        quarantineNote,
       now(),
       running.id,
     )

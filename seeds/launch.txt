@@ -299,3 +299,7 @@ apple.com
 asus.com  # seen
 netgear.com  # seen
 wyze.com  # seen
+
+# Submissions (added automatically when a site is listed)
+cookiebot.com/us
+cal.com
