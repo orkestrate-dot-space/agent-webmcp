@@ -27,6 +27,8 @@ const MAX_PAGES = Number(args.pages ?? 4);
 const WORKERS = Math.max(1, Number(args.workers ?? 4));
 const ONLY = args.only ? new Set(String(args.only).split(",").map((h) => h.trim())) : null;
 
+const ENGINES = new Set(String(args.engines ?? "lightpanda,agent-browser").split(",").map((e) => e.trim()));
+
 const LINT = [
   ["ignore previous", "instruction_override"],
   ["ignore all previous", "instruction_override"],
@@ -541,7 +543,7 @@ async function main() {
 
   // Lightpanda: one MCP server (HTTP) per worker, so browsing sessions are isolated.
   const jump = spawnSync("which", ["lightpanda"], { encoding: "utf8" });
-  const haveLightpanda = jump.status === 0;
+  const haveLightpanda = jump.status === 0 && ENGINES.has("lightpanda");
   const lpResults = new Map();
   if (haveLightpanda) {
     const servers = await Promise.all(
@@ -583,6 +585,9 @@ async function main() {
   }
 
   // agent-browser: one session per worker.
+  if (!ENGINES.has("agent-browser")) {
+    return finish(sites, lpResults, new Map(), previous, started);
+  }
   const sessions = Array.from({ length: WORKERS }, (_, i) => `awm-build-${process.pid}-${i}`);
   const abQueue = [...sites];
   const abResults = new Map();
@@ -611,6 +616,11 @@ async function main() {
     }),
   );
 
+  finish(sites, lpResults, abResults, previous, started);
+}
+
+/// Merge what each engine saw, keep sites through one missed check, write.
+function finish(sites, lpResults, abResults, previous, started) {
   const merged = sites.map((site) => mergeSite(site, lpResults.get(site.entry), abResults.get(site.entry)));
   const kept = carryForward(merged, previous);
   const totals = merged.reduce((m, s) => ({ ...m, [s.status]: (m[s.status] ?? 0) + 1 }), {});
