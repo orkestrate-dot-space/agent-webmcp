@@ -1,37 +1,52 @@
-# First release plan
+# Plan
 
 ## What it is
 
-`agent-webmcp find "<task>"` tells an agent which website has a WebMCP tool
-for the task, and which page to open. The agent opens it with its own browser
-driver and calls the tool there. agent-webmcp never opens a page or calls a
-tool for the agent.
+`agent-webmcp find "<task>"` tells an agent which website has a WebMCP tool for
+the task, and which page to open. The agent opens that page with its own browser
+driver and calls the tool there. agent-webmcp never opens a page or calls a tool
+for the agent.
 
-## Pieces
+## What is built
 
-1. **Index.** Built by loading a curated seed list (`seeds/launch.txt`) in a
-   browser with WebMCP on, using an existing driver (no scanner of our own). Records per tool: name, description, schema,
-   annotations, the page found on, check date. Status per site: verified,
-   no_tools, blocked, error.
-2. **find.** FTS5 search. Platform tools shared by many sites (Mintlify)
-   appear once with a site count. Descriptions that steer the agent are
-   flagged and ranked last.
-3. **Distribution.** CLI and skill; MCP server with `find` only. The index is
-   downloaded on first use and refreshed weekly.
-4. **Website.** `/webmcp/sites` and per-site pages built from the same index
-   file.
-5. **Registries** (community toolkits for sites without tools): designed next,
-   with the user.
+| Piece | State |
+|---|---|
+| `find` | Search over verified sites: the object of a request is required, the verb is not; a word naming an indexed site narrows the search to it; results rerank on where the words land. `--json` adds `relevance`. |
+| Index | `index/index.json`. Built by `tools/build-index` from `seeds/launch.txt` with Lightpanda and agent-browser, unioned per site. Each site records the page each tool was found on and when it was checked. |
+| Delivery | `worker/agent-webmcp-index` publishes a pointer (`index.json`) plus an immutable, hash-addressed index file. The CLI checks hourly with a conditional GET, verifies the sha256, swaps atomically, and keeps the last good copy on any failure. `agent-webmcp status` shows the addresses tried. |
+| MCP server | One tool, `find`. Refreshes the index in the background every hour. |
+| Skill | `skills/agent-webmcp/SKILL.md`: find, then open and call with your own driver. |
+| Publish | `node tools/publish-index.mjs --deploy`. |
 
-## Done when
+## Not built yet
 
-- A fresh agent, given only the skill, finds a tool with `find` and calls it
-  through agent-browser without help.
-- The launch scan has run and the index is published.
-- `/webmcp/sites` shows only scanned sites, with dates.
+1. **Submissions.** GitHub issue form, a scan job with no secrets, a validate job
+   that commits `index/sites/<host>.json` to a `data` branch, and the bot comment
+   with a fix-it checklist. No ownership proof to be listed; takedown by opt-out
+   form.
+2. **Registry.** Static item JSON, `add`/`remove`/`list`/`outdated`/`update`, a
+   lockfile with hashes, the generated extension folder, `setup`, and the first
+   `@orkestrate` items. Reviewed `@orkestrate` only at first.
+3. **Distribution.** CI, binaries per platform, npm `@orkestrate/agent-webmcp@0.2.0`
+   (v1 `0.1.0` deprecated), skill install.
+4. **Website.** `/webmcp` rewrite, "Add your site", registry pages, docs, flags
+   for the other surfaces, Vercel Web Analytics.
+5. **Launch.** Archive push, website deploy, force-push `main`, tag, publish.
 
-## Out of scope for the first release
+## How the index stays honest
 
-- Calling tools, approvals, call logs (drivers do this).
-- Tools that appear only after interaction.
-- Usage counts, claims, badges (after launch).
+- Only what a browser actually saw is listed; a tool that needs interaction to
+  appear is not indexed yet.
+- Blocked sites are recorded as blocked, never solved.
+- A site that misses one check keeps its tools, marked with the date they were
+  last seen; two misses in a row drop it.
+- Descriptions that try to steer the agent are flagged and ranked last.
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `find <task>` | Search the index. `--json` for machine output. |
+| `update` | Check for a newer index now. |
+| `status` | Show the index in use and the addresses tried. |
+| `mcp` | Run the MCP server with one tool, `find`. |
