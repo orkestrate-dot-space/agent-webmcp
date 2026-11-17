@@ -591,7 +591,7 @@ export async function checkSite(entry, { pages = 4, engines = ["agent-browser"],
     }
   }
   if (engines.includes("agent-browser")) {
-    const session = `awm-check-${process.pid}`;
+    const session = process.env.AWM_SESSION || `awm-check-${process.pid}`;
     try {
       const page = (url) => agentBrowserPage(session, url);
       page.engine = "agent-browser";
@@ -695,7 +695,8 @@ async function main() {
   if (!ENGINES.has("agent-browser")) {
     return finish(sites, lpResults, new Map(), previous, started);
   }
-  const sessions = Array.from({ length: WORKERS }, (_, i) => `awm-build-${process.pid}-${i}`);
+  const sessionBase = process.env.AWM_SESSION || `awm-build-${process.pid}`;
+  const sessions = Array.from({ length: WORKERS }, (_, i) => `${sessionBase}-${i}`);
   const abQueue = [...sites];
   const abResults = new Map();
   let abDone = 0;

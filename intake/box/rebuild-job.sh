@@ -15,6 +15,17 @@ mkdir -p "$WORK"
 cd /opt/awm-scan || exit 90
 export AGENT_BROWSER_ARGS="--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport"
 export HOME=/home/scanner
+export AWM_SESSION="awm-rebuild-$ID-$SHARD"
+
+cleanup() {
+  for n in 0 1 2 3; do
+    agent-browser --session "$AWM_SESSION-$n" close >/dev/null 2>&1 || true
+  done
+  pkill -P $$ >/dev/null 2>&1 || true
+  rm -f "$HOME/.agent-browser/$AWM_SESSION"* >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+trap 'exit 143' TERM INT
 
 curl -sS -m 60 "$WORKER/seeds.txt?shard=$SHARD&count=$COUNT" -o "$WORK/seeds.txt" || exit 91
 [ -s "$WORK/seeds.txt" ] || exit 91

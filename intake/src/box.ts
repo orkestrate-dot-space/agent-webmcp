@@ -58,7 +58,7 @@ export async function startScan(
 /// index back and the Worker merges when every shard has reported.
 export async function startRebuildShard(
   env: Env,
-  opts: { id: string; callback: string; token: string; boxId: string; shard: number },
+  opts: { id: string; callback: string; token: string; boxId: string; shard: number; count: number },
 ): Promise<void> {
   const cmd = [
     "sudo -u scanner",
@@ -70,7 +70,7 @@ export async function startRebuildShard(
     shellQuote(env.WORKER_URL),
     shellQuote(env.POINTER_URL),
     shellQuote(String(opts.shard)),
-    shellQuote(String(boxes(env).length)),
+    shellQuote(String(opts.count)),
     ">/dev/null 2>&1 &",
   ].join(" ");
   await exec(env, opts.boxId, cmd, 30);

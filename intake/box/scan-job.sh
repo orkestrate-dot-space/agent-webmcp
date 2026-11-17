@@ -10,7 +10,7 @@ EXTRAS="${5:-}"
 
 OUT="/var/lib/awm-scan/jobs/$ID"
 mkdir -p "$OUT"
-/opt/awm-scan/run-scan.sh "$ENTRY" "$OUT" 3 "$EXTRAS"
+/opt/awm-scan/run-scan.sh "$ENTRY" "$OUT" 3 "$EXTRAS" "$ID"
 
 if [ ! -s "$OUT/result.json" ]; then
   # The scanner crashed before printing a record. Send a valid error record so

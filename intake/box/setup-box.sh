@@ -31,9 +31,21 @@ sudo chown -R "$USER_NAME:$USER_NAME" /var/lib/awm-scan
 
 # Network guard: Chrome runs as the scanner user, so these rules cover every
 # fetch it makes, including one reached by a redirect.
-for net in 169.254.0.0/16 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 127.0.0.0/8 0.0.0.0/8; do
+#
+# Loopback needs care. agent-browser talks to Chrome over a loopback CDP port
+# that Chrome picks at random from the ephemeral range, so blocking 127.0.0.0/8
+# outright makes every launch fail with "Connection refused". Allow loopback
+# only to that range, and reject it below, where the box's own services live.
+guard() { # guard <net> <accept-ephemeral: 0|1>
+  net="$1"
+  if [ "$2" = 1 ]; then
+    sudo iptables -C OUTPUT -m owner --uid-owner "$USER_NAME" -d "$net" -p tcp --dport 32768:65535 -j ACCEPT 2>/dev/null \
+      || sudo iptables -I OUTPUT -m owner --uid-owner "$USER_NAME" -d "$net" -p tcp --dport 32768:65535 -j ACCEPT
+  fi
   sudo iptables -C OUTPUT -m owner --uid-owner "$USER_NAME" -d "$net" -j REJECT 2>/dev/null \
     || sudo iptables -A OUTPUT -m owner --uid-owner "$USER_NAME" -d "$net" -j REJECT
-done
+}
+for net in 169.254.0.0/16 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16; do guard "$net" 0; done
+guard 127.0.0.0/8 1
 
 echo "scanner ready: $(sudo -u "$USER_NAME" bash -lc 'node --version')"

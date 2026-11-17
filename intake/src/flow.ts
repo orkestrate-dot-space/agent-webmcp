@@ -353,7 +353,10 @@ export async function maybeStartRebuild(env: Env, force = false): Promise<boolea
     return false;
   }
 
-  const list = boxes(env);
+  // The first box scans submissions; the rebuild uses the rest so the two
+  // never share a browser. With a single box, it shares.
+  const all = boxes(env);
+  const list = all.length > 1 ? all.slice(1) : all;
   const id = randomHex(8);
   const token = randomHex(24);
   const at = now();
@@ -374,6 +377,7 @@ export async function maybeStartRebuild(env: Env, force = false): Promise<boolea
         token,
         boxId: list[shard],
         shard,
+        count: list.length,
       });
     } catch (e) {
       console.error(`rebuild shard ${shard} did not start`, e);
