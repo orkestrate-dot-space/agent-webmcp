@@ -86,13 +86,26 @@ function bareHost(host) {
 // ---------------------------------------------------------------- lightpanda
 
 async function startLightpanda(port) {
-  const child = spawn("lightpanda", ["mcp", "--port", String(port), "--host", "127.0.0.1"], {
-    stdio: ["ignore", "pipe", "pipe"],
+  let child;
+  try {
+    child = spawn("lightpanda", ["mcp", "--port", String(port), "--host", "127.0.0.1"], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch (e) {
+    throw new Error(`lightpanda not available: ${String(e).slice(0, 120)}`);
+  }
+  // If the binary is missing the child emits 'error' (ENOENT) instead of
+  // throwing. Swallow it here so the fetch loop below times out cleanly and
+  // the caller gets a normal error, not an unhandled 'error' crash.
+  let spawnError = null;
+  child.on("error", (e) => {
+    spawnError = e;
   });
   child.stdout.on("data", () => {});
   child.stderr.on("data", () => {});
   const base = `http://127.0.0.1:${port}/mcp`;
   for (let i = 0; i < 100; i += 1) {
+    if (spawnError) break;
     try {
       await fetch(base, {
         method: "POST",
@@ -104,8 +117,12 @@ async function startLightpanda(port) {
       await sleep(200);
     }
   }
-  child.kill();
-  throw new Error(`lightpanda mcp did not start on port ${port}`);
+  try {
+    child.kill();
+  } catch {}
+  throw new Error(
+    spawnError ? `lightpanda not available: ${String(spawnError).slice(0, 120)}` : `lightpanda mcp did not start on port ${port}`,
+  );
 }
 
 function initParams() {
@@ -500,22 +517,32 @@ function carryForward(sites, previous) {
 
 // ------------------------------------------------------------------ one site
 
-/// Check one site with both engines and return its index record.
-export async function checkSite(entry, { pages = 4, engines = ["lightpanda", "agent-browser"] } = {}) {
+/// Check one site with the requested engines and return its index record.
+/// Defaults to agent-browser only: it is the launch scanner (Chrome 157 needs
+/// the WebMCP flag, set in-process). Lightpanda stays available via --engines
+/// for cross-checks. A missing engine binary yields an `error` record, never
+/// a crash, so CI runners without that binary still produce a valid result.
+export async function checkSite(entry, { pages = 4, engines = ["agent-browser"] } = {}) {
   const start = readSeeds(SEEDS).find((s) => s.entry === entry);
   const host = (start?.host ?? entry.split("/")[0]).replace(/^www\./, "");
   let lpPages;
   let abPages;
 
   if (engines.includes("lightpanda")) {
-    const lp = await startLightpanda(8300 + (process.pid % 200));
+    let lp = null;
     try {
+      lp = await startLightpanda(8300 + (process.pid % 200));
       await lightpandaInit(lp);
       const page = (url) => lightpandaPage(lp, url);
       page.engine = "lightpanda";
       lpPages = await collectPages(page, entry, pages);
+    } catch (e) {
+      const url = `https://${entry.replace(/\/$/, "")}/`;
+      lpPages = [{ url, final_url: url, tools: [], error: String(e).slice(0, 200), links: [], blocked: false, engine: "lightpanda" }];
     } finally {
-      lp.child.kill();
+      try {
+        lp?.child?.kill();
+      } catch {}
     }
   }
   if (engines.includes("agent-browser")) {
