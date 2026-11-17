@@ -156,7 +156,7 @@ async function lightpandaPage(lp, url) {
       name: "evaluate",
       arguments: {
         expression:
-          "return Array.from(document.querySelectorAll('a[href]')).map(a=>a.href).filter(h=>h.startsWith(location.origin)).slice(0,400)",
+          "Array.from(document.querySelectorAll('a[href]')).map(a=>a.href).filter(h=>h.startsWith(location.origin)).slice(0,400)",
       },
     }).catch(() => null);
     out.links = linkList(linkRes);
@@ -260,14 +260,14 @@ async function agentBrowserPage(session, url) {
     const finalUrl = (urlGet.stdout || "").trim().split("\n").pop();
     if (/^https?:\/\//.test(finalUrl)) out.final_url = finalUrl;
     const links = run(
-      ["eval", "return JSON.stringify(Array.from(document.querySelectorAll('a[href]')).map(a=>a.href).filter(h=>h.startsWith(location.origin)).slice(0,400))"],
+      [
+        "eval",
+        "--json",
+        "Array.from(document.querySelectorAll('a[href]')).map(a=>a.href).filter(h=>h.startsWith(location.origin)).slice(0,400)",
+      ],
       20000,
     );
-    try {
-      out.links = JSON.parse((links.stdout || "").trim());
-    } catch {
-      out.links = [];
-    }
+    out.links = parseAbResult(links.stdout);
     out.blocked = /just a moment|attention required|access denied|verify you are human|are you a robot|cf-challenge/i.test(
       `${finalUrl} ${links.stdout}`,
     );
@@ -275,6 +275,18 @@ async function agentBrowserPage(session, url) {
     out.error = String(e).slice(0, 200);
   }
   return out;
+}
+
+/// `agent-browser ... --json` prints { success, data, error }; data.result
+/// holds an eval's value.
+function parseAbResult(stdout) {
+  try {
+    const line = stdout.split("\n").find((l) => l.trim().startsWith("{"));
+    const j = JSON.parse(line ?? "{}");
+    return j.data?.result ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function parseAbTools(stdout) {
