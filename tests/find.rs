@@ -162,3 +162,41 @@ fn a_relative_pointer_target_keeps_the_pointer_s_directory() {
     assert_eq!(store::resolve(p, "indexes/a.json"), "https://index.example/indexes/a.json");
     assert_eq!(store::resolve(p, "/a.json"), "https://index.example/a.json");
 }
+
+#[test]
+fn a_task_nobody_offers_returns_nothing() {
+    let s = Search::build(index()).unwrap();
+    assert!(s.find("get the weather", 5).unwrap().is_empty());
+    assert!(s.find("book a hotel room", 5).unwrap().is_empty());
+}
+
+#[test]
+fn the_action_verb_does_not_have_to_be_in_the_tool() {
+    let s = Search::build(index()).unwrap();
+    // The flight demo's tool is `searchFlights`; "order" appears nowhere.
+    let hits = s.find("order a flight", 3).unwrap();
+    assert_eq!(hits[0].tool, "searchFlights");
+}
+
+#[test]
+fn naming_a_site_keeps_the_answer_on_that_site() {
+    let s = Search::build(index()).unwrap();
+    let hits = s.find("search flights on googlechromelabs", 5).unwrap();
+    assert!(hits.iter().all(|h| h.site == "googlechromelabs.github.io"), "{hits:#?}");
+}
+
+#[test]
+fn relevance_prefers_a_tool_named_for_the_task() {
+    let mut idx = index();
+    idx.sites.push(site(
+        "shop.example",
+        None,
+        vec![
+            tool("manage_orders", "Manage orders.", "https://shop.example/"),
+            tool("create_order", "Create an order.", "https://shop.example/"),
+        ],
+    ));
+    let s = Search::build(idx).unwrap();
+    let hits = s.find("create an order", 3).unwrap();
+    assert_eq!(hits[0].tool, "create_order");
+}

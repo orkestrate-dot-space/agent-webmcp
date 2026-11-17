@@ -28,6 +28,9 @@ pub struct Hit {
     pub platform: Option<Platform>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub flags: Vec<String>,
+    /// How well this matched, higher is better. Only comparable within one
+    /// search, and only useful for spotting a weak match.
+    pub relevance: f64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -53,7 +56,10 @@ impl Search {
     pub fn build(index: Index) -> Result<Self> {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch(
-            "CREATE VIRTUAL TABLE tools USING fts5(site, name, description, params, tokenize = 'porter unicode61');",
+            // No stemming: porter would stem the query term too, so "deploy"
+            // becomes "deploi" and stops matching "deployment". Prefix terms
+            // (see `term`) cover the inflections that matter instead.
+            "CREATE VIRTUAL TABLE tools USING fts5(site, name, description, params, tokenize = 'unicode61');",
         )?;
         let mut rows = Vec::new();
         let mut platform_sites: BTreeMap<String, usize> = BTreeMap::new();
@@ -98,21 +104,44 @@ impl Search {
     /// best-ranked site), with the number of sites that share it. Flagged
     /// tools come after clean ones.
     pub fn find(&self, query: &str, limit: usize) -> Result<Vec<Hit>> {
-        let Some(fts) = fts_query(query) else {
+        let words = content_words(query);
+        if words.is_empty() {
             return Ok(Vec::new());
-        };
-        let mut stmt = self.conn.prepare(
-            "SELECT rowid FROM tools WHERE tools MATCH ?1 ORDER BY bm25(tools, 8.0, 5.0, 2.0, 1.0) LIMIT ?2",
-        )?;
-        let wanted = (limit * 20).max(200) as i64;
-        let ids: Vec<i64> = stmt
-            .query_map(params![fts, wanted], |r| r.get(0))?
-            .collect::<rusqlite::Result<_>>()?;
+        }
+        // A word that names an indexed site narrows the search to that site, so
+        // "search stripe docs" never answers with another company's docs.
+        let site = self.site_filter(&words);
+        // The verb in a request describes what the caller wants to do, not what
+        // the tool is called: "order a pizza" is answered by `manage_pizza`, so
+        // only the object words have to be present.
+        let subjects: Vec<String> = words.iter().filter(|w| !ACTION_WORDS.contains(&w.as_str())).cloned().collect();
+        let required = if subjects.is_empty() { &words } else { &subjects };
+        let mut ids = self.match_rows(required, site.as_deref())?;
+        if ids.is_empty() && words.len() > 1 {
+            // Nothing has the object. Accept a match on any two words, which
+            // still needs more than one coincidental term.
+            ids = self.any_two_rows(&words, site.as_deref())?;
+        }
+
+        // Order by where the words land: a tool named for the task beats one
+        // that mentions it in passing. Every word counts, verbs included, so
+        // "add to cart" prefers a tool that says add.
+        let mut scored: Vec<(f64, f64, i64)> = ids
+            .into_iter()
+            .map(|(id, rank)| {
+                let row = &self.rows[(id - 1) as usize];
+                let site = &self.index.sites[row.site];
+                let tool = &site.tools[row.tool];
+                let score = relevance(&words, &site.host, &tool.name, &tool.description, &tool.input_schema);
+                (score, rank, id)
+            })
+            .collect();
+        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal).then(a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)));
 
         let mut seen_platform_tools: Vec<(String, String)> = Vec::new();
         let mut clean = Vec::new();
         let mut flagged = Vec::new();
-        for id in ids {
+        for (relevance, _rank, id) in scored {
             let row = &self.rows[(id - 1) as usize];
             let site = &self.index.sites[row.site];
             let tool = &site.tools[row.tool];
@@ -150,6 +179,7 @@ impl Search {
                 checked_at: site.checked_at.clone(),
                 platform,
                 flags: tool.flags.clone(),
+                relevance,
             };
             if hit.flags.is_empty() { clean.push(hit) } else { flagged.push(hit) }
             if clean.len() >= limit {
@@ -160,6 +190,81 @@ impl Search {
         clean.truncate(limit);
         Ok(clean)
     }
+
+    /// Rows matching every content word, best first.
+    fn match_rows(&self, words: &[String], site: Option<&str>) -> Result<Vec<(i64, f64)>> {
+        let expr = words.iter().map(|w| term(w)).collect::<Vec<_>>().join(" AND ");
+        self.ranked(&expr, site)
+    }
+
+    /// Rows matching at least two of the content words.
+    fn any_two_rows(&self, words: &[String], site: Option<&str>) -> Result<Vec<(i64, f64)>> {
+        let mut pairs = Vec::new();
+        for (i, a) in words.iter().enumerate() {
+            for b in &words[i + 1..] {
+                pairs.push(format!("({} AND {})", term(a), term(b)));
+            }
+        }
+        if pairs.is_empty() {
+            return Ok(Vec::new());
+        }
+        self.ranked(&pairs.join(" OR "), site)
+    }
+
+    fn ranked(&self, expr: &str, site: Option<&str>) -> Result<Vec<(i64, f64)>> {
+        let fts = match site {
+            Some(s) => format!("site:\"{s}\" AND ({expr})"),
+            None => format!("({expr})"),
+        };
+        let mut stmt = self.conn.prepare(
+            "SELECT rowid, bm25(tools, 8.0, 5.0, 2.0, 1.0) AS rank FROM tools WHERE tools MATCH ?1 ORDER BY rank LIMIT ?2",
+        )?;
+        let wanted = 400i64;
+        let rows = stmt
+            .query_map(params![fts, wanted], |r| Ok((r.get(0)?, r.get(1)?)))?
+            .collect::<rusqlite::Result<_>>()?;
+        Ok(rows)
+    }
+
+    /// The word in the query that names a site, when exactly one site family
+    /// does. "stripe" matches `docs.stripe.com`; "docs" matches nothing here
+    /// because it is not a host label.
+    fn site_filter(&self, words: &[String]) -> Option<String> {
+        let mut hits: Vec<&str> = Vec::new();
+        for s in self.index.sites.iter().filter(|s| s.status == crate::model::Status::Verified) {
+            if s.host.split(['.', '-']).any(|label| words.iter().any(|w| w == label)) {
+                hits.push(&s.host);
+            }
+        }
+        let first = hits.first()?;
+        // More than one site family named: let the words decide, not the filter.
+        let family = host_family(first);
+        if hits.iter().any(|h| host_family(h) != family) {
+            return None;
+        }
+        words.iter().find(|w| family.split(['.', '-']).any(|l| l == *w)).cloned()
+    }
+}
+
+/// One query word as an FTS5 term. Words long enough to survive truncation
+/// match by prefix, so "deploy" finds "deployment" and "document" finds
+/// "documentation"; stems alone do not connect those.
+fn term(word: &str) -> String {
+    // Bare, not quoted: quoting a term in FTS5 turns stemming off, so
+    // "deploy" would stop matching "deployment". `words()` already removed
+    // everything that is not alphanumeric, so no escaping is needed.
+    if word.chars().count() >= 3 {
+        format!("{word}*")
+    } else {
+        word.to_string()
+    }
+}
+
+/// The registered-domain-ish part of a host, for grouping sites that belong
+/// together (`docs.stripe.com` and `stripe.com`).
+fn host_family(host: &str) -> String {
+    let parts: Vec<&str> = host.split('.').collect();
+    parts[parts.len().saturating_sub(2)..].join(".")
 }
 
 /// Property names from a JSON Schema, as searchable words.
@@ -194,19 +299,86 @@ const STOPWORDS: &[&str] = &[
     "a", "an", "and", "any", "are", "as", "at", "be", "by", "can", "do", "for", "from", "how", "i",
     "in", "is", "it", "me", "my", "of", "on", "or", "please", "so", "that", "the", "this", "to",
     "up", "what", "when", "where", "which", "with", "you", "want", "need", "some", "site", "website",
+    // FTS5 query operators: never treat them as search terms.
+    "and", "or", "not", "near",
 ];
 
-/// Free text to a safe FTS5 query: every word quoted, joined with OR.
-fn fts_query(query: &str) -> Option<String> {
-    let mut seen = Vec::new();
+/// The words that describe a capability: stopwords and punctuation dropped,
+/// camelCase split, order kept, duplicates removed.
+fn content_words(query: &str) -> Vec<String> {
+    let mut seen: Vec<String> = Vec::new();
     for w in words(query).split_whitespace() {
         let w = w.to_lowercase();
         if !STOPWORDS.contains(&w.as_str()) && !seen.contains(&w) {
             seen.push(w);
         }
     }
-    if seen.is_empty() {
-        return None;
-    }
-    Some(seen.iter().map(|w| format!("\"{w}\"")).collect::<Vec<_>>().join(" OR "))
+    seen
 }
+
+/// How well a tool answers a query: every query word adds weight depending on
+/// whether it appears in the tool's name, its site, its description or its
+/// input fields. Words match by prefix, so "deploy" finds "deployment".
+fn relevance(words: &[String], host: &str, name: &str, description: &str, schema: &Value) -> f64 {
+    let fields = schema["properties"]
+        .as_object()
+        .map(|p| p.keys().cloned().collect::<Vec<_>>().join(" "))
+        .unwrap_or_default();
+    let name = name.replace(['_', '.'], " ");
+    let mut score = 0.0;
+    for w in words {
+        if contains_word(&name, w) {
+            score += 4.0;
+        }
+        if contains_word(host, w) {
+            score += 3.0;
+        }
+        if contains_word(description, w) {
+            score += 2.0;
+        }
+        if contains_word(&fields, w) {
+            score += 1.0;
+        }
+    }
+    let score: f64 = score;
+    (score * 100.0).round() / 100.0
+}
+
+/// Whether `text` has a word that starts with `word`, case-insensitively.
+fn contains_word(text: &str, word: &str) -> bool {
+    text.split(|c: char| !c.is_alphanumeric())
+        .filter(|t| !t.is_empty())
+        .any(|t| {
+            let t = t.to_lowercase();
+            t.starts_with(word) || camel_pieces(t.as_str()).any(|p| p.starts_with(word))
+        })
+}
+
+/// "openDocumentation" also offers "open" and "documentation".
+fn camel_pieces(word: &str) -> impl Iterator<Item = String> + '_ {
+    let mut pieces = Vec::new();
+    let mut current = String::new();
+    let mut prev_lower = false;
+    for c in word.chars() {
+        if c.is_uppercase() && prev_lower && !current.is_empty() {
+            pieces.push(current.to_lowercase());
+            current = String::new();
+        }
+        current.push(c);
+        prev_lower = c.is_lowercase() || c.is_ascii_digit();
+    }
+    if !current.is_empty() {
+        pieces.push(current.to_lowercase());
+    }
+    pieces.into_iter()
+}
+
+/// Words that say what the caller wants to do. A tool rarely carries them in
+/// its name, so they rank but do not have to match.
+const ACTION_WORDS: &[&str] = &[
+    "add", "ask", "book", "buy", "cancel", "check", "create", "delete", "deploy", "edit", "find", "get",
+    "list", "look", "make", "manage", "open", "order", "read", "remove", "reserve", "search", "send",
+    "set", "share", "show", "start", "submit", "track", "update", "view", "write",
+];
+
+
