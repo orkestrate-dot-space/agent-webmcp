@@ -16,6 +16,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
 
 const args = parseArgs(process.argv.slice(2));
@@ -465,6 +466,60 @@ function carryForward(sites, previous) {
   return kept;
 }
 
+// ------------------------------------------------------------------ one site
+
+/// Check one site with both engines and return its index record.
+export async function checkSite(entry, { pages = 4, engines = ["lightpanda", "agent-browser"] } = {}) {
+  const start = readSeeds(SEEDS).find((s) => s.entry === entry);
+  const host = (start?.host ?? entry.split("/")[0]).replace(/^www\./, "");
+  let lpPages;
+  let abPages;
+
+  if (engines.includes("lightpanda")) {
+    const lp = await startLightpanda(8300 + (process.pid % 200));
+    try {
+      await lightpandaInit(lp);
+      const page = (url) => lightpandaPage(lp, url);
+      page.engine = "lightpanda";
+      lpPages = await collectPages(page, entry, pages);
+    } finally {
+      lp.child.kill();
+    }
+  }
+  if (engines.includes("agent-browser")) {
+    const session = `awm-check-${process.pid}`;
+    try {
+      const page = (url) => agentBrowserPage(session, url);
+      page.engine = "agent-browser";
+      abPages = await collectPages(page, entry, pages);
+    } finally {
+      spawnSync("agent-browser", ["--session", session, "close"], { encoding: "utf8", timeout: 30_000 });
+    }
+  }
+  const site = {
+    entry,
+    host: host.toLowerCase(),
+    url: `https://${entry.replace(/\/$/, "")}/`,
+  };
+  return mergeSite(site, lpPages ? lpPages.map((p) => ({ ...p, engine: "lightpanda" })) : undefined, abPages ? abPages.map((p) => ({ ...p, engine: "agent-browser" })) : undefined);
+}
+
+/// A homepage plus the likely pages it links to, for one engine.
+async function collectPages(pageFn, entry, maxPages) {
+  const url = `https://${entry.replace(/\/$/, "")}/`;
+  const pages = [];
+  let first = await pageFn(url);
+  if (!first.tools.length && !first.error && !first.blocked) {
+    const again = await pageFn(url);
+    if (again.tools.length) first = again;
+  }
+  pages.push(first);
+  if (!first.error && !first.blocked) {
+    for (const next of pickPages(first.final_url, first.links, maxPages)) pages.push(await pageFn(next));
+  }
+  return pages;
+}
+
 // ---------------------------------------------------------------------- main
 
 async function main() {
@@ -567,7 +622,11 @@ async function main() {
   );
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+// Importable: `checkSite` scans one site for tools/check-site.mjs. Only a
+// direct run builds the index.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}
