@@ -1,0 +1,147 @@
+name: Weekly index rebuild
+
+# The trusted, heavy job. Unlike per-submission scans (which run on disposable
+# GitHub runners with no secrets), the full rebuild runs on ephemeral instabox
+# boxes: one fresh box per shard, deleted afterwards. Input is only our own
+# seeds file, so the INSTABOX_API_KEY secret is safe to use here.
+#
+# Result is a PR with the rebuilt index, never a direct push: a maintainer
+# reviews the newly-verified and dropped hosts, merges, and publishes with
+# `node tools/publish-index.mjs --deploy`.
+#
+# Required secret: INSTABOX_API_KEY (a machine-scoped API key).
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: index-rebuild
+  cancel-in-progress: false
+
+jobs:
+  shard:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      count: ${{ steps.make.outputs.count }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Split seeds into 5 shards
+        id: make
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const lines = fs.readFileSync("seeds/launch.txt", "utf8").split("\n");
+            const entries = lines
+              .map((l) => l.replace(/(^|\s)#\s.*$/, "").trim())
+              .filter((l) => l && !l.startsWith("#"));
+            const N = 5, size = Math.ceil(entries.length / N);
+            fs.mkdirSync("/tmp/shards", { recursive: true });
+            for (let i = 0; i < N; i += 1) {
+              fs.writeFileSync(`/tmp/shards/shard-${i + 1}.txt`, entries.slice(i * size, (i + 1) * size).join("\n") + "\n");
+            }
+            console.log(`entries=${entries.length}`);
+          '
+          echo "count=5" >> "$GITHUB_OUTPUT"
+      - name: Upload shards
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: shards
+          path: /tmp/shards/
+          retention-days: 7
+
+  build:
+    needs: shard
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5]
+    steps:
+      - name: Check out
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Download shards
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: shards
+          path: /tmp/shards
+      - name: Install the instabox CLI
+        run: npm install --global instabox@latest
+      - name: Scan one shard on a fresh box
+        env:
+          INSTABOX_API_KEY: ${{ secrets.INSTABOX_API_KEY }}
+          SHARD: ${{ matrix.shard }}
+        run: |
+          SHARD_LINES=$(cat "/tmp/shards/shard-${SHARD}.txt")
+          instabox run --push tools --push seeds --timeout 10m \
+            -e SHARD_LINES="$SHARD_LINES" \
+            -e POINTER_URL="https://agent-webmcp-index.agent-webmcp.workers.dev/index.json" \
+            -- 'echo "$SHARD_LINES" > /tmp/shard.txt
+              curl -s "$POINTER_URL" -o /tmp/pointer.json
+              URL=$(node -e "const p=require(\"/tmp/pointer.json\");console.log(new URL(p.url, \"$POINTER_URL\").href)")
+              curl -s "$URL" -o /tmp/previous.json
+              node tools/build-index/build.mjs --seeds /tmp/shard.txt --pages 3 --workers 4 --engines agent-browser --previous /tmp/previous.json --out /tmp/out.json >/dev/null 2>/tmp/build.log
+              cat /tmp/out.json' > "/tmp/out-${SHARD}.json"
+          node -e "const j=require(\"/tmp/out-${SHARD}.json\");console.log(\"shard ${SHARD}:\", j.sites.length, \"sites\")"
+
+      - name: Upload shard result
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: shard-results
+          path: /tmp/out-*.json
+          retention-days: 7
+
+  propose:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - name: Download shard results
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: shard-results
+          path: /tmp/results
+          merge-multiple: true
+      - name: Merge and sanity-check
+        run: |
+          node tools/merge-index.mjs --inputs /tmp/results/out-1.json,/tmp/results/out-2.json,/tmp/results/out-3.json,/tmp/results/out-4.json,/tmp/results/out-5.json --out index/index.json
+          node -e '
+            const cur = require("./index/index.json");
+            const v = cur.sites.filter((s) => s.status === "verified").length;
+            const t = cur.sites.reduce((n, s) => n + s.tools.length, 0);
+            console.log(`merged: ${cur.sites.length} sites, ${v} verified, ${t} tools`);
+            if (v < 40) { console.error("REFUSING: verified sites collapsed, the scan must be broken"); process.exit(1); }
+          '
+      - name: Open the weekly PR
+        run: |
+          BRANCH="index/rebuild-$(date -u +%Y-%m-%d)"
+          git checkout -b "$BRANCH"
+          git add index/index.json
+          git -c user.name=agent-webmcp-bot -c user.email=bot@orkestrate.space commit -m "Weekly index rebuild ($(date -u +%Y-%m-%d))"
+          git push origin "$BRANCH"
+          gh pr create --title "Weekly index rebuild ($(date -u +%Y-%m-%d))" --base main --head "$BRANCH" \
+            --body "Automated rebuild across 5 ephemeral boxes. Review newly-verified and dropped hosts, merge, then publish with \`node tools/publish-index.mjs --deploy\`."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

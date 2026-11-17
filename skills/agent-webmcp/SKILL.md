@@ -38,7 +38,11 @@ driver's WebMCP tools. Call it with the arguments from the schema.
 | Playwright MCP | tools named `webmcp_<tool>` appear after navigation | call `webmcp_<tool>` |
 | OpenCode Browse | `webmcp` with `action: "list"` | `webmcp` with `action: "call"` |
 
-The driver needs a Chrome with WebMCP on. agent-browser turns it on by default.
+The driver needs a Chrome with WebMCP switched on. agent-browser 0.43+ only
+enables WebMCP testing support by default, which is not enough on Chrome 157:
+run it with the feature flag, e.g.
+`export AGENT_BROWSER_ARGS="--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport"`.
+Without the flag the page registers nothing and `webmcp list` comes back empty.
 
 A tool may register a moment after the page loads. If it is missing, wait for
 the page to finish loading and list again.

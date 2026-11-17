@@ -1,0 +1,25 @@
+name: Request takedown
+description: Remove your site from the index, or report a bad listing.
+title: "Takedown: "
+labels: ["takedown"]
+body:
+  - type: input
+    id: host
+    attributes:
+      label: Host
+      description: The hostname to remove, e.g. example.com.
+      placeholder: example.com
+    validations:
+      required: true
+  - type: textarea
+    id: reason
+    attributes:
+      label: Reason
+      description: Owner request, wrong tools, hijacked domain, anything we should know.
+    validations:
+      required: true
+  - type: input
+    id: contact
+    attributes:
+      label: Contact (optional)
+      description: Where to reach you. Never published.
