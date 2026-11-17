@@ -79,14 +79,14 @@ the old index and records why in D1.
 ## Box setup (once per box)
 
 ```bash
-sudo useradd -m -s /bin/bash scanner
-sudo mkdir -p /opt/awm-scan /var/lib/awm-scan/jobs /var/lib/awm-scan/rebuild
-# tools/ comes from this repo
-sudo cp -r tools /opt/awm-scan/
-sudo chown -R root:root /opt/awm-scan && sudo chmod -R a+rX /opt/awm-scan
-sudo cp intake/box/*.sh /opt/awm-scan/ && sudo chmod 755 /opt/awm-scan/*.sh
-sudo chown -R scanner:scanner /var/lib/awm-scan
+# on the box, with this repo's tools/ in /data/home
+HERE=/data/home bash intake/box/setup-box.sh
 ```
+
+`setup-box.sh` creates the unprivileged `scanner` user, installs the scripts
+under `/opt/awm-scan`, and adds iptables rules that stop `scanner` from reaching
+private, loopback and metadata ranges. The rules are not persistent across a
+reboot: rerun the script after one.
 
 Refresh `tools/` after changing the scanner; the box never holds a token.
 
