@@ -5,7 +5,7 @@
 //   node tools/build-index/build.mjs [--seeds seeds/launch.txt]
 //        [--out index/index.json] [--pages 4] [--workers 4]
 //        [--previous index/index.json] [--only host,host]
-//        [--retries 2] [--settle 2500]
+//        [--retries 2] [--quiet 3000] [--cap 20000]
 //
 // Engines:
 //   lightpanda    its own MCP server (HTTP), one process per worker.
@@ -30,10 +30,11 @@ const WORKERS = Math.max(1, Number(args.workers ?? 4));
 // chance; a scheduled rebuild can lean on the carry rule instead, which makes
 // the weekly run several times faster.
 const RETRIES = Number(args.retries ?? 2);
-const SETTLE_MS = Number(args.settle ?? 2500);
-// The network-idle wait is what makes a scan slow on pages with analytics or
-// chat widgets. A rebuild can skip it and lean on the fixed settle instead.
-const WAIT_IDLE = !args["skip-networkidle"];
+// Settle polling: stop QUIET_MS after the tool set stops changing, give up at
+// CAP_MS. Polls are one process each, ~1s.
+const QUIET_MS = Number(args.quiet ?? 3000);
+const CAP_MS = Number(args.cap ?? 20000);
+const POLL_MS = 500;
 const ONLY = args.only ? new Set(String(args.only).split(",").map((h) => h.trim())) : null;
 
 const ENGINES = new Set(String(args.engines ?? "lightpanda,agent-browser").split(",").map((e) => e.trim()));
@@ -57,6 +58,10 @@ const LINT = [
 /// (vercel.com: 0 tools stock, 5 with it). Verified on Chrome 157.0.8103.78.
 const WEBMCP_ARGS = "--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport";
 const abEnv = () => ({ ...process.env, AGENT_BROWSER_ARGS: WEBMCP_ARGS });
+
+/// The recorder init script, installed before the first navigation so staged
+/// and legacy registrations are logged from the very first call.
+const RECORDER_PATH = resolve(dirname(new URL(import.meta.url).pathname), "recorder.js");
 
 const PAGE_HINTS = ["/docs", "/search", "/pricing", "/products", "/product", "/shop", "/api", "/help"];
 
@@ -304,83 +309,221 @@ function isBlocked(out, nav) {
 
 // ------------------------------------------------------------- agent-browser
 
+/// What the settle poll reads each round: the current tool names, whether the
+/// page API exists, and how many registrations the recorder has seen. Any
+/// change restarts the quiet window.
+const STATE_SRC = `(async()=>{
+  let names=[], api="missing", logLen=0;
+  try { api = (typeof document.modelContext); } catch(e) { api = "error"; }
+  try { if (document.modelContext && document.modelContext.getTools) names = (await document.modelContext.getTools()).map(t=>t && t.name).filter(Boolean); } catch(e) {}
+  try { logLen = (window.__wmcLog||[]).length; } catch(e) {}
+  return {names, api, logLen};
+})()`;
+
+/// Full tool records for the final union. inputSchema can arrive as an object
+/// (webmcp list) or a JSON string (page getTools); both are normalized.
+const FULL_SRC = `(async()=>{
+  try {
+    if (document.modelContext && document.modelContext.getTools) {
+      const t = await document.modelContext.getTools();
+      return t.map(x=>({name:x.name,description:x.description||"",inputSchema:(typeof x.inputSchema==="string"?(function(){try{return JSON.parse(x.inputSchema)}catch(e){return {}}})():x.inputSchema)??x.input_schema??{},origin:x.origin||"",annotations:x.annotations||{}}));
+    }
+    return [];
+  } catch(e) { return []; }
+})()`;
+
+const RECORDER_SRC = `(()=>{try{return (window.__wmcLog||[]).map(e=>e.name).filter(Boolean);}catch(e){return [];}})()`;
+
+function spawnAgentBrowser(argv, { input, timeout = 60_000 } = {}) {
+  return spawnSync("agent-browser", argv, { input, encoding: "utf8", timeout, env: abEnv() });
+}
+
+function parseBatch(stdout) {
+  try {
+    const batch = JSON.parse((stdout || "").trim());
+    return Array.isArray(batch) ? batch : null;
+  } catch {
+    return null;
+  }
+}
+
+function evalState(session, src) {
+  const res = spawnAgentBrowser(["--session", session, "eval", "--stdin", "--json"], { input: src });
+  try {
+    const j = JSON.parse((res.stdout || "").trim());
+    const data = j && typeof j === "object" && "data" in j ? j.data : j;
+    return data?.result ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function normRecord(t) {
+  let schema = t.inputSchema ?? t.input_schema ?? {};
+  if (typeof schema === "string") {
+    try {
+      schema = JSON.parse(schema);
+    } catch {
+      schema = {};
+    }
+  }
+  return {
+    name: t.name,
+    description: t.description ?? "",
+    input_schema: typeof schema === "object" && schema !== null ? schema : {},
+    origin: t.origin ?? "",
+    annotations: normAnnotations(t.annotations),
+  };
+}
+
+/// Merge full records by tool name, keeping the richer one.
+function unionRecords(lists) {
+  const byName = new Map();
+  for (const list of lists) {
+    for (const raw of list) {
+      if (!raw || typeof raw.name !== "string") continue;
+      const next = normRecord(raw);
+      const prev = byName.get(next.name);
+      if (!prev) {
+        byName.set(next.name, next);
+        continue;
+      }
+      if (!prev.description && next.description) prev.description = next.description;
+      if (!prev.origin && next.origin) prev.origin = next.origin;
+      if (!prev.input_schema || Object.keys(prev.input_schema).length === 0) prev.input_schema = next.input_schema;
+      prev.annotations = {
+        read_only: prev.annotations.read_only || next.annotations.read_only,
+        consequential: prev.annotations.consequential || next.annotations.consequential,
+        untrusted_content: prev.annotations.untrusted_content || next.annotations.untrusted_content,
+      };
+    }
+  }
+  return [...byName.values()];
+}
+
+function settleLoop(session) {
+  // Poll until the tool set stops changing for QUIET_MS, or CAP_MS passes.
+  // Staged registration (shop.dev shows 4 then 22) arrives in batches seconds
+  // apart, so a fixed sleep either misses stages or wastes minutes.
+  const t0 = Date.now();
+  let prevKey = null;
+  let quietSince = t0;
+  let polls = 0;
+  let state = null;
+  for (;;) {
+    state = evalState(session, STATE_SRC);
+    polls += 1;
+    const key = state
+      ? `${[...state.names].sort().join(",")}#${state.logLen}`
+      : `null#${polls}`;
+    const now = Date.now();
+    if (key !== prevKey) {
+      prevKey = key;
+      quietSince = now;
+    }
+    if (now - quietSince >= QUIET_MS) return { settled: true, ms: now - t0, polls, state };
+    if (now - t0 >= CAP_MS) return { settled: false, ms: now - t0, polls, state };
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, POLL_MS);
+  }
+}
+
 async function agentBrowserPage(session, url) {
   const out = { url, final_url: url, tools: [], blocked: false, error: null, links: [] };
-  // One process per page. `agent-browser` costs about a second to start, so a
-  // call per command made a full run take an hour. Commands go in as JSON on
-  // stdin: the argv form strips quotes out of an eval expression.
-  // Pages must finish loading before we read tools: wait for the load event
-  // and then for the network to go quiet (analytics and chat widgets keep it
-  // busy on some sites, so this can time out and that is fine). Tools can
-  // also register in stages after load (shop.dev shows 4 then 22), so list,
-  // wait, and list again, keeping whichever saw more.
-  const commands = [
-    ["open", url],
-    ["wait", "--load", "load"],
-    ...(WAIT_IDLE ? [["wait", "--load", "networkidle"]] : []),
-    ["webmcp", "list"],
-    ["wait", String(SETTLE_MS)],
-    ["webmcp", "list"],
-    ["eval", LINKS],
-    ["get", "url"],
-    // Whether the page API exists at all. A page with the flag on reports
-    // "object" even when it registers nothing, so "undefined" here means the
-    // scan browser is wrong, not the site.
-    ["eval", "typeof document.modelContext"],
-  ];
-  const res = spawnSync("agent-browser", ["--session", session, "batch", "--json"], {
-    input: JSON.stringify(commands),
-    encoding: "utf8",
-    timeout: 120_000,
-    env: abEnv(),
-  });
-  let batch;
-  try {
-    batch = JSON.parse((res.stdout || "").trim());
-  } catch {
-    out.error = (res.stderr || res.stdout || "batch failed").trim().slice(0, 200);
+  // One process per call; `agent-browser` costs about a second to start. The
+  // recorder init script is installed before the first navigation so staged
+  // and legacy registrations are logged from the very first call.
+  const openRes = spawnAgentBrowser(
+    ["--init-script", RECORDER_PATH, "--session", session, "batch", "--json"],
+    {
+      input: JSON.stringify([
+        ["open", url],
+        ["wait", "--load", "load", "--timeout", "15000"],
+      ]),
+      timeout: 90_000,
+    },
+  );
+  const openBatch = parseBatch(openRes.stdout);
+  if (!openBatch) {
+    out.error = (openRes.stderr || openRes.stdout || "open failed").trim().slice(0, 200);
     return out;
   }
-  if (!Array.isArray(batch)) {
-    out.error = "unexpected batch output";
-    return out;
-  }
-  const result = (i) => batch[i]?.result;
-  const opened = result(0);
-  if (batch[0]?.error && !opened?.url) {
-    out.error = String(batch[0].error).slice(0, 200);
+  const opened = openBatch[0]?.result;
+  if (openBatch[0]?.error && !opened?.url) {
+    out.error = String(openBatch[0].error).slice(0, 200);
     return out;
   }
   if (opened?.url) out.final_url = opened.url;
+  const openTools = opened?.webmcp?.tools ?? [];
 
-  const base = WAIT_IDLE ? 3 : 2;
-  const first = result(base)?.tools ?? [];
-  const second = result(base + 2)?.tools ?? [];
-  const fromOpen = opened?.webmcp?.tools ?? [];
-  const tools = [fromOpen, first, second].reduce((best, list) => (list.length > best.length ? list : best), []);
-  out.tools = tools.map((t) => ({
-    name: t.name,
-    description: t.description ?? "",
-    input_schema: t.inputSchema ?? {},
-    origin: t.origin ?? "",
-    annotations: normAnnotations(t.annotations),
-  }));
+  const p1 = settleLoop(session);
 
-  const links = result(base + 3)?.result;
+  const finalRes = spawnAgentBrowser(["--session", session, "batch", "--json"], {
+    input: JSON.stringify([
+      ["webmcp", "list"],
+      ["eval", FULL_SRC],
+      ["eval", RECORDER_SRC],
+      ["eval", LINKS],
+      ["get", "url"],
+    ]),
+    timeout: 90_000,
+  });
+  const finalBatch = parseBatch(finalRes.stdout);
+  const result = (i) => finalBatch?.[i]?.result;
+  const unwrap = (v) => (v && typeof v === "object" && "result" in v ? v.result : v);
+  const listTools = result(0)?.tools ?? [];
+  const fullTools = unwrap(result(1)) ?? [];
+  void unwrap(result(2)); // recorder names: activity signal only, resolved via getTools
+  const links = unwrap(result(3));
   out.links = Array.isArray(links) ? links : [];
-  const now = result(base + 4);
-  const finalUrl = typeof now === "string" ? now : now?.url ?? "";
-  if (/^https?:\/\//.test(finalUrl)) out.final_url = finalUrl;
-  const apiRaw = result(base + 5)?.result;
-  const apiValue = apiRaw && typeof apiRaw === "object" && "result" in apiRaw ? apiRaw.result : apiRaw;
-  if (apiValue === "object") out.api = true;
-  else if (typeof apiValue === "string") out.api = false;
-  out.blocked = /just a moment|attention required|access denied|verify you are human|are you a robot|cf-challenge/i.test(
-    `${out.final_url} ${res.stdout.slice(0, 4000)}`,
-  );
-  const failed = batch.find((b) => b?.error);
-  if (failed) out.note = String(failed.error).slice(0, 200);
+  const finalUrl = unwrap(result(4));
+  const finalUrlStr = typeof finalUrl === "string" ? finalUrl : finalUrl?.url ?? "";
+  if (/^https?:\/\//.test(finalUrlStr)) out.final_url = finalUrlStr;
+
+  // The API exists whenever the scan browser is right, even on a site with no
+  // tools. Absent everywhere means the scanner is wrong, not the site.
+  if (p1.state?.api === "object") out.api = true;
+  else if (typeof p1.state?.api === "string") out.api = false;
+
+  // Records only: a name the recorder saw but no source can describe is not
+  // listable. The recorder still did its job by keeping the set open.
+  const getToolsRecords = Array.isArray(fullTools) ? fullTools : [];
+  out.tools = unionRecords([openTools, listTools, getToolsRecords]);
+
+  // One more look: registration can miss a busy first load.
+  if (!out.tools.length && !out.error && !isBlockedPage(out, finalRes.stdout)) {
+    const reloadRes = spawnAgentBrowser(["--session", session, "batch", "--json"], {
+      input: JSON.stringify([
+        ["reload"],
+        ["wait", "--load", "load", "--timeout", "15000"],
+      ]),
+      timeout: 90_000,
+    });
+    if (parseBatch(reloadRes.stdout)) {
+      const p2 = settleLoop(session);
+      if (p2.state?.api === "object") out.api = true;
+      const list2 = spawnAgentBrowser(["--session", session, "webmcp", "list", "--json"], { timeout: 60_000 });
+      let second = [];
+      try {
+        const j = JSON.parse((list2.stdout || "").trim());
+        second = (j && typeof j === "object" && "data" in j ? j.data : j)?.tools ?? [];
+      } catch {}
+      const full2 = evalState(session, FULL_SRC);
+      out.tools = unionRecords([out.tools, second, Array.isArray(full2) ? full2 : []]);
+    }
+  }
+
+  out.blocked = isBlockedPage(out, (openRes.stdout || "") + (finalRes.stdout || ""));
+  const failed = [...(openBatch ?? []), ...(finalBatch ?? [])].find((b) => b?.error);
+  if (failed && !out.tools.length) out.note = String(failed.error).slice(0, 200);
   return out;
+
+  function isBlockedPage(o, text) {
+    return (
+      /just a moment|attention required|access denied|verify you are human|are you a robot|cf-challenge/i.test(
+        `${o.final_url} ${String(text).slice(0, 4000)}`,
+      ) && o.tools.length === 0
+    );
+  }
 }
 
 // ------------------------------------------------------------------ planning

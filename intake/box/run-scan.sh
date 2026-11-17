@@ -10,7 +10,8 @@ ENTRY="${1:?entry}"
 OUT="${2:?out dir}"
 PAGES="${3:-3}"
 EXTRAS="${4:-}"
-JOB="${5:-$$}"
+# Session names allow only letters, digits, hyphens and underscores.
+JOB="$(printf '%s' "${5:-$$}" | tr -c 'A-Za-z0-9_-' '_')"
 
 mkdir -p "$OUT"
 cd /opt/awm-scan || exit 90

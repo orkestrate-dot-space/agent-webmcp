@@ -55,8 +55,6 @@ node tools/build-index/build.mjs \
   --pages 2 \
   --workers 4 \
   --retries 0 \
-  --settle 1200 \
-  --skip-networkidle \
   --engines agent-browser \
   $PREV_ARG \
   --out "$WORK/out.json" >"$WORK/build.log" 2>&1 || exit 92
