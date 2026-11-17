@@ -53,7 +53,7 @@ PREV_ARG=""
 node tools/build-index/build.mjs \
   --seeds "$WORK/seeds.txt" \
   --pages 2 \
-  --workers 4 \
+  --workers 2 \
   --retries 0 \
   --engines agent-browser \
   $PREV_ARG \

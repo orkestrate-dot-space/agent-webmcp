@@ -14,6 +14,7 @@ import {
   touchGeneratedAt,
   writeDenylist,
 } from "./index-store";
+import { holdBackToolLoss } from "./guard";
 import { entryFor, parseHost, validateRecord, validateSubmission } from "./validate";
 
 // Generous: a free box can pause for a cooldown mid-scan and resume with the
@@ -498,6 +499,13 @@ export async function receiveRebuild(
     return { status: 200, body: { ok: false } };
   }
 
+  const guarded = holdBackToolLoss(merged.sites, current?.sites ?? []);
+  merged.sites = guarded.sites;
+  const guardNote = guarded.kept.length
+    ? ` Kept the previous record for ${guarded.kept.length} site(s) that lost over a third of their tools: ${guarded.kept.slice(0, 10).join(", ")}.`
+    : "";
+  if (guarded.kept.length) console.error(`rebuild: kept previous record for ${guarded.kept.join(", ")}`);
+
   const denylist = await readDenylist(env);
   // A rebuild is not a bypass: a record that could not be listed through a
   // submission (bad host, flagged description) must not enter through here.
@@ -529,6 +537,7 @@ export async function receiveRebuild(
   await env.DB.prepare("UPDATE requests SET state='done', outcome='rebuilt', message=?, updated_at=? WHERE id=?")
     .bind(
       `Rebuilt: ${merged.sites.length} sites, ${verifiedNow} verified, ${merged.sites.reduce((n, s) => n + s.tools.length, 0)} tools.` +
+        guardNote +
         quarantineNote,
       now(),
       running.id,
