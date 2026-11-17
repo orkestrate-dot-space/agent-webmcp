@@ -47,18 +47,21 @@ async fn main() -> Result<()> {
             let search = Search::build(tokio::task::spawn_blocking(store::load).await??)?;
             let file = std::env::var_os("AGENT_WEBMCP_INDEX").map(PathBuf::from).unwrap_or_else(store::index_path);
             println!(
-                "{} sites, {} tools\ngenerated {}\nfile {}",
+                "{} sites, {} tools\ngenerated {}\nfile {}\nchecks {}",
                 search.sites(),
                 search.tools(),
                 search.generated_at(),
-                file.display()
+                file.display(),
+                store::pointer_url()
             );
             Ok(())
         }
         Command::Mcp => {
             use rmcp::ServiceExt;
             let search = Search::build(tokio::task::spawn_blocking(store::load).await??)?;
-            let running = Server::new(search).serve(rmcp::transport::stdio()).await?;
+            let server = Server::new(search);
+            server.spawn_refresh();
+            let running = server.serve(rmcp::transport::stdio()).await?;
             running.waiting().await?;
             Ok(())
         }

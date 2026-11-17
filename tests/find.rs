@@ -139,3 +139,26 @@ fn naming_the_site_ranks_that_site_first() {
     let s = Search::build(idx).unwrap();
     assert_eq!(s.find("search stripe docs", 3).unwrap()[0].site, "docs.stripe.com");
 }
+
+#[test]
+fn a_pointer_url_resolves_against_its_own_address() {
+    let p = "https://index.example/webmcp/index.json";
+    assert_eq!(store::resolve(p, "indexes/abc.json"), "https://index.example/webmcp/indexes/abc.json");
+    assert_eq!(store::resolve(p, "/indexes/abc.json"), "https://index.example/webmcp/indexes/abc.json");
+    assert_eq!(store::resolve(p, "https://other.example/x.json"), "https://other.example/x.json");
+}
+
+#[test]
+fn the_index_hash_is_sha256_hex() {
+    // Known SHA-256 of the empty string.
+    assert_eq!(store::sha256_hex(b""), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    assert_eq!(store::sha256_hex(b"abc").len(), 64);
+    assert_ne!(store::sha256_hex(b"abc"), store::sha256_hex(b"abd"));
+}
+
+#[test]
+fn a_relative_pointer_target_keeps_the_pointer_s_directory() {
+    let p = "https://index.example/index.json";
+    assert_eq!(store::resolve(p, "indexes/a.json"), "https://index.example/indexes/a.json");
+    assert_eq!(store::resolve(p, "/a.json"), "https://index.example/a.json");
+}

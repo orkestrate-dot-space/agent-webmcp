@@ -13,3 +13,8 @@ node_modules/
 .preview/
 .agents/
 skills-lock.json
+
+# index worker build output
+/worker/node_modules/
+/worker/.cloudflare/
+/worker/public/indexes/

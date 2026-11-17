@@ -1,6 +1,7 @@
 //! MCP server exposing one tool, `find`.
 
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use rmcp::model::{
     CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation, InitializeResult,
@@ -27,6 +28,40 @@ pub struct Server {
 impl Server {
     pub fn new(search: Search) -> Self {
         Self { search: Arc::new(Mutex::new(search)) }
+    }
+
+    /// The shared search, so a background task can swap in a newer index.
+    pub fn shared(&self) -> Arc<Mutex<Search>> {
+        self.search.clone()
+    }
+
+    /// Check for a newer index every hour, with a little jitter so many
+    /// clients do not ask at the same moment. A failure is reported once and
+    /// the current index is kept. `--index` and `AGENT_WEBMCP_INDEX` pin a
+    /// file, so nothing is fetched then.
+    pub fn spawn_refresh(&self) {
+        if std::env::var_os("AGENT_WEBMCP_INDEX").is_some() {
+            return;
+        }
+        let shared = self.shared();
+        let jitter = Duration::from_secs(u64::from(std::process::id()) % 300);
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(60 * 60) + jitter).await;
+            loop {
+                let fresh = tokio::task::spawn_blocking(crate::store::refresh).await;
+                match fresh {
+                    Ok(Ok(index)) => match Search::build(index) {
+                        Ok(search) => {
+                            *shared.lock().expect("search lock") = search;
+                        }
+                        Err(e) => eprintln!("agent-webmcp: could not build the new index: {e:#}"),
+                    },
+                    Ok(Err(e)) => eprintln!("agent-webmcp: keeping the current index ({e:#})"),
+                    Err(e) => eprintln!("agent-webmcp: index refresh task failed: {e:#}"),
+                }
+                tokio::time::sleep(Duration::from_secs(60 * 60)).await;
+            }
+        });
     }
 
     fn find(&self, args: &serde_json::Map<String, Value>) -> CallToolResult {
