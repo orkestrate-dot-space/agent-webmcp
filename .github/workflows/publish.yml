@@ -5,6 +5,12 @@ name: Publish a verified submission
 # workspace, validated strictly, and only a clean verified record can cause a
 # branch, a commit, or a PR. Nothing here loads a stranger's URL.
 #
+# Repo settings required (Settings → Actions → General):
+# - "Allow GitHub Actions to create and approve pull requests" ON, or the
+#   listing PR cannot be opened and the job fails loudly with needs-review.
+# - Workflow permissions default to read; this job declares its own
+#   actions/issues/contents/pull-requests writes.
+#
 # The issue number travels in the artifact (meta.json, written from trusted
 # event context by the scan job). It is only a routing hint: the job fetches
 # the issue back and proceeds only if it is open and labelled site-submission.

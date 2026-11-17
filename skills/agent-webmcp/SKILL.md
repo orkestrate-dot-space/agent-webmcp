@@ -43,6 +43,8 @@ enables WebMCP testing support by default, which is not enough on Chrome 157:
 run it with the feature flag, e.g.
 `export AGENT_BROWSER_ARGS="--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport"`.
 Without the flag the page registers nothing and `webmcp list` comes back empty.
+OpenCode Browse drives your own Chrome, which takes no flags: there only
+sites with a WebMCP origin-trial token show tools.
 
 A tool may register a moment after the page loads. If it is missing, wait for
 the page to finish loading and list again.
