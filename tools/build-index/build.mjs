@@ -42,6 +42,13 @@ const LINT = [
   ["<script", "markup"],
 ];
 
+/// Chrome 157 keeps `document.modelContext` off unless the WebMCP feature is
+/// on, and agent-browser's own defaults only enable WebMCPTesting and DevTools
+/// support. Without this, a site that registers tools reads as having none
+/// (vercel.com: 0 tools stock, 5 with it). Verified on Chrome 157.0.8103.78.
+const WEBMCP_ARGS = "--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport";
+const abEnv = () => ({ ...process.env, AGENT_BROWSER_ARGS: WEBMCP_ARGS });
+
 const PAGE_HINTS = ["/docs", "/search", "/pricing", "/products", "/product", "/shop", "/api", "/help"];
 
 /// Same-origin links on the page, as a bare expression both engines evaluate.
@@ -277,6 +284,7 @@ async function agentBrowserPage(session, url) {
     input: JSON.stringify(commands),
     encoding: "utf8",
     timeout: 120_000,
+    env: abEnv(),
   });
   let batch;
   try {
@@ -517,7 +525,7 @@ export async function checkSite(entry, { pages = 4, engines = ["lightpanda", "ag
       page.engine = "agent-browser";
       abPages = await collectPages(page, entry, pages);
     } finally {
-      spawnSync("agent-browser", ["--session", session, "close"], { encoding: "utf8", timeout: 30_000 });
+      spawnSync("agent-browser", ["--session", session, "close"], { encoding: "utf8", timeout: 30_000, env: abEnv() });
     }
   }
   const site = {
@@ -625,7 +633,7 @@ async function main() {
         abDone += 1;
         process.stderr.write(`agent-browser: ${abDone}/${sites.length} ${site.entry} ${pages.reduce((n, p) => n + p.tools.length, 0)} tools\n`);
       }
-      spawnSync("agent-browser", ["--session", session, "close"], { encoding: "utf8", timeout: 30000 });
+      spawnSync("agent-browser", ["--session", session, "close"], { encoding: "utf8", timeout: 30000, env: abEnv() });
     }),
   );
 
