@@ -131,7 +131,11 @@ jobs:
               }
               run("git", ["-c", "user.name=agent-webmcp-bot", "-c", "user.email=bot@orkestrate.space",
                 "commit", "-m", `Add ${decision.entry} (submission #${meta.issue})`], { stdio: "inherit" });
-              const push = run("git", ["push", "origin", branch], { stdio: "inherit" });
+              // Force-push: a rescan of the same issue rebuilds the branch
+              // from scratch (new timestamp), so a plain push rejects after
+              // the first attempt. submission/* branches are bot-owned; humans
+              // review through the PR, never by committing to the branch.
+              const push = run("git", ["push", "-f", "origin", branch], { stdio: "inherit" });
               if (push.status !== 0) {
                 await fail(`git push exited ${push.status}`);
                 return;
