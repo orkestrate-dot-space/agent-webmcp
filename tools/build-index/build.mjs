@@ -152,10 +152,19 @@ async function lightpandaPage(lp, url) {
     const nav = await rpc(lp, "tools/call", { name: "goto", arguments: { url } });
     out.final_url = nav?.structuredContent?.url ?? url;
     const status = nav?.structuredContent?.httpStatus ?? 0;
-    // Let hydration and late registration finish.
-    await sleep(1500);
-    await rpc(lp, "tools/call", { name: "waitForState", arguments: { state: "networkidle" } }).catch(() => {});
-    const tools = await rpc(lp, "tools/call", { name: "pageTools", arguments: {} });
+    // Let hydration and late registration finish, but never wait long for a
+    // network that never goes idle: analytics and chat widgets keep fetching.
+    await sleep(800);
+    await rpc(lp, "tools/call", {
+      name: "waitForState",
+      arguments: { state: "networkalmostidle", timeout: 4000 },
+    }).catch(() => {});
+    // Tools can register in stages; take early ones, then look again.
+    let tools = await rpc(lp, "tools/call", { name: "pageTools", arguments: {} });
+    for (let i = 0; i < 3 && extractTools(tools).length === 0; i += 1) {
+      await sleep(700);
+      tools = await rpc(lp, "tools/call", { name: "pageTools", arguments: {} });
+    }
     out.tools = extractTools(tools);
     const linkRes = await rpc(lp, "tools/call", {
       name: "evaluate",
@@ -249,7 +258,7 @@ async function agentBrowserPage(session, url) {
   // stdin: the argv form strips quotes out of an eval expression.
   const commands = [
     ["open", url],
-    ["wait", "1500"],
+    ["wait", "1000"],
     ["webmcp", "list"],
     ["eval", LINKS],
     ["get", "url"],
