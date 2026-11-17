@@ -23,16 +23,14 @@ previous version is on the `archive/v1-main` branch.
 | `find <task>` | Search the index. `--json` for machine output. |
 | `update` | Download the latest index now (it also refreshes itself weekly). |
 | `status` | Show the index in use. |
-| `scan <hosts>` or `scan --list <file>` | Load sites in Chrome and record the tools they register. |
 | `mcp` | Run an MCP server with one tool, `find`. |
 
-## How the index is made
+## The index
 
-`agent-webmcp scan` loads each site's homepage and a few likely pages (docs,
-search, pricing, products) in headless Chrome with WebMCP on, and records
-every tool the pages register: name, description, input schema, annotations,
-the page it was found on, and when. It only reads. It never calls a tool,
-submits a form, or solves a bot check; blocked sites are recorded as blocked.
+`index/index.json` lists, for each checked site, the WebMCP tools its pages
+register: name, description, input schema, annotations, the page the tool was
+found on, and the date. Sites that showed no tools, were blocked by a bot
+check or failed to load are recorded with that status and are not searchable.
 
 Tools that only appear after you interact with a page (for example, after a
 search) are not indexed yet.

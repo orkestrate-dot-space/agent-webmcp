@@ -9,8 +9,8 @@ tool for the agent.
 
 ## Pieces
 
-1. **Index.** Produced by `agent-webmcp scan` over a curated seed list
-   (`seeds/launch.txt`). Records per tool: name, description, schema,
+1. **Index.** Built by loading a curated seed list (`seeds/launch.txt`) in a
+   browser with WebMCP on, using an existing driver (no scanner of our own). Records per tool: name, description, schema,
    annotations, the page found on, check date. Status per site: verified,
    no_tools, blocked, error.
 2. **find.** FTS5 search. Platform tools shared by many sites (Mintlify)

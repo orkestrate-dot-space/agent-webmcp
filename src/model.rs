@@ -1,4 +1,4 @@
-//! The index: what a scan found on each site.
+//! The index: the WebMCP tools each checked site registers.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -65,7 +65,7 @@ pub struct Tool {
     pub origin: String,
     #[serde(default)]
     pub annotations: Annotations,
-    /// Set when the description was flagged by the lint (for example, it gives
+    /// Set when the description was flagged when the index was built (for example, it gives
     /// the agent orders). Flagged tools are kept but ranked last and marked.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub flags: Vec<String>,

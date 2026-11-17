@@ -5,17 +5,13 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.104"
-chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
 clap = { version = "4.6.7", features = ["derive"] }
-futures-util = "0.3.34"
 rmcp = { version = "3.10.0", default-features = false, features = ["server", "macros", "base64", "transport-io"] }
 rusqlite = { version = "0.43.0", features = ["bundled"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
-tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "process", "time", "net", "sync", "io-util", "fs"] }
-tokio-tungstenite = "0.30.0"
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "io-util"] }
 ureq = "3.5.2"
-which = "8.0.6"
 
 [dev-dependencies]
 tempfile = "3.27.0"

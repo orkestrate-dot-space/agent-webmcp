@@ -1,7 +1,7 @@
-# Launch seed list for agent-webmcp scans.
+# Launch seed list for building the index.
 # One host per line; a path only when the site lives under it.
 # "seen" marks hosts a public directory lists as having tools. Every host is
-# checked by our own scan; nothing is copied from those directories.
+# loaded and checked by us; nothing is copied from those directories.
 
 # WebMCP demos
 googlechromelabs.github.io/webmcp-tools/demos/react-flightsearch  # seen
