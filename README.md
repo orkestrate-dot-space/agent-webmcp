@@ -13,7 +13,9 @@ googlechromelabs.github.io/searchFlights  [read]
 Open that page with agent-browser, Playwright MCP or OpenCode Browse, and
 `searchFlights` is in the driver's WebMCP tools.
 
-Status: rebuilding for the first release. See [PLAN.md](PLAN.md). The
+Status: pre-launch. `index/index.json` holds the launch index (52 sites
+checked, 38 verified with 227 tools); submissions arrive through the
+`add-site` issue form and are proposed by a bot, merged by a maintainer. The
 previous version is on the `archive/v1-main` branch.
 
 ## Commands
@@ -34,6 +36,11 @@ check or failed to load are recorded with that status and are not searchable.
 
 Tools that only appear after you interact with a page (for example, after a
 search) are not indexed yet.
+
+To list a site, open the `add-site` issue form. A bot checks the site in a
+fresh browser and opens a listing PR when it verifies; a maintainer merges it.
+Takedown works the same way through the takedown form. No ownership proof is
+needed to be listed: the bot lists only what the site registers with WebMCP on.
 
 `find` needs the object of your request, not the verb: "order a pizza" finds
 `manage_pizza`. A word that names an indexed site narrows the search to that

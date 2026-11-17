@@ -54,9 +54,13 @@ jobs:
             core.setOutput("entry", result.entry);
             core.setOutput("urls", JSON.stringify(result.urls));
 
-      - name: Install agent-browser
+      - name: Install the scan browser
         if: steps.request.outputs.entry != ''
-        run: npm install --global agent-browser
+        # agent-browser needs its own Chromium plus system libs. Runners
+        # allow sudo, which --with-deps uses for the libs.
+        run: |
+          npm install --global agent-browser
+          agent-browser install --with-deps
 
       - name: Check the site
         if: steps.request.outputs.entry != ''
