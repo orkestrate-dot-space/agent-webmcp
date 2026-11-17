@@ -534,9 +534,10 @@ export async function receiveRebuild(
     : "";
   if (quarantined.length) console.error(`rebuild: quarantined ${quarantined.join(", ")}`);
   await publishIndex(env, merged);
+  const verifiedKept = merged.sites.filter((s) => s.status === "verified").length;
   await env.DB.prepare("UPDATE requests SET state='done', outcome='rebuilt', message=?, updated_at=? WHERE id=?")
     .bind(
-      `Rebuilt: ${merged.sites.length} sites, ${verifiedNow} verified, ${merged.sites.reduce((n, s) => n + s.tools.length, 0)} tools.` +
+      `Rebuilt: ${merged.sites.length} sites, ${verifiedKept} verified, ${merged.sites.reduce((n, s) => n + s.tools.length, 0)} tools.` +
         guardNote +
         quarantineNote,
       now(),
