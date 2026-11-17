@@ -88,6 +88,15 @@ under `/opt/awm-scan`, and adds iptables rules that stop `scanner` from reaching
 private, loopback and metadata ranges. The rules are not persistent across a
 reboot: rerun the script after one.
 
+Requirements on the box (instabox's `agent-browser` template has all three):
+
+- passwordless sudo for the box user, because every job runs as
+  `sudo -u scanner`;
+- Node in the scanner's PATH (`/usr/local/bin/node`);
+- `agent-browser` and its own Chromium installed **as scanner**, so it uses
+  Chrome 157+ rather than the distro's older Chromium:
+  `sudo -u scanner agent-browser install`.
+
 Refresh `tools/` after changing the scanner; the box never holds a token.
 
 ## Rollback

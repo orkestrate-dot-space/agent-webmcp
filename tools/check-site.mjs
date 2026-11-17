@@ -26,11 +26,16 @@ const flag = (name, fallback) => {
 
 const entry = url.replace(/^https?:\/\//, "").replace(/\/$/, "");
 const pages = Number(flag("pages", 4));
+// Extra pages the site owner asked for, one per line or comma separated.
+const extras = String(flag("extra", ""))
+  .split(/[\n,]/)
+  .map((u) => u.trim())
+  .filter(Boolean);
 const engines = String(flag("engines", "agent-browser"))
   .split(",")
   .map((e) => e.trim())
   .filter(Boolean);
-const site = await checkSite(entry, { pages, engines });
+const site = await checkSite(entry, { pages, engines, extras });
 process.stdout.write(`${JSON.stringify(site, null, 2)}\n`);
 
 const tools = site.tools.length;

@@ -150,7 +150,11 @@ export default {
       }
       if (url.pathname === "/admin/retry" && request.method === "POST") {
         const id = url.searchParams.get("id") ?? "";
-        await env.DB.prepare("UPDATE requests SET state='queued', attempts=0, updated_at=? WHERE id=? AND state='done'")
+        // Only a finished site request can be requeued; a rebuild is started
+        // through /admin/rebuild.
+        await env.DB.prepare(
+          "UPDATE requests SET state='queued', attempts=0, updated_at=? WHERE id=? AND state='done' AND kind='site'",
+        )
           .bind(new Date().toISOString().replace(/\.\d+Z$/, "Z"), id)
           .run();
         return json({ ok: true }, 200, origin);

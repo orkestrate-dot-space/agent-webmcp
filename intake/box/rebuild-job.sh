@@ -19,13 +19,20 @@ export HOME=/home/scanner
 curl -sS -m 60 "$WORKER/seeds.txt?shard=$SHARD&count=$COUNT" -o "$WORK/seeds.txt" || exit 91
 [ -s "$WORK/seeds.txt" ] || exit 91
 
-# The previous index lets one missed check keep a site's tools.
+# The previous index lets one missed check keep a site's tools. If the live
+# index exists but cannot be read, fail the shard: publishing without history
+# would delist every site that misses one check.
 if curl -sS -m 60 "$POINTER" -o "$WORK/pointer.json"; then
   URL=$(node -e 'const p=require(process.argv[1]);console.log(new URL(p.url,process.argv[2]).href)' \
     "$WORK/pointer.json" "$POINTER" 2>/dev/null)
-  if [ -n "${URL:-}" ]; then
-    curl -sS -m 120 "$URL" -o "$WORK/previous.json" || rm -f "$WORK/previous.json"
+  if [ -z "${URL:-}" ]; then
+    echo "pointer has no usable url" >&2
+    exit 93
   fi
+  curl -sS -m 120 "$URL" -o "$WORK/previous.json" || exit 93
+  [ -s "$WORK/previous.json" ] || exit 93
+else
+  echo "no published pointer; rebuilding without history" >&2
 fi
 
 PREV_ARG=""

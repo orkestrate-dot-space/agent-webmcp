@@ -6,11 +6,12 @@ set -u
 ENTRY="${1:?entry}"
 OUT="${2:?out dir}"
 PAGES="${3:-3}"
+EXTRAS="${4:-}"
 mkdir -p "$OUT"
 cd /opt/awm-scan || exit 90
 export AGENT_BROWSER_ARGS="--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport"
 export HOME=/home/scanner
-node tools/check-site.mjs "$ENTRY" --pages "$PAGES" > "$OUT/result.json" 2> "$OUT/check.log"
+node tools/check-site.mjs "$ENTRY" --pages "$PAGES" --extra "$EXTRAS" > "$OUT/result.json" 2> "$OUT/check.log"
 CODE=$?
 echo "exit=$CODE"
 tail -3 "$OUT/check.log"

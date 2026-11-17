@@ -567,7 +567,7 @@ function carryForward(sites, previous) {
 /// the WebMCP flag, set in-process). Lightpanda stays available via --engines
 /// for cross-checks. A missing engine binary yields an `error` record, never
 /// a crash, so CI runners without that binary still produce a valid result.
-export async function checkSite(entry, { pages = 4, engines = ["agent-browser"] } = {}) {
+export async function checkSite(entry, { pages = 4, engines = ["agent-browser"], extras = [] } = {}) {
   const start = readSeeds(SEEDS).find((s) => s.entry === entry);
   const host = (start?.host ?? entry.split("/")[0]).replace(/^www\./, "");
   let lpPages;
@@ -596,6 +596,13 @@ export async function checkSite(entry, { pages = 4, engines = ["agent-browser"] 
       const page = (url) => agentBrowserPage(session, url);
       page.engine = "agent-browser";
       abPages = await collectPages(page, entry, pages);
+      // Pages the owner named are checked as given, in order.
+      for (const extra of extras.slice(0, 3)) {
+        if (!/^https:\/\//.test(extra)) continue;
+        const p = await page(extra);
+        p.engine = "agent-browser";
+        abPages.push(p);
+      }
     } finally {
       spawnSync("agent-browser", ["--session", session, "close"], { encoding: "utf8", timeout: 30_000, env: abEnv() });
     }

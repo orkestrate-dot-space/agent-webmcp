@@ -165,6 +165,15 @@ export async function pumpQueue(env: Env): Promise<void> {
     }
   }
 
+  // One scan at a time: the box has one browser and the scripts share a
+  // session. A live scan means wait for the next minute.
+  const live = await env.DB.prepare(
+    "SELECT 1 AS n FROM requests WHERE state = 'scanning' AND kind = 'site' AND updated_at > ? LIMIT 1",
+  )
+    .bind(new Date(Date.now() - SCAN_TIMEOUT_MS).toISOString())
+    .first<{ n: number }>();
+  if (live) return;
+
   const next = await env.DB.prepare(
     "SELECT * FROM requests WHERE state = 'queued' AND kind = 'site' ORDER BY created_at LIMIT 1",
   ).first<Row>();
@@ -172,16 +181,30 @@ export async function pumpQueue(env: Env): Promise<void> {
 
   await env.DB.prepare("UPDATE requests SET state='scanning', updated_at=? WHERE id=?").bind(now(), next.id).run();
   try {
+    let extras: string[] = [];
+    try {
+      const parsed = JSON.parse(next.pages) as unknown;
+      if (Array.isArray(parsed)) extras = parsed.filter((u): u is string => typeof u === "string");
+    } catch {}
     await startScan(env, {
       id: next.id,
       entry: next.entry,
+      extras,
       callback: `${env.WORKER_URL}/callback`,
       token: next.token,
     });
   } catch (e) {
-    await env.DB.prepare("UPDATE requests SET state='queued', attempts=attempts+1, updated_at=? WHERE id=?")
-      .bind(now(), next.id)
-      .run();
+    if (next.attempts + 1 >= MAX_ATTEMPTS) {
+      await env.DB.prepare(
+        "UPDATE requests SET state='done', outcome='error', message=?, attempts=attempts+1, updated_at=? WHERE id=?",
+      )
+        .bind("The scan box could not be reached. A maintainer will look.", now(), next.id)
+        .run();
+    } else {
+      await env.DB.prepare("UPDATE requests SET state='queued', attempts=attempts+1, updated_at=? WHERE id=?")
+        .bind(now(), next.id)
+        .run();
+    }
     throw e;
   }
 }
@@ -259,19 +282,36 @@ export async function takedown(
   }
   const parsed = parseHost(input.host ?? "");
   if (!parsed.ok) return { status: 400, body: { error: parsed.reason } };
+  // A takedown only removes, but it should not be a mass-delisting tool.
+  if (ip && !admin) {
+    const ipHash = await sha256(`${env.IP_SALT}:${ip}`);
+    const recent = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM requests WHERE ip_hash = ? AND kind = 'takedown' AND created_at > ?",
+    )
+      .bind(ipHash, new Date(Date.now() - 60 * 60 * 1000).toISOString())
+      .first<{ n: number }>();
+    if ((recent?.n ?? 0) >= 5) {
+      return { status: 429, body: { error: "too many takedowns from this network; try again later" } };
+    }
+    return applyTakedown(env, parsed.host);
+  }
+  return applyTakedown(env, parsed.host);
+}
+
+async function applyTakedown(env: Env, host: string): Promise<{ status: number; body: unknown }> {
 
   const denylist = await readDenylist(env);
-  if (!denylist.includes(parsed.host)) {
-    await writeDenylist(env, [...denylist, parsed.host]);
+  if (!denylist.includes(host)) {
+    await writeDenylist(env, [...denylist, host]);
   }
   let removed = 0;
   const index = await readIndex(env);
-  if (index && (removed = removeHost(index, parsed.host)) > 0) {
+  if (index && (removed = removeHost(index, host)) > 0) {
     touchGeneratedAt(index);
     await publishIndex(env, index);
   }
   await env.DB.prepare("UPDATE requests SET state='done', updated_at=? WHERE host=? AND state IN ('queued','scanning')")
-    .bind(now(), parsed.host)
+    .bind(now(), host)
     .run();
 
   const id = randomHex(8);
@@ -282,15 +322,15 @@ export async function takedown(
   )
     .bind(
       id,
-      parsed.host,
-      parsed.host,
+      host,
+      host,
       removed ? "The host is on the takedown list; its listing was removed." : "The host is on the takedown list and is not scanned.",
       randomHex(24),
       at,
       at,
     )
     .run();
-  return { status: 200, body: { ok: true, host: parsed.host, removed } };
+  return { status: 200, body: { ok: true, host, removed } };
 }
 
 /// Weekly: scan the whole seed list across the boxes and publish the result.
@@ -301,7 +341,17 @@ export async function maybeStartRebuild(env: Env, force = false): Promise<boolea
   if (!force && last && Date.now() - Date.parse(last.created_at) < REBUILD_EVERY_MS - 60 * 60 * 1000) return false;
   if (last && last.state === "scanning" && Date.now() - Date.parse(last.updated_at) < 120 * 60 * 1000) return false;
   const seeds = await readSeeds(env);
-  if (!seeds.trim()) return false;
+  if (!seeds.trim()) {
+    // Invisible would be wrong: Monday would come and go with no rebuild.
+    console.error("rebuild: no seed list published; nothing to scan");
+    await env.DB.prepare(
+      `INSERT INTO requests (id, kind, host, entry, pages, state, outcome, message, token, created_at, updated_at)
+       VALUES (?, 'rebuild', 'index', 'index', '[]', 'done', 'error', ?, ?, ?, ?)`,
+    )
+      .bind(randomHex(8), "No seed list is published; the rebuild did not run.", randomHex(24), now(), now())
+      .run();
+    return false;
+  }
 
   const list = boxes(env);
   const id = randomHex(8);
@@ -343,6 +393,8 @@ function mergeShards(shards: MergeShard[]): IndexFile {
   const byKey = new Map<string, SiteRecord>();
   let generatedAt = "";
   for (const shard of shards) {
+    const at = (shard as { generated_at?: string }).generated_at ?? "";
+    if (at > generatedAt) generatedAt = at;
     for (const site of shard.sites) {
       const key = site.pages_checked[0] ?? site.host;
       const seen = byKey.get(key);
@@ -416,11 +468,14 @@ export async function receiveRebuild(
   await env.INDEX.put(`rebuild:${running.id}:${shard}`, JSON.stringify(index));
 
   const shards: MergeShard[] = [];
+  let present = 0;
   for (let i = 0; i < expected; i += 1) {
     const raw = await env.INDEX.get(`rebuild:${running.id}:${i}`);
-    if (!raw) return { status: 200, body: { ok: true, waiting: expected - shards.length - 1 } };
+    if (!raw) continue;
+    present += 1;
     shards.push(JSON.parse(raw) as MergeShard);
   }
+  if (present < expected) return { status: 200, body: { ok: true, waiting: expected - present } };
 
   const merged = mergeShards(shards);
   for (let i = 0; i < expected; i += 1) await env.INDEX.delete(`rebuild:${running.id}:${i}`);
@@ -436,11 +491,33 @@ export async function receiveRebuild(
   }
 
   const denylist = await readDenylist(env);
-  merged.sites = merged.sites.filter((s: SiteRecord) => !denylist.includes(s.host));
+  // A rebuild is not a bypass: a record that could not be listed through a
+  // submission (bad host, flagged description) must not enter through here.
+  const kept: SiteRecord[] = [];
+  let quarantined = 0;
+  for (const site of merged.sites) {
+    if (denylist.includes(site.host)) continue;
+    const entry = site.pages_checked[0]
+      ? site.pages_checked[0].replace(/^https:\/\//, "").replace(/\/$/, "")
+      : site.host;
+    const checked = validateRecord(site, entry);
+    if (!checked.ok) {
+      quarantined += 1;
+      continue;
+    }
+    if (site.status === "verified" && listingBlockers(site, denylist).length) {
+      quarantined += 1;
+      continue;
+    }
+    kept.push(site);
+  }
+  merged.sites = kept;
+  if (quarantined) console.error(`rebuild: quarantined ${quarantined} record(s) that failed listing rules`);
   await publishIndex(env, merged);
   await env.DB.prepare("UPDATE requests SET state='done', outcome='rebuilt', message=?, updated_at=? WHERE id=?")
     .bind(
-      `Rebuilt: ${merged.sites.length} sites, ${verifiedNow} verified, ${merged.sites.reduce((n, s) => n + s.tools.length, 0)} tools.`,
+      `Rebuilt: ${merged.sites.length} sites, ${verifiedNow} verified, ${merged.sites.reduce((n, s) => n + s.tools.length, 0)} tools` +
+        (quarantined ? `, ${quarantined} quarantined.` : "."),
       now(),
       running.id,
     )

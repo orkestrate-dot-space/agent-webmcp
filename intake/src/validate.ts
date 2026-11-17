@@ -122,9 +122,12 @@ async function resolvesPublic(host: string): Promise<{ ok: boolean; reason?: str
     }
     if (data.Status !== 0) return { ok: false, reason: `${host} does not resolve` };
     for (const a of data.Answer ?? []) {
-      if (typeof a.data !== "string") continue;
+      const ip = typeof a.data === "string" ? a.data.trim() : "";
+      // A CNAME answer is a name, not an address: skip it rather than feeding
+      // a name to the IP parser.
+      if (!/^[0-9.]+$/.test(ip) && !ip.includes(":")) continue;
       answered = true;
-      if (isBlockedIp(a.data)) {
+      if (isBlockedIp(ip)) {
         return { ok: false, reason: `${host} resolves to a non-public address` };
       }
     }
@@ -191,9 +194,33 @@ export function validateRecord(record: unknown, entry: string): { ok: true; reco
     if (typeof t.description !== "string" || t.description.length > MAX_DESCRIPTION) return fail("bad tool description");
     if (typeof t.input_schema !== "object" || t.input_schema === null) return fail("bad input_schema");
     if (typeof t.page !== "string") return fail("bad tool page");
-    const a = (t.annotations ?? {}) as Record<string, unknown>;
-    for (const k of ["read_only", "consequential", "untrusted_content"]) {
-      if (k in a && typeof a[k] !== "boolean") return fail("bad annotation");
+    // A tool page must be an https URL on the submitted host: it is rendered
+    // as a link and used by agents to open the page.
+    let toolPage: URL;
+    try {
+      toolPage = new URL(t.page);
+    } catch {
+      return fail("tool page is not a URL");
+    }
+    if (toolPage.protocol !== "https:" || toolPage.hostname.toLowerCase().replace(/^www\./, "") !== wantHost) {
+      return fail("tool page leaves the submitted host");
+    }
+    if ("flags" in t) {
+      if (!Array.isArray(t.flags) || t.flags.length > 20 || t.flags.some((f) => typeof f !== "string" || f.length > 64)) {
+        return fail("bad flags");
+      }
+    }
+    if ("annotations" in t && t.annotations !== undefined) {
+      if (!t.annotations || typeof t.annotations !== "object" || Array.isArray(t.annotations)) {
+        return fail("bad annotations");
+      }
+      const a = t.annotations as Record<string, unknown>;
+      for (const k of ["read_only", "consequential", "untrusted_content"]) {
+        if (k in a && typeof a[k] !== "boolean") return fail("bad annotation");
+      }
+    }
+    if ("seen_by" in t) {
+      if (!Array.isArray(t.seen_by) || t.seen_by.some((e) => typeof e !== "string")) return fail("bad seen_by");
     }
   }
   return { ok: true, record: rec as unknown as SiteRecord };

@@ -108,6 +108,29 @@ if (args.includes("--kv")) {
     live = null;
   }
   if (live && typeof live.sites === "number" && !args.includes("--force")) {
+    // Compare hosts, not counts: the bot may have added one site while this
+    // file dropped another, which a count check cannot see.
+    const liveHosts = new Set();
+    const liveName = live.url?.split("/").pop() ?? "";
+    const liveFile = spawnSync("cf", ["kv", "keys", "get", `version:${liveName}`, "--namespace-id", NAMESPACE], { encoding: "utf8" });
+    try {
+      const parsed = JSON.parse(liveFile.stdout);
+      for (const site of parsed.sites ?? []) if (site.status === "verified") liveHosts.add(site.host);
+    } catch {}
+    const localHosts = new Set(verified.map((s) => s.host));
+    const missing = [...liveHosts].filter((h) => !localHosts.has(h));
+    if (missing.length) {
+      console.error(
+        `refusing: ${missing.length} live site(s) are not in this file: ${missing.slice(0, 8).join(", ")}` +
+          `${missing.length > 8 ? ", …" : ""}.
+` +
+          `The bot may have listed them since this file was written. Pull the live index first:
+` +
+          `  node tools/publish-index.mjs --adopt <live pointer url>\n` +
+          `or pass --force to overwrite anyway.`,
+      );
+      process.exit(1);
+    }
     const drop = live.sites - pointer.sites;
     if (drop > Math.max(1, Math.floor(live.sites * 0.05))) {
       console.error(

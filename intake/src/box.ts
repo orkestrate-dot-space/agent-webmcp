@@ -38,7 +38,7 @@ export async function exec(env: Env, boxId: string, cmd: string, timeout = 30): 
 /// posts its result to /callback when it is done.
 export async function startScan(
   env: Env,
-  opts: { id: string; entry: string; callback: string; token: string },
+  opts: { id: string; entry: string; extras?: string[]; callback: string; token: string },
 ): Promise<void> {
   const cmd = [
     "sudo -u scanner",
@@ -48,6 +48,7 @@ export async function startScan(
     shellQuote(opts.entry),
     shellQuote(opts.callback),
     shellQuote(opts.token),
+    shellQuote((opts.extras ?? []).join("\n")),
     ">/dev/null 2>&1 &",
   ].join(" ");
   await exec(env, boxes(env)[0], cmd, 30);
