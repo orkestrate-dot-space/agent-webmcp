@@ -5,6 +5,7 @@
 //   node tools/build-index/build.mjs [--seeds seeds/launch.txt]
 //        [--out index/index.json] [--pages 4] [--workers 4]
 //        [--previous index/index.json] [--only host,host]
+//        [--retries 2] [--settle 2500]
 //
 // Engines:
 //   lightpanda    its own MCP server (HTTP), one process per worker.
@@ -25,6 +26,11 @@ const OUT = resolve(args.out ?? "index/index.json");
 const PREVIOUS = args.previous ? resolve(args.previous) : null;
 const MAX_PAGES = Number(args.pages ?? 4);
 const WORKERS = Math.max(1, Number(args.workers ?? 4));
+// Extra looks at an empty homepage. A submission scan gives a site every
+// chance; a scheduled rebuild can lean on the carry rule instead, which makes
+// the weekly run several times faster.
+const RETRIES = Number(args.retries ?? 2);
+const SETTLE_MS = Number(args.settle ?? 2500);
 const ONLY = args.only ? new Set(String(args.only).split(",").map((h) => h.trim())) : null;
 
 const ENGINES = new Set(String(args.engines ?? "lightpanda,agent-browser").split(",").map((e) => e.trim()));
@@ -65,6 +71,8 @@ function parseArgs(argv) {
 }
 
 function readSeeds(path) {
+  // Missing seeds are fine: check-site scans an entry that need not be listed.
+  if (!existsSync(path)) return [];
   return readFileSync(path, "utf8")
     .split("\n")
     // A comment starts with "# " or sits at the start of a line, so URLs with
@@ -308,7 +316,7 @@ async function agentBrowserPage(session, url) {
     ["wait", "--load", "load"],
     ["wait", "--load", "networkidle"],
     ["webmcp", "list"],
-    ["wait", "2500"],
+    ["wait", String(SETTLE_MS)],
     ["webmcp", "list"],
     ["eval", LINKS],
     ["get", "url"],
@@ -602,7 +610,7 @@ export async function checkSite(entry, { pages = 4, engines = ["agent-browser"] 
 /// more looks spaced a few seconds apart before it counts as empty.
 async function loadHomepage(pageFn, url) {
   let first = await pageFn(url);
-  for (let i = 0; i < 2 && !first.tools.length && !first.error && !first.blocked; i += 1) {
+  for (let i = 0; i < RETRIES && !first.tools.length && !first.error && !first.blocked; i += 1) {
     await sleep(3000);
     const again = await pageFn(url);
     if (again.tools.length || again.error || again.blocked) return again;

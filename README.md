@@ -13,10 +13,11 @@ googlechromelabs.github.io/searchFlights  [read]
 Open that page with agent-browser, Playwright MCP or OpenCode Browse, and
 `searchFlights` is in the driver's WebMCP tools.
 
-Status: pre-launch. `index/index.json` holds the launch index (52 sites
-checked, 38 verified with 227 tools); submissions arrive through the
-`add-site` issue form and are proposed by a bot, merged by a maintainer. The
-previous version is on the `archive/v1-main` branch.
+Status: pre-launch. The live index is served from KV by the
+`agent-webmcp-index` Worker; `index/index.json` is a snapshot of it. Listings
+are automatic: the `agent-webmcp-intake` Worker scans submissions on an
+instabox box and publishes clean results. The previous version is on the
+`archive/v1-main` branch.
 
 ## Commands
 
@@ -37,10 +38,11 @@ check or failed to load are recorded with that status and are not searchable.
 Tools that only appear after you interact with a page (for example, after a
 search) are not indexed yet.
 
-To list a site, open the `add-site` issue form. A bot checks the site in a
-fresh browser and opens a listing PR when it verifies; a maintainer merges it.
-Takedown works the same way through the takedown form. No ownership proof is
-needed to be listed: the bot lists only what the site registers with WebMCP on.
+To list a site, use **Add your site** on the sites page. A bot checks it in a
+fresh Chromium and lists it automatically when the result is clean; the status
+page shows the verdict and anything to fix. **Remove a site** puts a host on the
+takedown list, which stops all checks and drops the listing. No ownership proof
+is needed: the bot lists only what the site registers with WebMCP on.
 
 `find` needs the object of your request, not the verb: "order a pizza" finds
 `manage_pizza`. A word that names an indexed site narrows the search to that
@@ -49,7 +51,9 @@ nothing matches, it says so instead of returning a loose word match.
 
 The index is published as a small pointer plus an immutable, hash-addressed
 file. The CLI checks the pointer hourly, downloads only when the hash changed,
-verifies it, and keeps the last good copy if anything fails.
+verifies it, and keeps the last good copy if anything fails. The weekly rebuild
+rechecks every seed; a site that misses one check keeps its tools and drops on
+the second, and a rebuild that finds far fewer sites refuses to publish.
 
 ## License
 

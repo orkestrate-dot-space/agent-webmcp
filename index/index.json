@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-17T19:26:02Z",
+  "generated_at": "2026-11-17T21:14:46Z",
   "sites": [
     {
       "host": "googlechromelabs.github.io",
@@ -10590,12 +10590,171 @@
       ]
     },
     {
-      "host": "ngrok.com",
+      "host": "infisical.com",
       "status": "verified",
       "checked_at": "2026-11-17T19:24:25Z",
       "pages_checked": [
+        "https://infisical.com/",
+        "https://infisical.com/docs"
+      ],
+      "platform": "mintlify",
+      "tools": [
+        {
+          "name": "get_site_overview",
+          "description": "Get an outline of the Infisical documentation, grouped by section, with a short description of each page. May be truncated for large sites; use search_docs to f\n[truncated: showing 160 of 181 bytes]",
+          "input_schema": {},
+          "page": "https://infisical.com/docs",
+          "origin": "https://infisical.com",
+          "annotations": {
+            "read_only": false,
+            "consequential": false,
+            "untrusted_content": false
+          },
+          "flags": [],
+          "seen_by": [
+            "agent-browser"
+          ]
+        },
+        {
+          "name": "navigate_page",
+          "description": "Navigate the current browser tab to a Infisical documentation page.",
+          "input_schema": {},
+          "page": "https://infisical.com/docs",
+          "origin": "https://infisical.com",
+          "annotations": {
+            "read_only": false,
+            "consequential": false,
+            "untrusted_content": false
+          },
+          "flags": [],
+          "seen_by": [
+            "agent-browser"
+          ]
+        },
+        {
+          "name": "read_page",
+          "description": "Read the full content of a Infisical documentation page as markdown.",
+          "input_schema": {},
+          "page": "https://infisical.com/docs",
+          "origin": "https://infisical.com",
+          "annotations": {
+            "read_only": false,
+            "consequential": false,
+            "untrusted_content": false
+          },
+          "flags": [],
+          "seen_by": [
+            "agent-browser"
+          ]
+        },
+        {
+          "name": "read_skill",
+          "description": "Read a Infisical agent skill document by name.",
+          "input_schema": {},
+          "page": "https://infisical.com/docs",
+          "origin": "https://infisical.com",
+          "annotations": {
+            "read_only": false,
+            "consequential": false,
+            "untrusted_content": false
+          },
+          "flags": [],
+          "seen_by": [
+            "agent-browser"
+          ]
+        },
+        {
+          "name": "search_docs",
+          "description": "Search the Infisical documentation for relevant pages and content.",
+          "input_schema": {},
+          "page": "https://infisical.com/docs",
+          "origin": "https://infisical.com",
+          "annotations": {
+            "read_only": false,
+            "consequential": false,
+            "untrusted_content": false
+          },
+          "flags": [],
+          "seen_by": [
+            "agent-browser"
+          ]
+        }
+      ],
+      "missed": 0,
+      "engines": [
+        "agent-browser"
+      ]
+    },
+    {
+      "host": "cookiebot.com",
+      "status": "verified",
+      "checked_at": "2026-11-17T21:13:56Z",
+      "pages_checked": [
+        "https://www.cookiebot.com/us/"
+      ],
+      "tools": [
+        {
+          "name": "cb_list_pages",
+          "description": "List all pages in the Cookiebot site navigation as titles and URLs. Call this first when the user asks about a topic and you are unsure which page covers it —\n[truncated: showing 160 of 326 bytes]",
+          "input_schema": {},
+          "page": "https://www.cookiebot.com/us/",
+          "origin": "https://www.cookiebot.com",
+          "annotations": {
+            "read_only": false,
+            "consequential": false,
+            "untrusted_content": false
+          },
+          "flags": [],
+          "seen_by": [
+            "agent-browser"
+          ]
+        },
+        {
+          "name": "cb_read_page",
+          "description": "Read the content of a Cookiebot page as clean markdown (about 10x fewer tokens than the HTML). Prefer this over fetching/scraping a page when you need to unders\n[truncated: showing 160 of 279 bytes]",
+          "input_schema": {},
+          "page": "https://www.cookiebot.com/us/",
+          "origin": "https://www.cookiebot.com",
+          "annotations": {
+            "read_only": false,
+            "consequential": false,
+            "untrusted_content": false
+          },
+          "flags": [],
+          "seen_by": [
+            "agent-browser"
+          ]
+        },
+        {
+          "name": "cb_scan_cmp",
+          "description": "Check whether a website is GDPR-compliant using Cookiebot's scanner. Ask the user for their domain and email before calling — the email is required to receive\n[truncated: showing 160 of 316 bytes]",
+          "input_schema": {},
+          "page": "https://www.cookiebot.com/us/",
+          "origin": "https://www.cookiebot.com",
+          "annotations": {
+            "read_only": false,
+            "consequential": false,
+            "untrusted_content": false
+          },
+          "flags": [],
+          "seen_by": [
+            "agent-browser"
+          ]
+        }
+      ],
+      "missed": 0,
+      "engines": [
+        "agent-browser"
+      ]
+    },
+    {
+      "host": "ngrok.com",
+      "status": "verified",
+      "checked_at": "2026-11-17T21:14:45Z",
+      "pages_checked": [
         "https://ngrok.com/",
-        "https://ngrok.com/docs/start"
+        "https://ngrok.com/docs/start",
+        "https://ngrok.com/pricing"
       ],
       "platform": "mintlify",
       "tools": [
@@ -10821,102 +10980,6 @@
             "read_only": true,
             "consequential": false,
             "untrusted_content": true
-          },
-          "flags": [],
-          "seen_by": [
-            "agent-browser"
-          ]
-        }
-      ],
-      "missed": 0,
-      "engines": [
-        "agent-browser"
-      ]
-    },
-    {
-      "host": "infisical.com",
-      "status": "verified",
-      "checked_at": "2026-11-17T19:24:25Z",
-      "pages_checked": [
-        "https://infisical.com/",
-        "https://infisical.com/docs"
-      ],
-      "platform": "mintlify",
-      "tools": [
-        {
-          "name": "get_site_overview",
-          "description": "Get an outline of the Infisical documentation, grouped by section, with a short description of each page. May be truncated for large sites; use search_docs to f\n[truncated: showing 160 of 181 bytes]",
-          "input_schema": {},
-          "page": "https://infisical.com/docs",
-          "origin": "https://infisical.com",
-          "annotations": {
-            "read_only": false,
-            "consequential": false,
-            "untrusted_content": false
-          },
-          "flags": [],
-          "seen_by": [
-            "agent-browser"
-          ]
-        },
-        {
-          "name": "navigate_page",
-          "description": "Navigate the current browser tab to a Infisical documentation page.",
-          "input_schema": {},
-          "page": "https://infisical.com/docs",
-          "origin": "https://infisical.com",
-          "annotations": {
-            "read_only": false,
-            "consequential": false,
-            "untrusted_content": false
-          },
-          "flags": [],
-          "seen_by": [
-            "agent-browser"
-          ]
-        },
-        {
-          "name": "read_page",
-          "description": "Read the full content of a Infisical documentation page as markdown.",
-          "input_schema": {},
-          "page": "https://infisical.com/docs",
-          "origin": "https://infisical.com",
-          "annotations": {
-            "read_only": false,
-            "consequential": false,
-            "untrusted_content": false
-          },
-          "flags": [],
-          "seen_by": [
-            "agent-browser"
-          ]
-        },
-        {
-          "name": "read_skill",
-          "description": "Read a Infisical agent skill document by name.",
-          "input_schema": {},
-          "page": "https://infisical.com/docs",
-          "origin": "https://infisical.com",
-          "annotations": {
-            "read_only": false,
-            "consequential": false,
-            "untrusted_content": false
-          },
-          "flags": [],
-          "seen_by": [
-            "agent-browser"
-          ]
-        },
-        {
-          "name": "search_docs",
-          "description": "Search the Infisical documentation for relevant pages and content.",
-          "input_schema": {},
-          "page": "https://infisical.com/docs",
-          "origin": "https://infisical.com",
-          "annotations": {
-            "read_only": false,
-            "consequential": false,
-            "untrusted_content": false
           },
           "flags": [],
           "seen_by": [

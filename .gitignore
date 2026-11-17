@@ -14,10 +14,14 @@ node_modules/
 .agents/
 skills-lock.json
 
-# index worker build output
+# worker build output
 /worker/node_modules/
 /worker/.cloudflare/
 /worker/public/indexes/
+/intake/node_modules/
+/intake/.cloudflare/
+/intake/public/indexes/
 
-# npm lock for the index worker
+# npm lock for the workers
 /worker/package-lock.json
+/intake/package-lock.json

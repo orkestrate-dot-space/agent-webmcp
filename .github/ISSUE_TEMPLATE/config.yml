@@ -1,8 +1,0 @@
-blank_issues_enabled: false
-contact_links:
-  - name: Opt out or take down a listing
-    url: https://github.com/orkestrate-dot-space/agent-webmcp/issues/new?template=takedown.yml
-    about: Remove your site from the index, or stop us checking it.
-  - name: Report a bad listing
-    url: https://github.com/orkestrate-dot-space/agent-webmcp/issues/new?template=takedown.yml
-    about: A listing with wrong tools, a hijacked domain, or a security problem.

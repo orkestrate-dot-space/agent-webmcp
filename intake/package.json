@@ -1,0 +1,12 @@
+{
+	"name": "agent-webmcp-intake",
+	"private": true,
+	"type": "module",
+	"scripts": { "deploy": "cf deploy", "build": "cf build" },
+	"devDependencies": {
+		"@cloudflare/vite-plugin": "beta",
+		"cf": "^1.0.0-beta.12",
+		"typescript": "^7.0.2",
+		"vite": "^8.3.0"
+	}
+}
