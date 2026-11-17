@@ -47,6 +47,11 @@ jobs:
 
       - name: Decide, splice, propose, comment
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        # The gh CLI needs an explicit token; without it `gh pr create` fails
+        # with empty stdout, which once shipped a "PR is opening" comment with
+        # no PR. Fail loudly instead (see the status checks below).
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           script: |
             const { execFileSync, spawnSync } = require("node:child_process");
@@ -90,7 +95,24 @@ jobs:
             const comment = fs.readFileSync("/tmp/decision.md", "utf8");
 
             if (decision.action === "pr" && decision.entry) {
-              // 4. Splice on a branch named from validated data only.
+              // 4. Splice on a branch named from validated data only. Every
+              // mutation is status-checked: a silent failure here once shipped
+              // a "PR is opening" comment with no PR.
+              const fail = async (reason) => {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: meta.issue,
+                  labels: ["needs-review"],
+                });
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: meta.issue,
+                  body: `Checked just now: **${decision.reason}** — but opening the listing PR failed (${reason}). A maintainer will propose it manually.`,
+                });
+                core.setFailed(`pr automation failed: ${reason}`);
+              };
               const slug = decision.entry.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
               const branch = `submission/${slug}-${meta.issue}`;
               run("git", ["checkout", "-b", branch], { stdio: "inherit" });
@@ -98,15 +120,23 @@ jobs:
               run("git", ["add", "index/index.json", "seeds/launch.txt"], { stdio: "inherit" });
               const st = run("git", ["status", "--porcelain"]);
               if (!st.stdout.trim()) {
-                core.setFailed("splice produced no changes");
+                await fail("splice produced no changes");
                 return;
               }
               run("git", ["-c", "user.name=agent-webmcp-bot", "-c", "user.email=bot@orkestrate.space",
                 "commit", "-m", `Add ${decision.entry} (submission #${meta.issue})`], { stdio: "inherit" });
-              run("git", ["push", "origin", branch], { stdio: "inherit" });
+              const push = run("git", ["push", "origin", branch], { stdio: "inherit" });
+              if (push.status !== 0) {
+                await fail(`git push exited ${push.status}`);
+                return;
+              }
               const pr = run("gh", ["pr", "create", "--title", `Add ${decision.entry} to the index`,
                 "--body", `Closes #${meta.issue}.\n\nAutomated submission: verified by the scan job, proposed by the publish job. A maintainer merges to list it.\n\n${comment}`,
                 "--head", branch, "--base", "main"]);
+              if (pr.status !== 0) {
+                await fail(`gh pr create exited ${pr.status}: ${(pr.stderr || "").slice(0, 200)}`);
+                return;
+              }
               core.info((pr.stdout || "").slice(0, 300));
             } else {
               await github.rest.issues.addLabels({

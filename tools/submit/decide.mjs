@@ -94,6 +94,6 @@ const why =
   record.status === "blocked"
     ? "A bot check stopped the browser, so its pages could not be seen. The check was not solved and never is."
     : record.status === "error"
-      ? `The pages did not finish loading (${(record.note ?? "see the log").slice(0, 120)}).`
+      ? `The check could not read this site (${(record.note ?? "see the log").slice(0, 200)}).`
       : "Its pages loaded and none registered a WebMCP tool. Tools that appear only after logging in or interacting are not indexed yet.";
 decide("review", entry, `no tools listed (${record.status})`, `${why} A maintainer will confirm and close this out.`);

@@ -199,6 +199,22 @@ async function lightpandaPage(lp, url) {
       },
     }).catch(() => null);
     out.links = linkList(linkRes);
+    const apiRes = await rpc(lp, "tools/call", {
+      name: "evaluate",
+      arguments: { expression: "typeof document.modelContext" },
+    }).catch(() => null);
+    // The value comes back as text or structured content; read only an exact
+    // "object"/"undefined" value so envelope words cannot fake a present API.
+    const apiCandidates = [...linkList(apiRes)];
+    if (typeof apiRes?.structuredContent === "string") apiCandidates.push(apiRes.structuredContent);
+    for (const block of apiRes?.content ?? []) {
+      if (block.type === "text" && typeof block.text === "string") {
+        const t = block.text.trim().replace(/^"|"$/g, "");
+        if (t === "object" || t === "undefined") apiCandidates.push(t);
+      }
+    }
+    if (apiCandidates.includes("object")) out.api = true;
+    else if (apiCandidates.includes("undefined")) out.api = false;
     out.blocked = isBlocked(out, nav);
     if (status >= 400) out.error = `HTTP ${status}`;
   } catch (e) {
@@ -296,6 +312,10 @@ async function agentBrowserPage(session, url) {
     ["webmcp", "list"],
     ["eval", LINKS],
     ["get", "url"],
+    // Whether the page API exists at all. A page with the flag on reports
+    // "object" even when it registers nothing, so "undefined" here means the
+    // scan browser is wrong, not the site.
+    ["eval", "typeof document.modelContext"],
   ];
   const res = spawnSync("agent-browser", ["--session", session, "batch", "--json"], {
     input: JSON.stringify(commands),
@@ -339,6 +359,10 @@ async function agentBrowserPage(session, url) {
   const now = result(7);
   const finalUrl = typeof now === "string" ? now : now?.url ?? "";
   if (/^https?:\/\//.test(finalUrl)) out.final_url = finalUrl;
+  const apiRaw = result(8)?.result;
+  const apiValue = apiRaw && typeof apiRaw === "object" && "result" in apiRaw ? apiRaw.result : apiRaw;
+  if (apiValue === "object") out.api = true;
+  else if (typeof apiValue === "string") out.api = false;
   out.blocked = /just a moment|attention required|access denied|verify you are human|are you a robot|cf-challenge/i.test(
     `${out.final_url} ${res.stdout.slice(0, 4000)}`,
   );
@@ -468,6 +492,12 @@ function mergeSite(site, lightpandaPages, abPages) {
 
   const list = [...tools.values()];
   const first = all[0];
+  // The page API exists whenever the scan browser is right, even on a site
+  // with no tools. Absent everywhere (and seen nowhere) means the scanner is
+  // wrong, not the site: route to error so a maintainer looks, and so the
+  // carry rule never mistakes it for an empty site.
+  const apiSeen = all.some((p) => p.api === true);
+  const apiAbsent = !apiSeen && all.some((p) => p.api === false);
   let status;
   let note;
   if (list.length) {
@@ -478,6 +508,9 @@ function mergeSite(site, lightpandaPages, abPages) {
   } else if (all.length && all.every((p) => p.error)) {
     status = "error";
     note = all[0].error;
+  } else if (apiAbsent) {
+    status = "error";
+    note = "the WebMCP page API was absent in the scan browser; the run may lack the feature flag";
   } else {
     status = "no_tools";
   }
@@ -563,15 +596,26 @@ export async function checkSite(entry, { pages = 4, engines = ["agent-browser"] 
   return mergeSite(site, lpPages ? lpPages.map((p) => ({ ...p, engine: "lightpanda" })) : undefined, abPages ? abPages.map((p) => ({ ...p, engine: "agent-browser" })) : undefined);
 }
 
+/// The homepage, reloaded when it shows nothing. Registration can miss a
+/// busy first load (a 51-second GitHub scan of cookiebot.com saw zero tools;
+/// a rescan minutes later saw three), so an empty, healthy page gets two
+/// more looks spaced a few seconds apart before it counts as empty.
+async function loadHomepage(pageFn, url) {
+  let first = await pageFn(url);
+  for (let i = 0; i < 2 && !first.tools.length && !first.error && !first.blocked; i += 1) {
+    await sleep(3000);
+    const again = await pageFn(url);
+    if (again.tools.length || again.error || again.blocked) return again;
+    first = again;
+  }
+  return first;
+}
+
 /// A homepage plus the likely pages it links to, for one engine.
 async function collectPages(pageFn, entry, maxPages) {
   const url = `https://${entry.replace(/\/$/, "")}/`;
   const pages = [];
-  let first = await pageFn(url);
-  if (!first.tools.length && !first.error && !first.blocked) {
-    const again = await pageFn(url);
-    if (again.tools.length) first = again;
-  }
+  const first = await loadHomepage(pageFn, url);
   pages.push(first);
   if (!first.error && !first.blocked) {
     for (const next of pickPages(first.final_url, first.links, maxPages)) pages.push(await pageFn(next));
@@ -607,11 +651,7 @@ async function main() {
           const site = queue.shift();
           if (!site) break;
           const pages = [];
-          let first = await lightpandaPage(lp, site.url);
-          if (!first.tools.length && !first.error && !first.blocked) {
-            const again = await lightpandaPage(lp, site.url);
-            if (again.tools.length) first = again;
-          }
+          const first = await loadHomepage((url) => lightpandaPage(lp, url), site.url);
           pages.push(first);
           if (!first.error && !first.blocked) {
             for (const url of pickPages(first.final_url, first.links, MAX_PAGES)) {
@@ -646,11 +686,7 @@ async function main() {
         const site = abQueue.shift();
         if (!site) break;
         const pages = [];
-        let first = await agentBrowserPage(session, site.url);
-        if (!first.tools.length && !first.error && !first.blocked) {
-          const again = await agentBrowserPage(session, site.url);
-          if (again.tools.length) first = again;
-        }
+        const first = await loadHomepage((url) => agentBrowserPage(session, url), site.url);
         pages.push(first);
         if (!first.error && !first.blocked) {
           for (const url of pickPages(first.final_url, first.links, MAX_PAGES)) pages.push(await agentBrowserPage(session, url));
