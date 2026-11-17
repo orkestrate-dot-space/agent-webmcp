@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-17T17:58:23Z",
-  "sha256": "097b50b176c4fcbe4776208d380177c5897970a3e8497be1329bd45318597b41",
-  "url": "indexes/index-097b50b176c4.json",
-  "bytes": 779748,
-  "sites": 106,
-  "tools": 518
+  "generated_at": "2026-11-17T19:26:02Z",
+  "sha256": "10e36c6ff48a77e35eddd97b6894efcc4a03d67ce46044d09d6b783ae244fbbe",
+  "url": "indexes/index-10e36c6ff48a.json",
+  "bytes": 434818,
+  "sites": 38,
+  "tools": 227
 }
