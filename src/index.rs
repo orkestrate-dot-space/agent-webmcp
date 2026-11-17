@@ -138,6 +138,7 @@ impl Search {
             .collect();
         scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal).then(a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)));
 
+        let mut seen_ids: Vec<String> = Vec::new();
         let mut seen_platform_tools: Vec<(String, String)> = Vec::new();
         let mut clean = Vec::new();
         let mut flagged = Vec::new();
@@ -162,8 +163,15 @@ impl Search {
                 }
                 seen_platform_tools.push(key);
             }
+            // One host can hold several records (the Chrome Labs demos), and
+            // the same tool can appear in more than one of them.
+            let id = format!("{}/{}", site.host, tool.name);
+            if seen_ids.contains(&id) {
+                continue;
+            }
+            seen_ids.push(id.clone());
             let hit = Hit {
-                id: format!("{}/{}", site.host, tool.name),
+                id,
                 site: site.host.clone(),
                 tool: tool.name.clone(),
                 description: tool.description.clone(),

@@ -200,3 +200,18 @@ fn relevance_prefers_a_tool_named_for_the_task() {
     let hits = s.find("create an order", 3).unwrap();
     assert_eq!(hits[0].tool, "create_order");
 }
+
+#[test]
+fn one_host_with_several_records_does_not_repeat_a_tool() {
+    let mut idx = index();
+    let mut demo = site("googlechromelabs.github.io", None, vec![tool(
+        "searchFlights",
+        "Searches for flights.",
+        "https://googlechromelabs.github.io/other-demo/",
+    )]);
+    demo.pages_checked = vec!["https://googlechromelabs.github.io/other-demo/".into()];
+    idx.sites.push(demo);
+    let s = Search::build(idx).unwrap();
+    let hits = s.find("search flights", 5).unwrap();
+    assert_eq!(hits.iter().filter(|h| h.tool == "searchFlights").count(), 1, "{hits:#?}");
+}
