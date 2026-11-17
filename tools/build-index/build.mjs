@@ -41,6 +41,10 @@ const LINT = [
 
 const PAGE_HINTS = ["/docs", "/search", "/pricing", "/products", "/product", "/shop", "/api", "/help"];
 
+/// Same-origin links on the page, as a bare expression both engines evaluate.
+const LINKS =
+  "Array.from(document.querySelectorAll('a[href]')).map(a=>a.href).filter(h=>h.startsWith(location.origin)).slice(0,400)";
+
 function parseArgs(argv) {
   const out = {};
   for (let i = 0; i < argv.length; i += 1) {
@@ -155,8 +159,7 @@ async function lightpandaPage(lp, url) {
     const linkRes = await rpc(lp, "tools/call", {
       name: "evaluate",
       arguments: {
-        expression:
-          "Array.from(document.querySelectorAll('a[href]')).map(a=>a.href).filter(h=>h.startsWith(location.origin)).slice(0,400)",
+        expression: LINKS,
       },
     }).catch(() => null);
     out.links = linkList(linkRes);
@@ -240,70 +243,58 @@ function isBlocked(out, nav) {
 
 async function agentBrowserPage(session, url) {
   const out = { url, final_url: url, tools: [], blocked: false, error: null, links: [] };
-  const run = (cmdArgs, timeout = 60000) =>
-    spawnSync("agent-browser", ["--session", session, ...cmdArgs], { encoding: "utf8", timeout });
+  // One process per page. `agent-browser` costs about a second to start, so a
+  // call per command made a full run take an hour. Commands go in as JSON on
+  // stdin: the argv form strips quotes out of an eval expression.
+  const commands = [
+    ["open", url],
+    ["wait", "1500"],
+    ["webmcp", "list"],
+    ["eval", LINKS],
+    ["get", "url"],
+  ];
+  const res = spawnSync("agent-browser", ["--session", session, "batch", "--json"], {
+    input: JSON.stringify(commands),
+    encoding: "utf8",
+    timeout: 120_000,
+  });
+  let batch;
   try {
-    const open = run(["open", url]);
-    if (open.status !== 0) {
-      out.error = (open.stderr || open.stdout || "open failed").trim().slice(0, 200);
-      return out;
-    }
-    let tools = [];
-    for (let i = 0; i < 6; i += 1) {
-      const list = run(["webmcp", "list", "--json"], 30000);
-      tools = parseAbTools(list.stdout);
-      if (tools.length) break;
-      await sleep(900);
-    }
-    out.tools = tools;
-    const urlGet = run(["get", "url"], 15000);
-    const finalUrl = (urlGet.stdout || "").trim().split("\n").pop();
-    if (/^https?:\/\//.test(finalUrl)) out.final_url = finalUrl;
-    const links = run(
-      [
-        "eval",
-        "--json",
-        "Array.from(document.querySelectorAll('a[href]')).map(a=>a.href).filter(h=>h.startsWith(location.origin)).slice(0,400)",
-      ],
-      20000,
-    );
-    out.links = parseAbResult(links.stdout);
-    out.blocked = /just a moment|attention required|access denied|verify you are human|are you a robot|cf-challenge/i.test(
-      `${finalUrl} ${links.stdout}`,
-    );
-  } catch (e) {
-    out.error = String(e).slice(0, 200);
+    batch = JSON.parse((res.stdout || "").trim());
+  } catch {
+    out.error = (res.stderr || res.stdout || "batch failed").trim().slice(0, 200);
+    return out;
   }
+  if (!Array.isArray(batch)) {
+    out.error = "unexpected batch output";
+    return out;
+  }
+  const result = (i) => batch[i]?.result;
+  const opened = result(0);
+  if (opened?.url) out.final_url = opened.url;
+
+  const listed = result(2)?.tools;
+  const fromOpen = opened?.webmcp?.tools;
+  const tools = listed?.length ? listed : fromOpen ?? [];
+  out.tools = tools.map((t) => ({
+    name: t.name,
+    description: t.description ?? "",
+    input_schema: t.inputSchema ?? {},
+    origin: t.origin ?? "",
+    annotations: normAnnotations(t.annotations),
+  }));
+
+  const links = result(3)?.result;
+  out.links = Array.isArray(links) ? links : [];
+  const now = result(4);
+  const finalUrl = typeof now === "string" ? now : now?.url ?? "";
+  if (/^https?:\/\//.test(finalUrl)) out.final_url = finalUrl;
+  out.blocked = /just a moment|attention required|access denied|verify you are human|are you a robot|cf-challenge/i.test(
+    `${out.final_url} ${res.stdout.slice(0, 4000)}`,
+  );
+  const failed = batch.find((b) => b?.error);
+  if (failed) out.note = String(failed.error).slice(0, 200);
   return out;
-}
-
-/// `agent-browser ... --json` prints { success, data, error }; data.result
-/// holds an eval's value.
-function parseAbResult(stdout) {
-  try {
-    const line = stdout.split("\n").find((l) => l.trim().startsWith("{"));
-    const j = JSON.parse(line ?? "{}");
-    return j.data?.result ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function parseAbTools(stdout) {
-  try {
-    const line = stdout.split("\n").find((l) => l.trim().startsWith("{"));
-    const j = JSON.parse(line ?? "{}");
-    const data = j.data ?? j;
-    return (data.tools ?? []).map((t) => ({
-      name: t.name,
-      description: t.description ?? "",
-      input_schema: t.inputSchema ?? {},
-      origin: t.origin ?? "",
-      annotations: normAnnotations(t.annotations),
-    }));
-  } catch {
-    return [];
-  }
 }
 
 // ------------------------------------------------------------------ planning
