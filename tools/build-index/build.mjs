@@ -258,9 +258,17 @@ async function agentBrowserPage(session, url) {
   // One process per page. `agent-browser` costs about a second to start, so a
   // call per command made a full run take an hour. Commands go in as JSON on
   // stdin: the argv form strips quotes out of an eval expression.
+  // Pages must finish loading before we read tools: wait for the load event
+  // and then for the network to go quiet (analytics and chat widgets keep it
+  // busy on some sites, so this can time out and that is fine). Tools can
+  // also register in stages after load (shop.dev shows 4 then 22), so list,
+  // wait, and list again, keeping whichever saw more.
   const commands = [
     ["open", url],
-    ["wait", "1000"],
+    ["wait", "--load", "load"],
+    ["wait", "--load", "networkidle"],
+    ["webmcp", "list"],
+    ["wait", "2500"],
     ["webmcp", "list"],
     ["eval", LINKS],
     ["get", "url"],
@@ -283,11 +291,16 @@ async function agentBrowserPage(session, url) {
   }
   const result = (i) => batch[i]?.result;
   const opened = result(0);
+  if (batch[0]?.error && !opened?.url) {
+    out.error = String(batch[0].error).slice(0, 200);
+    return out;
+  }
   if (opened?.url) out.final_url = opened.url;
 
-  const listed = result(2)?.tools;
-  const fromOpen = opened?.webmcp?.tools;
-  const tools = listed?.length ? listed : fromOpen ?? [];
+  const first = result(3)?.tools ?? [];
+  const second = result(5)?.tools ?? [];
+  const fromOpen = opened?.webmcp?.tools ?? [];
+  const tools = [fromOpen, first, second].reduce((best, list) => (list.length > best.length ? list : best), []);
   out.tools = tools.map((t) => ({
     name: t.name,
     description: t.description ?? "",
@@ -296,9 +309,9 @@ async function agentBrowserPage(session, url) {
     annotations: normAnnotations(t.annotations),
   }));
 
-  const links = result(3)?.result;
+  const links = result(6)?.result;
   out.links = Array.isArray(links) ? links : [];
-  const now = result(4);
+  const now = result(7);
   const finalUrl = typeof now === "string" ? now : now?.url ?? "";
   if (/^https?:\/\//.test(finalUrl)) out.final_url = finalUrl;
   out.blocked = /just a moment|attention required|access denied|verify you are human|are you a robot|cf-challenge/i.test(
