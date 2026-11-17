@@ -21,8 +21,8 @@ previous version is on the `archive/v1-main` branch.
 | Command | What it does |
 |---|---|
 | `find <task>` | Search the index. `--json` for machine output. |
-| `update` | Download the latest index now (it also refreshes itself weekly). |
-| `status` | Show the index in use. |
+| `update` | Check for a newer index now (it also checks hourly). |
+| `status` | Show the index in use and the addresses it was fetched from. |
 | `mcp` | Run an MCP server with one tool, `find`. |
 
 ## The index
@@ -34,6 +34,15 @@ check or failed to load are recorded with that status and are not searchable.
 
 Tools that only appear after you interact with a page (for example, after a
 search) are not indexed yet.
+
+`find` needs the object of your request, not the verb: "order a pizza" finds
+`manage_pizza`. A word that names an indexed site narrows the search to that
+site, so "search stripe docs" never answers with another company's docs. When
+nothing matches, it says so instead of returning a loose word match.
+
+The index is published as a small pointer plus an immutable, hash-addressed
+file. The CLI checks the pointer hourly, downloads only when the hash changed,
+verifies it, and keeps the last good copy if anything fails.
 
 ## License
 
