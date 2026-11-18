@@ -25,9 +25,13 @@ jobs:
           node-version: 24
       - run: npm install --no-audit --no-fund
         working-directory: intake
+      - run: npx cf workers types
+        working-directory: intake
       - run: npx tsc --noEmit
         working-directory: intake
       - run: npm install --no-audit --no-fund
+        working-directory: worker
+      - run: npx cf workers types
         working-directory: worker
       - run: npx tsc --noEmit
         working-directory: worker
