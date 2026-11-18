@@ -114,7 +114,7 @@ tar -xzf "$tmp/$asset" -C "$tmp"
 [ -f "$tmp/agent-webmcp" ] || die "$asset does not contain agent-webmcp"
 
 [ -d "$DIR" ] || mkdir -p "$DIR" 2>/dev/null || die "cannot create $DIR"
-DIR="$(cd "$DIR" && pwd)"
+DIR="$(cd "$DIR" && pwd -P)"
 # Copy next to the target, then rename: a running agent-webmcp (the MCP
 # server) keeps its old file and never sees a half-written one.
 cp "$tmp/agent-webmcp" "$DIR/.agent-webmcp.new"
@@ -137,8 +137,9 @@ elif [ -n "${XDG_DATA_HOME:-}" ]; then
 else
   data="${HOME:?HOME is not set}/.local/share/agent-webmcp"
 fi
-mkdir -p "$data"
-printf 'script\n%s\n' "$DIR/agent-webmcp" > "$data/install-receipt"
+mkdir -p "$data" 2>/dev/null || die "installed, but cannot create $data for the upgrade receipt"
+printf 'script\n%s\n' "$DIR/agent-webmcp" > "$data/install-receipt" \
+  || die "installed, but cannot write $data/install-receipt"
 
 say "$installed installed to $DIR/agent-webmcp"
 case ":${PATH:-}:" in

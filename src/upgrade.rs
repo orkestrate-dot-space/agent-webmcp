@@ -1,6 +1,6 @@
-//! `agent-webmcp upgrade`: replace this CLI with a newer release through the
-//! package manager that installed it. Only npm global installs are upgraded
-//! in place; anything else gets the command to run by hand.
+//! `agent-webmcp upgrade`: replace this CLI with a newer release the way it
+//! was installed. npm global installs and install.sh copies upgrade in
+//! place; anything else gets the command to run by hand.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -150,8 +150,14 @@ fn upgrade_script(path: &Path, target: &str, explicit: bool, current: &str) -> R
     println!("upgrading agent-webmcp {current} -> {wanted}");
     let status = Command::new("sh")
         .arg("-c")
+        // Save the script first so a failed download fails the upgrade (`sh`
+        // has no pipefail). curl or wget, like install.sh itself.
         .arg(format!(
-            "curl -fsSL --proto '=https' --tlsv1.2 {INSTALL_SH} | sh"
+            r#"f=$(mktemp) || exit 1; trap 'rm -f "$f"' EXIT
+if command -v curl >/dev/null 2>&1; then curl -fsSL --proto '=https' --tlsv1.2 -o "$f" {INSTALL_SH} || exit 1
+elif command -v wget >/dev/null 2>&1; then wget -q -O "$f" {INSTALL_SH} || exit 1
+else echo 'agent-webmcp upgrade: needs curl or wget' >&2; exit 1; fi
+sh "$f""#
         ))
         .env("AGENT_WEBMCP_VERSION", &wanted)
         .env("AGENT_WEBMCP_INSTALL_DIR", dir)
