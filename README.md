@@ -43,10 +43,21 @@ so, and the agent uses its driver as usual.
 
 ## Quickstart
 
+Install one of two ways:
+
+| | |
+|---|---|
+| curl (Linux, macOS) | `curl -fsSL https://github.com/orkestrate-dot-space/agent-webmcp/releases/latest/download/install.sh \| sh` |
+| npm (any OS) | `npm i -g @orkestrate/agent-webmcp` |
+
+Then run first-run setup:
+
 ```console
-$ npm i -g @orkestrate/agent-webmcp
 $ agent-webmcp setup
 ```
+
+The curl script installs one checksum-verified binary to `~/.local/bin` and
+edits nothing else. Both installs upgrade with `agent-webmcp upgrade`.
 
 `setup` downloads the index, installs the agent skill (Claude Code, OpenCode
 and any `~/.agents` client), adds the MCP server to OpenCode, and prints
