@@ -22,6 +22,9 @@ import { entryFor, parseHost, validateRecord, validateSubmission } from "./valid
 const SCAN_TIMEOUT_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 2;
 const REBUILD_EVERY_MS = 7 * 24 * 60 * 60 * 1000;
+// A rebuild shard is a fraction of the index (the whole index is ~806 KB for
+// ~260 records); 8 MB is generous and well above any honest shard.
+export const REBUILD_BODY_MAX_BYTES = 8 * 1024 * 1024;
 
 export interface Row {
   id: string;
