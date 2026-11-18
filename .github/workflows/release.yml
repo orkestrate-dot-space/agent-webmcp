@@ -96,12 +96,15 @@ jobs:
         with:
           pattern: npm-*
           path: packages/out
-          merge-multiple: true
+          # NOTE: no merge-multiple. Each artifact uploads the *contents* of
+          # packages/out/<pkg> (bin/ + package.json at the artifact root),
+          # so merging would pile all five platforms into one franken-dir.
+          # Unmerged, each lands in packages/out/npm-<pkg>/.
       # actions/upload-artifact does not preserve the exec bit; without this
       # the binary in the npm tarball is non-executable and the wrapper fails
       # with EACCES (the wrapper also chmod-repairs on EACCES as a backstop
       # for already-published tarballs).
-      - run: chmod +x packages/out/*/bin/*
+      - run: chmod +x packages/out/npm-*/bin/*
       # Platform packages first (the wrapper depends on them), then the
       # wrapper. First release goes out under the `next` tag. After the
       # clean-machine test passes, move it:
@@ -111,7 +114,7 @@ jobs:
       - name: publish (real)
         if: github.ref_type == 'tag'
         run: |
-          for d in packages/out/*/; do (cd "$d" && npm publish --provenance --access public --tag next); done
+          for d in packages/out/npm-*/; do (cd "$d" && npm publish --provenance --access public --tag next); done
           npm publish --provenance --access public --tag next ./packages/agent-webmcp
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -119,5 +122,5 @@ jobs:
       - name: publish (dry run)
         if: github.ref_type != 'tag'
         run: |
-          for d in packages/out/*/; do (cd "$d" && npm publish --dry-run --access public --tag next); done
+          for d in packages/out/npm-*/; do (cd "$d" && npm publish --dry-run --access public --tag next); done
           npm publish --dry-run --access public --tag next ./packages/agent-webmcp
