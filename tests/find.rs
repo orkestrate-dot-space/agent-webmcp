@@ -373,3 +373,13 @@ fn gibberish_gets_the_no_match_line() {
     // The tool is still findable by a query that names it.
     assert_eq!(s.find("fix sink", 5).unwrap()[0].tool, "fix_sink");
 }
+
+#[test]
+fn fallback_scores_camel_case_names_like_the_index_splits_them() {
+    let s = Search::build(index()).unwrap();
+    // "xyz" matches nothing, so this goes through the any-two fallback;
+    // "flight" has to score through the camelCase name to clear the floor.
+    let hits = s.find("search flight xyz", 5).unwrap();
+    assert_eq!(hits[0].id, "googlechromelabs.github.io/searchFlights");
+    assert!(hits[0].relevance >= 12.0, "{:#?}", hits[0]);
+}

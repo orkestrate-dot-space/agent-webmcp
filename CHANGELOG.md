@@ -7,6 +7,10 @@
   points at npm for those versions instead of failing on a 404.
 - `find` drops fuzzy matches that earn less than one relevance point per
   query word, so gibberish gets the no-match line instead of weak hits.
+- `find` scores camelCase tool names the way the index splits them, so a
+  fallback match on the name counts.
+
+## 0.2.2 — 2026-11-18
 
 - curl install for Linux and macOS:
   `curl -fsSL https://github.com/orkestrate-dot-space/agent-webmcp/releases/latest/download/install.sh | sh`.

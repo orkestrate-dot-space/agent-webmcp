@@ -119,7 +119,7 @@ const MIN_SCRIPT_VERSION: &str = "0.2.2";
 pub fn script_reaches(wanted: &str) -> Result<()> {
     if newer_available(wanted, MIN_SCRIPT_VERSION) {
         bail!(
-            "release {wanted} ships no install-script binaries (script installs start at {MIN_SCRIPT_VERSION}); use npm instead: npm i -g {PACKAGE}@{wanted}"
+            "release {wanted} ships no install-script binaries (script installs start at {MIN_SCRIPT_VERSION}); install it with npm instead: npm i -g {PACKAGE}@{wanted}, then run the npm copy (npm's bin dir, not ~/.local/bin)"
         );
     }
     Ok(())
@@ -153,7 +153,6 @@ fn upgrade_script(path: &Path, target: &str, explicit: bool, current: &str) -> R
         ),
         v => v.to_string(),
     };
-    script_reaches(&wanted)?;
     if wanted == current {
         println!("agent-webmcp {current} is already the {target} release");
         return Ok(());
@@ -162,6 +161,9 @@ fn upgrade_script(path: &Path, target: &str, explicit: bool, current: &str) -> R
         println!("agent-webmcp {current} is newer than {target} ({wanted}); nothing to do");
         return Ok(());
     }
+    // After the no-ops: a bare `upgrade` while the index names an older
+    // release stays a no-op above, and only an explicit pin can fail here.
+    script_reaches(&wanted)?;
     let dir = path.parent().context("install path has no directory")?;
     println!("upgrading agent-webmcp {current} -> {wanted}");
     let status = Command::new("sh")

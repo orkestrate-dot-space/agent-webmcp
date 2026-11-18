@@ -409,13 +409,12 @@ fn relevance(words: &[String], host: &str, name: &str, description: &str, schema
 }
 
 /// Whether `text` has a word that starts with `word`, case-insensitively.
+/// CamelCase splits happen before lowercasing, the way the index splits
+/// names, so `searchFlights` offers both "search" and "flights".
 fn contains_word(text: &str, word: &str) -> bool {
     text.split(|c: char| !c.is_alphanumeric())
         .filter(|t| !t.is_empty())
-        .any(|t| {
-            let t = t.to_lowercase();
-            t.starts_with(word) || camel_pieces(t.as_str()).any(|p| p.starts_with(word))
-        })
+        .any(|t| t.to_lowercase().starts_with(word) || camel_pieces(t).any(|p| p.starts_with(word)))
 }
 
 /// "openDocumentation" also offers "open" and "documentation".
