@@ -18,7 +18,7 @@ PKG=@orkestrate/agent-webmcp
 cd "$(dirname "$0")/.."
 
 for p in "" -linux-x64 -linux-arm64 -darwin-arm64 -darwin-x64 -win32-x64; do
-  got="$(npm view "$PKG$p@$V" version 2>/dev/null || true)"
+  got="$(npm view --prefer-online "$PKG$p@$V" version 2>/dev/null || true)"
   [ "$got" = "$V" ] || { echo "npm has no $PKG$p@$V yet (replication can lag a minute)"; exit 1; }
 done
 
