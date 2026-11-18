@@ -18,20 +18,20 @@ permissions:
 
 jobs:
   check-tag:
-    # Tag pushes only; skipped (not failed) on PR / manual dry runs.
-    if: github.ref_type == 'tag'
+    # The tag check only applies to tag pushes; on PR / manual dry runs this
+    # job is a no-op success (a skipped job would transitively skip `publish`,
+    # which needs `build`, which needs this job).
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: |
+      - if: github.ref_type == 'tag'
+        run: |
           TAG="${GITHUB_REF_NAME#v}"
           CARGO="$(sed -n 's/^version *= *"\(.*\)"/\1/p' Cargo.toml | head -1)"
           [ "$TAG" = "$CARGO" ] || { echo "tag v$TAG does not match Cargo.toml $CARGO"; exit 1; }
 
   build:
     needs: check-tag
-    # Run when check-tag passed (tag push) or was skipped (dry run).
-    if: always() && (needs.check-tag.result == 'success' || needs.check-tag.result == 'skipped')
     strategy:
       fail-fast: false
       matrix:
