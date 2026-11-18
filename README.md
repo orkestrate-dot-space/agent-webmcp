@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/orkestrate-dot-space/agent-webmcp/main/.github/assets/banner.png" alt="agent-webmcp: tools for every site your agent visits" width="100%">
+  <img src="https://raw.githubusercontent.com/orkestrate-dot-space/agent-webmcp/main/.github/assets/banner.png" alt="agent-webmcp: WebMCP for AI agents" width="100%">
 </p>
 
 <p align="center">
