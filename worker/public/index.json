@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-17T23:55:54Z",
-  "sha256": "042f0837a057a7fa8ad67dc03fb7f3ecadb2fd992b61adaa86ea11351aba2d9d",
-  "url": "indexes/index-042f0837a057.json",
-  "bytes": 804931,
-  "sites": 102,
-  "tools": 514,
+  "generated_at": "2026-11-18T05:19:52Z",
+  "sha256": "f53558a4ee7672224f56617f31042a693cfe0dd56251db565dcbd4303b3e9ff4",
+  "url": "indexes/index-f53558a4ee76.json",
+  "bytes": 806703,
+  "sites": 100,
+  "tools": 515,
   "latest_cli": "0.2.0"
 }
