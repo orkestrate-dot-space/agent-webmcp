@@ -686,7 +686,8 @@ fn happy_path_returns_output_reused_and_removes_params() {
     let open = lines.iter().find(|l| l.contains(" open ")).unwrap();
     assert!(open.contains("--session test-s --json"), "{open}");
     assert!(open.contains("open https://cal.com/"), "{open}");
-    assert!(open.contains("--init-script @"), "{open}");
+    assert!(open.contains("--init-script /"), "{open}");
+    assert!(!open.contains("--init-script @"), "{open}");
     assert!(!open.contains("--profile"), "{open}");
     let invoke = lines.iter().find(|l| l.contains(" invoke ")).unwrap();
     assert!(invoke.contains("--session test-s --json"), "{invoke}");
@@ -1264,17 +1265,15 @@ fn init_script_passed_on_open_and_removed() {
     }
     let lines = argv_log(&dir, "ab");
     let open = lines.iter().find(|l| l.contains(" open ")).unwrap();
-    assert!(open.contains("--init-script @"), "{open}");
+    assert!(
+        !open.contains("--init-script @"),
+        "bare path, never @file: {open}"
+    );
     let path = open
         .split_whitespace()
-        .find(|w| w.starts_with("--init-script"))
-        .and_then(|_| {
-            open.split_whitespace()
-                .skip_while(|w| *w != "--init-script")
-                .nth(1)
-        })
-        .unwrap()
-        .trim_start_matches('@');
+        .skip_while(|w| *w != "--init-script")
+        .nth(1)
+        .unwrap();
     assert!(
         !std::path::Path::new(path).exists(),
         "init script must be removed"

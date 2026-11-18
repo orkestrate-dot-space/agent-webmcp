@@ -216,7 +216,8 @@ impl AgentBrowser {
             open_argv.push(cdp.clone());
         }
         open_argv.push("--init-script".to_string());
-        open_argv.push(format!("@{}", _recorder.path.display()));
+        // Bare path: the @file form is silently ignored for init scripts.
+        open_argv.push(_recorder.path.display().to_string());
         open_argv.push("open".to_string());
         open_argv.push(req.page.clone());
 
