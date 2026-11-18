@@ -1,5 +1,10 @@
 //! agent-browser: the only driver agent-webmcp runs itself, over a session.
 
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
+
 use super::{CallRequest, Detection, Driver, Kind, Plan, RunOptions, RunOutcome, Step};
 use crate::call::CallError;
 use crate::config::Config;
@@ -106,18 +111,31 @@ pub fn detect_with(
 /// Run `<command> --version`, giving up after five seconds.
 fn run_version(command: &str) -> std::io::Result<std::process::Output> {
     use std::time::Duration;
-    let child = std::process::Command::new(command)
+    let mut child = std::process::Command::new(command)
         .arg("--version")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
         .spawn()?;
+    let budget = Arc::new(AtomicUsize::new(DRAIN_CAP));
+    let out_rx = drain_stream(child.stdout.take(), budget);
     let deadline = std::time::Instant::now() + Duration::from_secs(5);
     match wait_deadline(child, deadline)? {
-        Some(output) => Ok(output),
-        None => Err(std::io::Error::new(
-            std::io::ErrorKind::TimedOut,
-            "timed out running --version",
-        )),
+        Some(output) => {
+            let (stdout, _) = out_rx.recv().unwrap_or_default();
+            Ok(std::process::Output {
+                status: output.status,
+                stdout,
+                stderr: Vec::new(),
+            })
+        }
+        None => {
+            let grace = std::time::Duration::from_secs(2);
+            let _ = out_rx.recv_timeout(grace);
+            Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "timed out running --version",
+            ))
+        }
     }
 }
 
@@ -170,6 +188,125 @@ fn parse_version(text: &str) -> Option<String> {
     None
 }
 
+/// Per-call budgets: every phase gets min(its cap, remaining total).
+struct CallBudget {
+    /// Hard deadline: timeout + settle + 30 s grace.
+    deadline: std::time::Instant,
+    /// Per-invoke tool budget, passed to the tool itself.
+    timeout_ms: u64,
+    /// The total, reported as `budgetMs`.
+    total_ms: u64,
+}
+
+impl CallBudget {
+    fn new(timeout_ms: u64, settle_ms: u64, started: std::time::Instant) -> Self {
+        let total_ms = timeout_ms.saturating_add(settle_ms).saturating_add(30_000);
+        Self {
+            deadline: started + std::time::Duration::from_millis(total_ms),
+            timeout_ms,
+            total_ms,
+        }
+    }
+
+    /// Milliseconds left of the total, saturating.
+    fn remaining_ms(&self) -> u64 {
+        self.deadline
+            .saturating_duration_since(std::time::Instant::now())
+            .as_millis()
+            .min(u128::from(u64::MAX)) as u64
+    }
+
+    /// Budget for one phase: its hardcoded cap or what is left.
+    fn phase(&self, cap_ms: u64, phase: &str) -> Result<u64, CallError> {
+        self.checkpoint(phase)?;
+        Ok(cap_ms.min(self.remaining_ms()))
+    }
+
+    /// Fail with a phase-naming timeout when the total is exhausted.
+    fn checkpoint(&self, phase: &str) -> Result<(), CallError> {
+        if self.remaining_ms() == 0 {
+            return Err(CallError {
+                code: "timeout",
+                message: format!("timed out before {phase}; total call budget exhausted"),
+                data: None,
+            });
+        }
+        Ok(())
+    }
+
+    /// Cap without failing: for lenient steps that may simply be skipped.
+    fn cap(&self, hard_ms: u64) -> u64 {
+        hard_ms.min(self.remaining_ms())
+    }
+}
+
+/// Piped output collected while waiting; memory is capped, not the child.
+struct ChildOutput {
+    stdout: String,
+    stderr: String,
+    truncated: bool,
+}
+
+/// Cap for piped output kept in memory, total across both streams.
+const DRAIN_CAP: usize = 8 * 1024 * 1024;
+
+/// Drain one pipe into memory, keeping at most the shared budget allows.
+/// Always reads to EOF so the child can never block on a full pipe; bytes
+/// past the budget are counted but dropped, and flagged as truncated.
+fn drain_stream<R: std::io::Read + Send + 'static>(
+    pipe: Option<R>,
+    budget: Arc<AtomicUsize>,
+) -> std::sync::mpsc::Receiver<(Vec<u8>, bool)> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut kept = Vec::new();
+        let mut truncated = false;
+        if let Some(mut pipe) = pipe {
+            let mut chunk = [0u8; 32 * 1024];
+            loop {
+                let n = match pipe.read(&mut chunk) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => n,
+                };
+                let mut pos = 0;
+                while pos < n {
+                    let remaining = budget.load(Ordering::Relaxed);
+                    if remaining == 0 {
+                        truncated = true;
+                        break;
+                    }
+                    let take = remaining.min(n - pos);
+                    if budget
+                        .compare_exchange_weak(
+                            remaining,
+                            remaining - take,
+                            Ordering::Relaxed,
+                            Ordering::Relaxed,
+                        )
+                        .is_ok()
+                    {
+                        kept.extend_from_slice(&chunk[pos..pos + take]);
+                        pos += take;
+                    }
+                }
+            }
+        }
+        let _ = tx.send((kept, truncated));
+    });
+    rx
+}
+
+/// A timeout error naming the phase that was running.
+fn timed_out(phase: &str) -> CallError {
+    CallError {
+        code: "timeout",
+        message: format!(
+            "agent-browser did not answer during {phase}; retry with a larger --timeout"
+        ),
+        data: None,
+    }
+}
+
 impl AgentBrowser {
     fn run_inner(&self, req: &CallRequest, opts: &RunOptions) -> Result<RunOutcome, CallError> {
         let session = if opts.fresh {
@@ -184,7 +321,6 @@ impl AgentBrowser {
         } else {
             self.session.clone()
         };
-        let deadline_ms = opts.timeout_ms.saturating_add(15_000);
         let mut base = vec![
             "--session".to_string(),
             session.clone(),
@@ -193,18 +329,6 @@ impl AgentBrowser {
         if opts.headed {
             base.push("--headed".to_string());
         }
-        let mut open_argv = base.clone();
-        if let Some(profile) = &opts.profile {
-            open_argv.push("--profile".to_string());
-            open_argv.push(profile.clone());
-        }
-        if let Some(cdp) = &opts.cdp {
-            open_argv.push("--cdp".to_string());
-            open_argv.push(cdp.clone());
-        }
-        open_argv.push("open".to_string());
-        open_argv.push(req.page.clone());
-
         let _recorder = write_init_script()?;
         let mut open_argv = base.clone();
         if let Some(profile) = &opts.profile {
@@ -215,6 +339,15 @@ impl AgentBrowser {
             open_argv.push("--cdp".to_string());
             open_argv.push(cdp.clone());
         }
+        for arg in &opts.extra_args {
+            open_argv.push("--args".to_string());
+            open_argv.push(arg.clone());
+        }
+        // Always launch with the WebMCP feature: without it, registration is
+        // a per-page lottery. agent-browser merges repeated --args into the
+        // one --enable-features switch, so no dedupe here.
+        open_argv.push("--args".to_string());
+        open_argv.push("--enable-features=WebMCP".to_string());
         open_argv.push("--init-script".to_string());
         // Bare path: the @file form is silently ignored for init scripts.
         open_argv.push(_recorder.path.display().to_string());
@@ -222,7 +355,40 @@ impl AgentBrowser {
         open_argv.push(req.page.clone());
 
         let started = std::time::Instant::now();
-        let open_val = run_step(&self.command, &open_argv, deadline_ms)?;
+        let budgets = CallBudget::new(opts.timeout_ms, opts.settle_ms.min(30_000), started);
+        let outcome = self.run_phases(req, opts, &base, &open_argv, &session, &budgets, started);
+        // Timeouts already attempted a close inside run_command; a fresh
+        // session only needs its close when the call did not time out.
+        let timed_out = matches!(&outcome, Err(e) if e.code == "timeout");
+        if !timed_out
+            && opts.fresh
+            && let Ok(ms) = budgets.phase(15_000, "close")
+        {
+            self.close_session(&session, ms);
+        }
+        outcome
+    }
+
+    /// Open, settle, and invoke; the caller closes the session afterwards.
+    #[allow(clippy::too_many_arguments)]
+    fn run_phases(
+        &self,
+        req: &CallRequest,
+        opts: &RunOptions,
+        base: &[String],
+        open_argv: &[String],
+        session: &str,
+        budgets: &CallBudget,
+        started: std::time::Instant,
+    ) -> Result<RunOutcome, CallError> {
+        let open_cap = opts.timeout_ms.saturating_add(15_000);
+        let open_val = run_step(
+            &self.command,
+            open_argv,
+            budgets.phase(open_cap, "open")?,
+            session,
+            "open",
+        )?;
         if !is_success(&open_val) {
             return Err(open_failure(&open_val));
         }
@@ -240,33 +406,46 @@ impl AgentBrowser {
             .and_then(serde_json::Value::as_bool)
             .unwrap_or(false);
 
-        let budget_ms = opts.settle_ms.min(30_000);
+        let settle_ms = opts.settle_ms.min(30_000);
         let announced = tool_names_at(&open_val, "/data/webmcp/tools");
         let result = if announced.iter().any(|n| n == &req.tool) {
-            map_invoke(self.invoke_once(req, &base, deadline_ms, opts.timeout_ms)?)
+            map_invoke(self.invoke_once(req, base, session, budgets)?)
         } else if is_blocked_page(title, page_url, "") {
             Err(blocked_page(page_url, title))
-        } else if budget_ms == 0 {
-            self.invoke_legacy(req, opts, &base, &open_argv, deadline_ms)
+        } else if settle_ms == 0 {
+            self.invoke_legacy(req, base, open_argv, session, budgets)
         } else {
-            self.settle_invoke(req, opts, &base, deadline_ms, budget_ms, title, page_url)
+            self.settle_invoke(
+                req,
+                base,
+                session,
+                budgets,
+                settle_ms,
+                announced.is_empty(),
+                title,
+                page_url,
+            )
         };
-        if opts.fresh {
-            let _ = run_command(
-                &self.command,
-                &[
-                    "--session".to_string(),
-                    session.clone(),
-                    "close".to_string(),
-                ],
-                15_000,
-            );
-        }
         result.map(|output| RunOutcome {
             output,
             duration_ms: started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64,
             reused,
+            budget_ms: budgets.total_ms,
         })
+    }
+
+    /// Best-effort session close; never fails the call.
+    fn close_session(&self, session: &str, deadline_ms: u64) {
+        let _ = run_command_raw(
+            &self.command,
+            &[
+                "--session".to_string(),
+                session.to_string(),
+                "close".to_string(),
+            ],
+            deadline_ms,
+            "close",
+        );
     }
 
     /// One invoke attempt: params file, invoke, parse. No retry here.
@@ -274,8 +453,8 @@ impl AgentBrowser {
         &self,
         req: &CallRequest,
         base: &[String],
-        deadline_ms: u64,
-        timeout_ms: u64,
+        session: &str,
+        budgets: &CallBudget,
     ) -> Result<serde_json::Value, CallError> {
         let input_json = serde_json::to_string(&req.input).unwrap_or_else(|_| "{}".to_string());
         let params = write_params_file(&input_json)?;
@@ -287,9 +466,16 @@ impl AgentBrowser {
             "--params".to_string(),
             format!("@{}", params.path.display()),
             "--timeout".to_string(),
-            timeout_ms.to_string(),
+            budgets.timeout_ms.to_string(),
         ]);
-        parse_envelope(&run_command(&self.command, &invoke_argv, deadline_ms)?)
+        let cap = budgets.timeout_ms.saturating_add(15_000);
+        parse_envelope(&run_command(
+            &self.command,
+            &invoke_argv,
+            budgets.phase(cap, "invoke")?,
+            session,
+            "invoke",
+        )?)
     }
 
     /// Today's shape for settle_ms 0: invoke, re-open once on
@@ -297,54 +483,77 @@ impl AgentBrowser {
     fn invoke_legacy(
         &self,
         req: &CallRequest,
-        opts: &RunOptions,
         base: &[String],
         open_argv: &[String],
-        deadline_ms: u64,
+        session: &str,
+        budgets: &CallBudget,
     ) -> Result<serde_json::Value, CallError> {
-        let first = self.invoke_once(req, base, deadline_ms, opts.timeout_ms)?;
+        let first = self.invoke_once(req, base, session, budgets)?;
         if is_success(&first) || invoke_code(&first) != "webmcp_tool_not_found" {
             return map_invoke(first);
         }
-        let reopened = run_step(&self.command, open_argv, deadline_ms)?;
+        let cap = budgets.timeout_ms.saturating_add(15_000);
+        let reopened = run_step(
+            &self.command,
+            open_argv,
+            budgets.phase(cap, "open")?,
+            session,
+            "open",
+        )?;
         if !is_success(&reopened) {
             return Err(open_failure(&reopened));
         }
-        let second = self.invoke_once(req, base, deadline_ms, opts.timeout_ms)?;
+        let second = self.invoke_once(req, base, session, budgets)?;
         if !is_success(&second) && invoke_code(&second) == "webmcp_tool_not_found" {
             return Err(tool_not_found(&req.tool));
         }
         map_invoke(second)
     }
 
-    /// Settle for a late tool: poll, reload once, settle again, look once.
-    /// The two settle phases share one budget, not one each.
+    /// Settle for a late tool: first look, probe, poll, reload once, settle
+    /// again, look once. The two settle phases share one budget, not one each.
     #[allow(clippy::too_many_arguments)]
     fn settle_invoke(
         &self,
         req: &CallRequest,
-        opts: &RunOptions,
         base: &[String],
-        deadline_ms: u64,
-        budget_ms: u64,
+        session: &str,
+        budgets: &CallBudget,
+        settle_ms: u64,
+        announced_empty: bool,
         title: &str,
         page_url: &str,
     ) -> Result<serde_json::Value, CallError> {
-        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(budget_ms);
-        if self.poll_until_present(base, &req.tool, deadline) {
-            return map_invoke(self.invoke_once(req, base, deadline_ms, opts.timeout_ms)?);
+        let stop_at = std::time::Instant::now()
+            .checked_add(std::time::Duration::from_millis(settle_ms))
+            .unwrap_or(budgets.deadline);
+        let stop_at = stop_at.min(budgets.deadline);
+        // The first look: found → invoke; empty plus an empty announcement →
+        // probe the JS API before concluding anything.
+        if self.poll_once(base, &req.tool, budgets.cap(15_000), session) {
+            return map_invoke(self.invoke_once(req, base, session, budgets)?);
         }
-        self.reload_and_wait(base, deadline_ms);
-        if self.poll_until_present(base, &req.tool, deadline) {
-            return map_invoke(self.invoke_once(req, base, deadline_ms, opts.timeout_ms)?);
+        if announced_empty
+            && let Some(api) = self.probe_api(base, session, budgets)
+            && api != "object"
+        {
+            return Err(webmcp_unsupported(&api));
         }
-        if self.poll_once(base, &req.tool) {
-            return map_invoke(self.invoke_once(req, base, deadline_ms, opts.timeout_ms)?);
+        if self.poll_until_present(base, &req.tool, stop_at, session) {
+            return map_invoke(self.invoke_once(req, base, session, budgets)?);
+        }
+        self.reload_and_wait(base, session, budgets);
+        if self.poll_until_present(base, &req.tool, stop_at, session) {
+            return map_invoke(self.invoke_once(req, base, session, budgets)?);
+        }
+        budgets.checkpoint("list")?;
+        if self.poll_once(base, &req.tool, budgets.cap(15_000), session) {
+            return map_invoke(self.invoke_once(req, base, session, budgets)?);
         }
         if is_blocked_page(title, page_url, "") {
             return Err(blocked_page(page_url, title));
         }
-        if read_recorder(&self.command, base).contains(&req.tool) {
+        if read_recorder(&self.command, base, session, budgets).contains(&req.tool) {
             return Err(tool_removed(&req.tool));
         }
         Err(tool_not_found(&req.tool))
@@ -356,25 +565,32 @@ impl AgentBrowser {
         &self,
         base: &[String],
         tool: &str,
-        deadline: std::time::Instant,
+        stop_at: std::time::Instant,
+        session: &str,
     ) -> bool {
         loop {
-            if std::time::Instant::now() >= deadline {
+            let now = std::time::Instant::now();
+            if now >= stop_at {
                 return false;
             }
-            if self.poll_once(base, tool) {
+            let remaining = stop_at.saturating_duration_since(now);
+            let per_poll_ms = remaining
+                .min(std::time::Duration::from_millis(15_000))
+                .as_millis()
+                .min(u128::from(u64::MAX)) as u64;
+            if self.poll_once(base, tool, per_poll_ms, session) {
                 return true;
             }
-            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            let remaining = stop_at.saturating_duration_since(std::time::Instant::now());
             std::thread::sleep(remaining.min(std::time::Duration::from_millis(500)));
         }
     }
 
     /// One settle poll: lenient, so a busy page costs budget, not errors.
-    fn poll_once(&self, base: &[String], tool: &str) -> bool {
+    fn poll_once(&self, base: &[String], tool: &str, per_poll_ms: u64, session: &str) -> bool {
         let mut argv = base.to_vec();
         argv.extend(["webmcp".to_string(), "list".to_string(), tool.to_string()]);
-        let out = match run_command(&self.command, &argv, 15_000) {
+        let out = match run_command(&self.command, &argv, per_poll_ms, session, "list") {
             Ok(out) => out,
             Err(_) => return false,
         };
@@ -385,12 +601,37 @@ impl AgentBrowser {
         is_success(&val) && tool_listed(&val, tool)
     }
 
+    /// The JS API shape, or None when the probe itself failed.
+    fn probe_api(&self, base: &[String], session: &str, budgets: &CallBudget) -> Option<String> {
+        let mut argv = base.to_vec();
+        argv.extend([
+            "eval".to_string(),
+            "typeof document.modelContext".to_string(),
+        ]);
+        let out = run_command(&self.command, &argv, budgets.cap(15_000), session, "eval").ok()?;
+        let val = parse_envelope(&out).ok()?;
+        if !is_success(&val) {
+            return None;
+        }
+        val.get("data")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string)
+    }
+
     /// Reload once and wait for load, like the weekly scanner. A failed
     /// reload still gets its second look; transport errors propagate.
-    fn reload_and_wait(&self, base: &[String], deadline_ms: u64) {
+    fn reload_and_wait(&self, base: &[String], session: &str, budgets: &CallBudget) {
         let mut reload_argv = base.to_vec();
         reload_argv.push("reload".to_string());
-        if run_step(&self.command, &reload_argv, deadline_ms).is_err() {
+        if run_step(
+            &self.command,
+            &reload_argv,
+            budgets.phase(15_000, "reload").unwrap_or(0),
+            session,
+            "reload",
+        )
+        .is_err()
+        {
             return;
         }
         let mut wait_argv = base.to_vec();
@@ -401,7 +642,15 @@ impl AgentBrowser {
             "--timeout".to_string(),
             "15000".to_string(),
         ]);
-        let _ = run_command(&self.command, &wait_argv, 20_000);
+        if budgets.remaining_ms() > 0 {
+            let _ = run_command(
+                &self.command,
+                &wait_argv,
+                budgets.cap(20_000),
+                session,
+                "wait",
+            );
+        }
     }
 }
 
@@ -410,8 +659,10 @@ fn run_step(
     command: &str,
     argv: &[String],
     deadline_ms: u64,
+    session: &str,
+    phase: &str,
 ) -> Result<serde_json::Value, CallError> {
-    parse_envelope(&run_command(command, argv, deadline_ms)?)
+    parse_envelope(&run_command(command, argv, deadline_ms, session, phase)?)
 }
 
 /// Tool names at a JSON pointer to a `[{name, ...}]` array, if any.
@@ -471,6 +722,16 @@ fn blocked_page(url: &str, title: &str) -> CallError {
     }
 }
 
+/// The browser cannot run WebMCP at all: diagnose, do not settle.
+fn webmcp_unsupported(api: &str) -> CallError {
+    CallError {
+        code: "webmcp_unsupported",
+        message: "this browser does not expose document.modelContext (needs Chrome 149+ with --enable-features=WebMCP); agent-webmcp passes it automatically — upgrade agent-browser/Chrome"
+            .to_string(),
+        data: Some(serde_json::json!({ "api": api })),
+    }
+}
+
 /// The page never registered the tool.
 fn tool_not_found(tool: &str) -> CallError {
     CallError {
@@ -494,11 +755,19 @@ fn tool_removed(tool: &str) -> CallError {
 }
 
 /// Names the recorder saw, via one `eval`. Lenient: failure means none.
-fn read_recorder(command: &str, base: &[String]) -> Vec<String> {
+fn read_recorder(
+    command: &str,
+    base: &[String],
+    session: &str,
+    budgets: &CallBudget,
+) -> Vec<String> {
     const READ: &str = r#"(()=>{try{return (window.__wmcSeen||[]).filter(function(n){return typeof n==="string";});}catch(e){return [];}})();"#;
     let mut argv = base.to_vec();
     argv.extend(["eval".to_string(), READ.to_string()]);
-    let Ok(out) = run_command(command, &argv, 15_000) else {
+    let Ok(ms) = budgets.phase(15_000, "eval") else {
+        return Vec::new();
+    };
+    let Ok(out) = run_command(command, &argv, ms, session, "eval") else {
         return Vec::new();
     };
     let Ok(val) = parse_envelope(&out) else {
@@ -602,8 +871,43 @@ fn write_temp(name: &str, contents: &str) -> Result<TempFile, CallError> {
 }
 
 /// Run a child with args, captured output, and a hard deadline.
-fn run_command(command: &str, args: &[String], deadline_ms: u64) -> Result<String, CallError> {
-    let child = std::process::Command::new(command)
+/// Run a child with args, drained output, and a hard deadline. `session`
+/// names the agent-browser session to close if the child has to be killed:
+/// the daemon cannot reap Chrome/grandchildren without a process group.
+fn run_command(
+    command: &str,
+    args: &[String],
+    deadline_ms: u64,
+    session: &str,
+    phase: &str,
+) -> Result<ChildOutput, CallError> {
+    match run_command_raw(command, args, deadline_ms, phase) {
+        Ok(out) => Ok(out),
+        Err(e) if e.code == "timeout" => {
+            let _ = run_command_raw(
+                command,
+                &[
+                    "--session".to_string(),
+                    session.to_string(),
+                    "close".to_string(),
+                ],
+                15_000,
+                "close",
+            );
+            Err(e)
+        }
+        Err(e) => Err(e),
+    }
+}
+
+/// Spawn, drain, and wait; timeouts kill without closing anything.
+fn run_command_raw(
+    command: &str,
+    args: &[String],
+    deadline_ms: u64,
+    phase: &str,
+) -> Result<ChildOutput, CallError> {
+    let mut child = std::process::Command::new(command)
         .args(args)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -613,19 +917,33 @@ fn run_command(command: &str, args: &[String], deadline_ms: u64) -> Result<Strin
             message: format!("could not run {command}: {e}"),
             data: None,
         })?;
+    let budget = Arc::new(AtomicUsize::new(DRAIN_CAP));
+    let out_rx = drain_stream(child.stdout.take(), budget.clone());
+    let err_rx = drain_stream(child.stderr.take(), budget);
     let deadline = std::time::Instant::now() + std::time::Duration::from_millis(deadline_ms);
     match wait_deadline(child, deadline).map_err(|e| CallError {
         code: "driver_error",
         message: format!("could not wait for {command}: {e}"),
         data: None,
     })? {
-        Some(output) => Ok(String::from_utf8_lossy(&output.stdout).into_owned()),
-        None => Err(CallError {
-            code: "timeout",
-            message: "agent-browser did not answer in time; retry with a larger --timeout"
-                .to_string(),
-            data: None,
-        }),
+        Some(_) => {
+            let (out, out_truncated) = out_rx.recv().unwrap_or_default();
+            let (err, err_truncated) = err_rx.recv().unwrap_or_default();
+            Ok(ChildOutput {
+                stdout: String::from_utf8_lossy(&out).into_owned(),
+                stderr: String::from_utf8_lossy(&err).into_owned(),
+                truncated: out_truncated || err_truncated,
+            })
+        }
+        None => {
+            // The child is dead; readers only linger if an orphaned
+            // grandchild holds the pipe. Wait briefly, then detach them
+            // rather than hang the call.
+            let grace = std::time::Duration::from_secs(2);
+            let _ = out_rx.recv_timeout(grace);
+            let _ = err_rx.recv_timeout(grace);
+            Err(timed_out(phase))
+        }
     }
 }
 
@@ -649,13 +967,20 @@ fn wait_deadline(
 }
 
 /// Parse agent-browser stdout; anything else is a driver error naming 0.43.
-fn parse_envelope(stdout: &str) -> Result<serde_json::Value, CallError> {
-    serde_json::from_str(stdout).map_err(|_| CallError {
-        code: "driver_error",
-        message: "agent-browser printed something that is not JSON; is it 0.43+?".to_string(),
-        data: Some(serde_json::json!({
-            "stdout": stdout.chars().take(200).collect::<String>(),
-        })),
+fn parse_envelope(out: &ChildOutput) -> Result<serde_json::Value, CallError> {
+    serde_json::from_str(&out.stdout).map_err(|_| {
+        let mut data = serde_json::json!({
+            "stdout": out.stdout.chars().take(200).collect::<String>(),
+            "stderr": out.stderr.chars().take(500).collect::<String>(),
+        });
+        if out.truncated {
+            data["truncated"] = serde_json::Value::Bool(true);
+        }
+        CallError {
+            code: "driver_error",
+            message: "agent-browser printed something that is not JSON; is it 0.43+?".to_string(),
+            data: Some(data),
+        }
     })
 }
 

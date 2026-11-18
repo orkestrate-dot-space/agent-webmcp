@@ -51,6 +51,12 @@
               "type": ["string", "null"],
               "default": null,
               "description": "Attach to a running Chrome; user config only."
+            },
+            "extraArgs": {
+              "type": "array",
+              "items": { "type": "string" },
+              "default": [],
+              "description": "Extra --args values for agent-browser, before the WebMCP one; user config only."
             }
           }
         }
@@ -64,7 +70,7 @@
       "properties": {
         "timeout": {
           "type": "integer",
-          "minimum": 0,
+          "minimum": 1,
           "default": 60000,
           "description": "How long one tool call may take, in milliseconds."
         },

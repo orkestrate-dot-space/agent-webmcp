@@ -95,6 +95,8 @@ pub struct RunOptions {
     pub timeout_ms: u64,
     /// How long to wait for a late tool registration, in milliseconds.
     pub settle_ms: u64,
+    /// Extra `--args` values, passed on `open` before the WebMCP one.
+    pub extra_args: Vec<String>,
     pub headed: bool,
     pub fresh: bool,
     pub profile: Option<String>,
@@ -107,6 +109,8 @@ pub struct RunOutcome {
     pub output: Value,
     pub duration_ms: u64,
     pub reused: bool,
+    /// timeout + settle + 30 s grace, the budget the run lived under.
+    pub budget_ms: u64,
 }
 
 /// Every driver, agent-browser first; sessions come from config.

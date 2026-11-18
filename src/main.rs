@@ -398,6 +398,38 @@ fn call_command(
             std::process::exit(call::exit_code(&e));
         }
     };
+    for (name, value, check) in [
+        (
+            "--timeout",
+            timeout,
+            config::check_timeout_ms as fn(u64, &str) -> anyhow::Result<()>,
+        ),
+        ("--settle", settle, config::check_settle_ms),
+    ] {
+        if let Some(v) = value
+            && let Err(e) = check(v, name)
+        {
+            let e = call::CallError::usage(format!("{e:#}"));
+            call::print_failure(&e);
+            std::process::exit(call::exit_code(&e));
+        }
+    }
+    for (name, value, check) in [
+        (
+            "--timeout",
+            timeout,
+            config::check_timeout_ms as fn(u64, &str) -> anyhow::Result<()>,
+        ),
+        ("--settle", settle, config::check_settle_ms),
+    ] {
+        if let Some(v) = value
+            && let Err(e) = check(v, name)
+        {
+            let e = call::CallError::usage(format!("{e:#}"));
+            call::print_failure(&e);
+            std::process::exit(call::exit_code(&e));
+        }
+    }
     cfg.apply_overrides(&config::Overrides {
         driver: choice,
         session,

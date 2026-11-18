@@ -567,3 +567,91 @@ fn bad_settle_errors_naming_the_var() {
     let err = load_with(env, tmp.path()).unwrap_err().to_string();
     assert!(err.contains("AGENT_WEBMCP_SETTLE"), "{err}");
 }
+
+#[test]
+fn timeout_zero_or_huge_in_file_is_rejected() {
+    for timeout in ["0", "3600001"] {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join("home");
+        let cwd = tmp.path().join("work");
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::create_dir_all(&cwd).unwrap();
+        std::fs::create_dir_all(home.join(".config/agent-webmcp")).unwrap();
+        std::fs::write(
+            home.join(".config/agent-webmcp/agent-webmcp.json"),
+            format!(r#"{{"call": {{"timeout": {timeout}}}}}"#),
+        )
+        .unwrap();
+        let err = load_with(base_env(&home), &cwd).unwrap_err().to_string();
+        assert!(err.contains("timeout must be 1..3600000 ms"), "{err}");
+        assert!(err.contains("agent-webmcp.json"), "names the file: {err}");
+    }
+}
+
+#[test]
+fn settle_ms_out_of_range_in_file_is_rejected() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("home");
+    let cwd = tmp.path().join("work");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(&cwd).unwrap();
+    std::fs::create_dir_all(home.join(".config/agent-webmcp")).unwrap();
+    std::fs::write(
+        home.join(".config/agent-webmcp/agent-webmcp.json"),
+        r#"{"call": {"settleMs": 99999}}"#,
+    )
+    .unwrap();
+    let err = load_with(base_env(&home), &cwd).unwrap_err().to_string();
+    assert!(err.contains("settle_ms must be 0..30000 ms"), "{err}");
+}
+
+#[test]
+fn env_timeout_out_of_range_names_the_var() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    let mut env = base_env(&home);
+    env.insert("AGENT_WEBMCP_TIMEOUT".to_string(), "0".to_string());
+    let err = load_with(env, tmp.path()).unwrap_err().to_string();
+    assert!(err.contains("AGENT_WEBMCP_TIMEOUT"), "{err}");
+    assert!(err.contains("timeout must be 1..3600000 ms"), "{err}");
+}
+
+#[test]
+fn extra_args_merge_and_env_parse() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("home");
+    let cwd = tmp.path().join("work");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(&cwd).unwrap();
+    std::fs::create_dir_all(home.join(".config/agent-webmcp")).unwrap();
+    std::fs::write(
+        home.join(".config/agent-webmcp/agent-webmcp.json"),
+        r#"{"drivers": {"agent-browser": {"extraArgs": ["--from-file"]}}}"#,
+    )
+    .unwrap();
+    let mut env = base_env(&home);
+    env.insert(
+        "AGENT_WEBMCP_EXTRA_ARGS".to_string(),
+        "a, b,,c ".to_string(),
+    );
+    let loaded = load_with(env, &cwd).unwrap();
+    assert_eq!(
+        loaded.config.drivers.agent_browser.extra_args,
+        vec!["a", "b", "c"]
+    );
+}
+
+#[test]
+fn project_file_setting_extra_args_is_rejected() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (home, _) = workdir(&tmp, "work");
+    let repo = tmp.path().join("repo");
+    std::fs::create_dir_all(repo.join(".git")).unwrap();
+    write(
+        &repo.join("agent-webmcp.json"),
+        r#"{"drivers": {"agent-browser": {"extraArgs": ["--x"]}}}"#,
+    );
+    let err = load_with(base_env(&home), &repo).unwrap_err().to_string();
+    assert!(err.contains("drivers.agent-browser.extraArgs"), "{err}");
+}

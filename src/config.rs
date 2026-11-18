@@ -46,6 +46,10 @@ pub struct AgentBrowserSettings {
     pub session: String,
     /// Show the browser window instead of running headless.
     pub headed: bool,
+    /// Extra `--args` values for agent-browser, before the WebMCP one.
+    /// User config only; agent-webmcp merges duplicates itself.
+    #[serde(default)]
+    pub extra_args: Vec<String>,
     /// Logged-in Chrome profile dir; user config only.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub profile: Option<String>,
@@ -62,6 +66,7 @@ impl Default for AgentBrowserSettings {
             headed: false,
             profile: None,
             cdp: None,
+            extra_args: Vec::new(),
         }
     }
 }
@@ -247,7 +252,7 @@ pub fn load_from(env: &dyn Fn(&str) -> Option<String>, cwd: &Path) -> Result<Loa
             .map(Path::to_path_buf)
             .unwrap_or_else(|| cwd.to_path_buf());
         substitute(&mut value, &dir, env, &home, None, &path, false)?;
-        check_file(&value, &path)?;
+        check_ranges(&check_file(&value, &path)?, &path)?;
         merge_into(&mut merged, value);
         sources.push(Source {
             kind: SourceKind::User,
@@ -263,7 +268,7 @@ pub fn load_from(env: &dyn Fn(&str) -> Option<String>, cwd: &Path) -> Result<Loa
         if let Some(path) = found {
             let mut value = read_file(&path)?;
             substitute(&mut value, &dir, env, &home, None, &path, false)?;
-            check_file(&value, &path)?;
+            check_ranges(&check_file(&value, &path)?, &path)?;
             merge_into(&mut merged, value);
             sources.push(Source {
                 kind: SourceKind::User,
@@ -287,7 +292,7 @@ pub fn load_from(env: &dyn Fn(&str) -> Option<String>, cwd: &Path) -> Result<Loa
                 &path,
                 true,
             )?;
-            check_file(&value, &path)?;
+            check_ranges(&check_file(&value, &path)?, &path)?;
             check_project_keys(&value, &path, &user_expected)?;
             merge_into(&mut merged, value);
             sources.push(Source {
@@ -430,9 +435,8 @@ fn read_file(path: &Path) -> Result<serde_json::Value> {
 }
 
 /// Type-check one file on its own so typos name the file they came from.
-fn check_file(value: &serde_json::Value, path: &Path) -> Result<()> {
+fn check_file(value: &serde_json::Value, path: &Path) -> Result<Config> {
     serde_json::from_value::<Config>(value.clone())
-        .map(|_| ())
         .map_err(|e| anyhow::anyhow!("invalid config in {}: {e}", path.display()))
 }
 
@@ -661,6 +665,41 @@ fn merge_permissions(base: &mut serde_json::Value, over: serde_json::Value) {
     }
 }
 
+/// Millisecond bounds for `call.timeout`: zero never runs, huge never returns.
+pub const TIMEOUT_RANGE: (u64, u64) = (1, 3_600_000);
+/// Millisecond bounds for `call.settle_ms`: zero waits not at all.
+pub const SETTLE_RANGE: (u64, u64) = (0, 30_000);
+
+/// Check a millisecond setting against its range; errors name the source.
+fn check_ms(name: &str, value: u64, range: (u64, u64), source: &str) -> Result<()> {
+    if value < range.0 || value > range.1 {
+        bail!(
+            "{name} must be {min}..{max} ms, got {value} from {source}",
+            min = range.0,
+            max = range.1
+        );
+    }
+    Ok(())
+}
+
+/// Range-check `call.timeout` from any layer; errors name the source.
+pub fn check_timeout_ms(value: u64, source: &str) -> Result<()> {
+    check_ms("timeout", value, TIMEOUT_RANGE, source)
+}
+
+/// Range-check `call.settle_ms` from any layer; errors name the source.
+pub fn check_settle_ms(value: u64, source: &str) -> Result<()> {
+    check_ms("settle_ms", value, SETTLE_RANGE, source)
+}
+
+/// Range-check the timeouts in one file; errors name the file.
+fn check_ranges(cfg: &Config, path: &Path) -> Result<()> {
+    let source = &path.display().to_string();
+    check_timeout_ms(cfg.call.timeout, source)?;
+    check_settle_ms(cfg.call.settle_ms, source)?;
+    Ok(())
+}
+
 /// Apply env vars over the merged files; true when any var was set.
 fn apply_env(config: &mut Config, env: &dyn Fn(&str) -> Option<String>) -> Result<bool> {
     let set = |key: &str| env(key).filter(|v| !v.is_empty());
@@ -694,23 +733,36 @@ fn apply_env(config: &mut Config, env: &dyn Fn(&str) -> Option<String>) -> Resul
         used = true;
     }
     if let Some(value) = set("AGENT_WEBMCP_SETTLE") {
-        config.call.settle_ms = value.parse::<u64>().map_err(|_| {
+        let parsed: u64 = value.parse::<u64>().map_err(|_| {
             anyhow::anyhow!(
                 "invalid AGENT_WEBMCP_SETTLE value {value:?}; expected milliseconds as a number"
             )
         })?;
+        check_settle_ms(parsed, "AGENT_WEBMCP_SETTLE")?;
+        config.call.settle_ms = parsed;
         used = true;
     }
     if let Some(value) = set("AGENT_WEBMCP_TIMEOUT") {
-        config.call.timeout = value.parse::<u64>().map_err(|_| {
+        let parsed: u64 = value.parse::<u64>().map_err(|_| {
             anyhow::anyhow!(
                 "invalid AGENT_WEBMCP_TIMEOUT value {value:?}; expected milliseconds as a number"
             )
         })?;
+        check_timeout_ms(parsed, "AGENT_WEBMCP_TIMEOUT")?;
+        config.call.timeout = parsed;
         used = true;
     }
     if let Some(value) = set("AGENT_WEBMCP_AGENT_BROWSER") {
         config.drivers.agent_browser.command = value;
+        used = true;
+    }
+    if let Some(value) = set("AGENT_WEBMCP_EXTRA_ARGS") {
+        config.drivers.agent_browser.extra_args = value
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .collect();
         used = true;
     }
     Ok(used)

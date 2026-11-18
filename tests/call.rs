@@ -608,21 +608,25 @@ fn settle_script(
     open_json: &str,
     list_lines: &[&str],
     invoke_json: &str,
-    eval_json: &str,
+    evals: &[&str],
 ) -> std::path::PathBuf {
     let log = dir.path().join(format!("{name}.argv"));
     let count = dir.path().join(format!("{name}.count"));
+    let ecount = dir.path().join(format!("{name}.ecount"));
     let lists = dir.path().join(format!("{name}.lists"));
+    let evals_file = dir.path().join(format!("{name}.evals"));
     std::fs::write(&lists, list_lines.join("\n")).unwrap();
+    std::fs::write(&evals_file, evals.join("\n")).unwrap();
     let path = dir.path().join(name);
     let script = format!(
-        "#!/bin/sh\necho \"$@\" >> \"{log}\"\ncase \" $* \" in\n  *\" --version \"*) echo \"agent-browser 0.43.1\";;\n  *\" close \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" invoke \"*) echo '{invoke}';;\n  *\" open \"*) echo '{open}';;\n  *\" list \"*) n=$(cat \"{count}\" 2>/dev/null || echo 0); echo $((n + 1)) > \"{count}\"; sed -n \"$((n+1))p\" \"{lists}\";;\n  *\" reload \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" wait \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" eval \"*) echo '{eval}';;\nesac\n",
+        "#!/bin/sh\necho \"$@\" >> \"{log}\"\ncase \" $* \" in\n  *\" --version \"*) echo \"agent-browser 0.43.1\";;\n  *\" close \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" invoke \"*) echo '{invoke}';;\n  *\" open \"*) echo '{open}';;\n  *\" list \"*) n=$(cat \"{count}\" 2>/dev/null || echo 0); echo $((n + 1)) > \"{count}\"; sed -n \"$((n+1))p\" \"{lists}\";;\n  *\" reload \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" wait \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" eval \"*) n=$(cat \"{ecount}\" 2>/dev/null || echo 0); echo $((n + 1)) > \"{ecount}\"; sed -n \"$((n+1))p\" \"{evals}\";;\nesac\n",
         log = log.display(),
         count = count.display(),
         lists = lists.display(),
+        ecount = ecount.display(),
+        evals = evals_file.display(),
         invoke = invoke_json,
         open = open_json,
-        eval = eval_json,
     );
     std::fs::write(&path, script).unwrap();
     use std::os::unix::fs::PermissionsExt;
@@ -655,6 +659,12 @@ const LIST_WITH_TOOL: &str = r#"{"success":true,"data":{"tools":[{"name":"ask_ca
 const OPEN_WITH_TOOL: &str = r#"{"success":true,"data":{"url":"https://cal.com/","lifecycle":{"reused":true},"webmcp":{"tools":[{"name":"ask_cal_com"}]}}}"#;
 #[cfg(unix)]
 const EVAL_EMPTY: &str = r#"{"success":true,"data":[]}"#;
+#[cfg(unix)]
+const EVAL_OBJECT: &str = r#"{"success":true,"data":"object"}"#;
+#[cfg(unix)]
+const EVAL_UNDEFINED: &str = r#"{"success":true,"data":"undefined"}"#;
+#[cfg(unix)]
+const OPEN_WITH_OTHER: &str = r#"{"success":true,"data":{"url":"https://cal.com/","webmcp":{"tools":[{"name":"other_tool"}]}}}"#;
 
 #[cfg(unix)]
 #[test]
@@ -1106,7 +1116,7 @@ fn mcp_pipeline_needs_confirmation_without_confirm() {
 #[test]
 fn announced_tool_skips_settle() {
     let dir = tempfile::tempdir().unwrap();
-    let script = settle_script(&dir, "ab", OPEN_WITH_TOOL, &[], INVOKE_OK, EVAL_EMPTY);
+    let script = settle_script(&dir, "ab", OPEN_WITH_TOOL, &[], INVOKE_OK, &[EVAL_EMPTY]);
     let cfg = settle_cfg(&script, 3000);
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
     match execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg) {
@@ -1131,7 +1141,7 @@ fn late_tool_found_on_third_list() {
         OPEN_OK,
         &[LIST_EMPTY, LIST_EMPTY, LIST_WITH_TOOL],
         INVOKE_OK,
-        EVAL_EMPTY,
+        &[EVAL_EMPTY],
     );
     let cfg = settle_cfg(&script, 5000);
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
@@ -1142,7 +1152,8 @@ fn late_tool_found_on_third_list() {
             ..
         }) => {
             assert_eq!(output, json!({"answer": 1}));
-            assert!(duration_ms >= 1000, "settle waits count: {duration_ms}");
+            // One 500 ms settle sleep happened between the empty polls.
+            assert!(duration_ms >= 450, "settle waits count: {duration_ms}");
         }
         other => panic!("expected a run, got {other:?}"),
     }
@@ -1157,7 +1168,7 @@ fn late_tool_found_on_third_list() {
 #[test]
 fn missing_tool_reloads_once_then_not_found() {
     let dir = tempfile::tempdir().unwrap();
-    let script = settle_script(&dir, "ab", OPEN_OK, &[LIST_EMPTY], INVOKE_OK, EVAL_EMPTY);
+    let script = settle_script(&dir, "ab", OPEN_OK, &[LIST_EMPTY], INVOKE_OK, &[EVAL_EMPTY]);
     let cfg = settle_cfg(&script, 1000);
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
     let e = execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
@@ -1194,7 +1205,7 @@ fn settle_zero_skips_list() {
         OPEN_OK,
         &[LIST_WITH_TOOL],
         INVOKE_OK,
-        EVAL_EMPTY,
+        &[EVAL_EMPTY],
     );
     let mut cfg = run_config(&script);
     cfg.call.settle_ms = 0;
@@ -1218,7 +1229,7 @@ fn settle_zero_skips_list() {
 fn blocked_title_stops_before_invoke() {
     let dir = tempfile::tempdir().unwrap();
     let open = r#"{"success":true,"data":{"url":"https://cal.com/","title":"Just a moment...","webmcp":{"tools":[]}}}"#;
-    let script = settle_script(&dir, "ab", open, &[LIST_EMPTY], INVOKE_OK, EVAL_EMPTY);
+    let script = settle_script(&dir, "ab", open, &[LIST_EMPTY], INVOKE_OK, &[EVAL_EMPTY]);
     let cfg = settle_cfg(&script, 5000);
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
     let e = execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
@@ -1235,8 +1246,15 @@ fn blocked_title_stops_before_invoke() {
 #[test]
 fn recorder_names_removed_tool() {
     let dir = tempfile::tempdir().unwrap();
-    let eval = r#"{"success":true,"data":["ask_cal_com"]}"#;
-    let script = settle_script(&dir, "ab", OPEN_OK, &[LIST_EMPTY], INVOKE_OK, eval);
+    let seen = r#"{"success":true,"data":["ask_cal_com"]}"#;
+    let script = settle_script(
+        &dir,
+        "ab",
+        OPEN_OK,
+        &[LIST_EMPTY],
+        INVOKE_OK,
+        &[EVAL_OBJECT, seen],
+    );
     let cfg = settle_cfg(&script, 1000);
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
     let e = execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
@@ -1254,7 +1272,7 @@ fn init_script_passed_on_open_and_removed() {
         OPEN_OK,
         &[LIST_WITH_TOOL],
         INVOKE_OK,
-        EVAL_EMPTY,
+        &[EVAL_EMPTY],
     );
     let mut cfg = run_config(&script);
     cfg.call.settle_ms = 0;
@@ -1310,4 +1328,264 @@ fn blocked_check_matches_scanner_signals() {
     ] {
         assert!(!is_blocked_page(title, url, body), "{title} {url}");
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn extra_args_come_before_the_webmcp_flag() {
+    let dir = tempfile::tempdir().unwrap();
+    let script = settle_script(
+        &dir,
+        "ab",
+        OPEN_OK,
+        &[LIST_WITH_TOOL],
+        INVOKE_OK,
+        &[EVAL_EMPTY],
+    );
+    let mut cfg = settle_cfg(&script, 0);
+    cfg.drivers.agent_browser.extra_args = vec!["first".into(), "--flag=x".into()];
+    let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
+    match execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg) {
+        Ok(Outcome::Ran { .. }) => {}
+        other => panic!("expected a run, got {other:?}"),
+    }
+    let lines = argv_log(&dir, "ab");
+    let open = lines.iter().find(|l| l.contains(" open ")).unwrap();
+    let flat = open.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(
+        flat.contains("--args first --args --flag=x --args --enable-features=WebMCP"),
+        "{open}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn announced_tools_skip_the_probe() {
+    let dir = tempfile::tempdir().unwrap();
+    let script = settle_script(
+        &dir,
+        "ab",
+        OPEN_WITH_OTHER,
+        &[LIST_EMPTY],
+        INVOKE_OK,
+        &[EVAL_EMPTY],
+    );
+    let cfg = settle_cfg(&script, 3000);
+    let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
+    let e = execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
+    assert_eq!(e.code, "tool_not_found");
+    assert!(e.message.contains("did not register"), "{}", e.message);
+    let lines = argv_log(&dir, "ab");
+    assert!(
+        !lines
+            .iter()
+            .any(|l| l.contains("typeof document.modelContext")),
+        "no API probe when open announced tools: {lines:?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn missing_api_is_webmcp_unsupported() {
+    let dir = tempfile::tempdir().unwrap();
+    let script = settle_script(
+        &dir,
+        "ab",
+        OPEN_OK,
+        &[LIST_EMPTY],
+        INVOKE_OK,
+        &[EVAL_UNDEFINED],
+    );
+    let cfg = settle_cfg(&script, 3000);
+    let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
+    let e = execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
+    assert_eq!(e.code, "webmcp_unsupported");
+    assert!(
+        e.message.contains("--enable-features=WebMCP"),
+        "{}",
+        e.message
+    );
+    let lines = argv_log(&dir, "ab");
+    assert_eq!(
+        lines.iter().filter(|l| l.contains(" list ")).count(),
+        1,
+        "probe runs after the first empty list: {lines:?}"
+    );
+    assert!(!lines.iter().any(|l| l.contains(" invoke ")), "{lines:?}");
+}
+
+#[cfg(unix)]
+#[test]
+fn big_stdout_does_not_deadlock() {
+    let big = "x".repeat(200 * 1024);
+    let invoke = format!(
+        "{{\"success\":true,\"data\":{{\"output\":{{\"answer\":\"{big}\"}},\"durationMs\":5}}}}"
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let script = settle_script(&dir, "ab", OPEN_WITH_TOOL, &[], &invoke, &[EVAL_EMPTY]);
+    let cfg = settle_cfg(&script, 0);
+    let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
+    match execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg) {
+        Ok(Outcome::Ran { output, .. }) => {
+            assert_eq!(output["answer"], json!(big));
+        }
+        other => panic!("expected a run, got {other:?}"),
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn huge_stdout_is_truncated() {
+    let big = "y".repeat(9 * 1024 * 1024);
+    let invoke = format!(
+        "{{\"success\":true,\"data\":{{\"output\":{{\"answer\":\"{big}\"}},\"durationMs\":5}}}}"
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let script = settle_script(&dir, "ab", OPEN_WITH_TOOL, &[], &invoke, &[EVAL_EMPTY]);
+    let cfg = settle_cfg(&script, 0);
+    let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
+    let e = execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
+    assert_eq!(e.code, "driver_error");
+    assert!(e.message.contains("not JSON"), "{}", e.message);
+    assert_eq!(e.data.as_ref().unwrap()["truncated"], json!(true));
+}
+
+#[cfg(unix)]
+#[test]
+fn timeout_names_the_phase_and_stays_bounded() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("ab");
+    let log = dir.path().join("ab.argv");
+    std::fs::write(
+        &path,
+        format!(
+            "#!/bin/sh\necho \"$@\" >> \"{log}\"\ncase \" $* \" in\n  *\" --version \"*) echo \"agent-browser 0.43.1\";;\n  *) sleep 30;;\nesac\n",
+            log = log.display(),
+        ),
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let mut cfg = run_config(&path);
+    cfg.call.timeout = 200;
+    cfg.call.settle_ms = 200;
+    let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
+    let started = std::time::Instant::now();
+    let e = execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
+    let elapsed = started.elapsed();
+    assert_eq!(e.code, "timeout");
+    assert!(e.message.contains("open"), "{}", e.message);
+    assert!(
+        elapsed < std::time::Duration::from_secs(45),
+        "total stays near timeout+settle+30s grace: {elapsed:?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn fresh_close_runs_on_open_failure() {
+    let dir = tempfile::tempdir().unwrap();
+    let open = r#"{"success":false,"code":"navigation_timeout","error":"timed out"}"#;
+    let script = settle_script(&dir, "ab", open, &[], INVOKE_OK, &[EVAL_EMPTY]);
+    let cfg = settle_cfg(&script, 0);
+    let mut opts = run_opts();
+    opts.fresh = true;
+    let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
+    let e = execute(&resolved, json!({"question": "hi"}), &opts, &cfg).unwrap_err();
+    assert_eq!(e.code, "page_unreachable");
+    let lines = argv_log(&dir, "ab");
+    let closes: Vec<_> = lines
+        .iter()
+        .filter(|l| l.split_whitespace().last() == Some("close"))
+        .collect();
+    assert_eq!(closes.len(), 1, "{lines:?}");
+    assert!(
+        closes[0].contains(&format!("agent-webmcp-{}-", std::process::id())),
+        "{lines:?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn fresh_close_runs_on_fast_path_invoke_failure() {
+    let dir = tempfile::tempdir().unwrap();
+    let invoke = r#"{"success":true,"data":{"output":{"isError":true,"content":[{"type":"text","text":"bad"}]}}}"#;
+    let script = settle_script(&dir, "ab", OPEN_WITH_TOOL, &[], invoke, &[EVAL_EMPTY]);
+    let cfg = settle_cfg(&script, 0);
+    let mut opts = run_opts();
+    opts.fresh = true;
+    let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
+    let e = execute(&resolved, json!({"question": "hi"}), &opts, &cfg).unwrap_err();
+    assert_eq!(e.code, "tool_error");
+    let lines = argv_log(&dir, "ab");
+    assert_eq!(
+        lines
+            .iter()
+            .filter(|l| l.split_whitespace().last() == Some("close"))
+            .count(),
+        1,
+        "{lines:?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn run_envelope_carries_budget() {
+    let dir = tempfile::tempdir().unwrap();
+    let script = settle_script(
+        &dir,
+        "ab",
+        OPEN_OK,
+        &[LIST_EMPTY, LIST_EMPTY, LIST_WITH_TOOL],
+        INVOKE_OK,
+        &[EVAL_OBJECT],
+    );
+    let cfg = settle_cfg(&script, 5000);
+    let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
+    match execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg) {
+        Ok(outcome @ Outcome::Ran { .. }) => {
+            assert_eq!(
+                outcome.envelope()["data"]["budgetMs"],
+                json!(1234 + 5000 + 30_000)
+            );
+        }
+        other => panic!("expected a run, got {other:?}"),
+    }
+}
+
+#[test]
+fn cli_timeout_zero_is_usage() {
+    let dir = tempfile::tempdir().unwrap();
+    let index = fixture_index(&dir);
+    let mut cmd = cli_base(&dir, &index);
+    cmd.args(["call", "cal.com/ask_cal_com", "--timeout", "0"]);
+    let out = cmd.output().unwrap();
+    assert_eq!(out.status.code(), Some(2), "{out:?}");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("--timeout"), "{stderr}");
+    assert!(stderr.contains("timeout must be 1..3600000 ms"), "{stderr}");
+}
+
+#[test]
+fn cli_huge_settle_is_usage() {
+    let dir = tempfile::tempdir().unwrap();
+    let index = fixture_index(&dir);
+    let mut cmd = cli_base(&dir, &index);
+    cmd.args(["call", "cal.com/ask_cal_com", "--settle", "99999999"]);
+    let out = cmd.output().unwrap();
+    assert_eq!(out.status.code(), Some(2), "{out:?}");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("--settle"), "{stderr}");
+}
+
+#[test]
+fn cli_huge_timeout_is_usage() {
+    let dir = tempfile::tempdir().unwrap();
+    let index = fixture_index(&dir);
+    let mut cmd = cli_base(&dir, &index);
+    cmd.args(["call", "cal.com/ask_cal_com", "--timeout", "99999999"]);
+    let out = cmd.output().unwrap();
+    assert_eq!(out.status.code(), Some(2), "{out:?}");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("timeout must be 1..3600000 ms"), "{stderr}");
 }

@@ -120,6 +120,7 @@ pub enum Outcome {
         output: Value,
         duration_ms: u64,
         reused: bool,
+        budget_ms: u64,
     },
     Planned {
         id: String,
@@ -141,6 +142,7 @@ impl Outcome {
                 output,
                 duration_ms,
                 reused,
+                budget_ms,
             } => serde_json::json!({
                 "success": true,
                 "data": {
@@ -151,6 +153,7 @@ impl Outcome {
                     "output": output,
                     "durationMs": duration_ms,
                     "reused": reused,
+                    "budgetMs": budget_ms,
                 },
             }),
             Outcome::Planned {
@@ -718,6 +721,7 @@ pub fn finish(prepared: Prepared, opts: &CallOptions, cfg: &Config) -> Result<Ou
                     &driver::RunOptions {
                         timeout_ms: cfg.call.timeout,
                         settle_ms: cfg.call.settle_ms.min(30_000),
+                        extra_args: cfg.drivers.agent_browser.extra_args.clone(),
                         headed: cfg.drivers.agent_browser.headed,
                         fresh: opts.fresh,
                         profile: cfg.drivers.agent_browser.profile.clone(),
@@ -728,6 +732,7 @@ pub fn finish(prepared: Prepared, opts: &CallOptions, cfg: &Config) -> Result<Ou
                     output,
                     duration_ms,
                     reused,
+                    budget_ms,
                 } = outcome;
                 Ok(Outcome::Ran {
                     id,
@@ -737,6 +742,7 @@ pub fn finish(prepared: Prepared, opts: &CallOptions, cfg: &Config) -> Result<Ou
                     output,
                     duration_ms,
                     reused,
+                    budget_ms,
                 })
             }
         }
