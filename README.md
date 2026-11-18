@@ -43,10 +43,22 @@ so, and the agent uses its driver as usual.
 
 ## Quickstart
 
+Install one of two ways:
+
+| | |
+|---|---|
+| curl (Linux, macOS) | `curl -fsSL https://github.com/orkestrate-dot-space/agent-webmcp/releases/latest/download/install.sh \| sh` |
+| npm (any OS) | `npm i -g @orkestrate/agent-webmcp` |
+
+Then run first-run setup:
+
 ```console
-$ npm i -g @orkestrate/agent-webmcp
 $ agent-webmcp setup
 ```
+
+The curl script installs one checksum-verified binary to `~/.local/bin`
+and never edits your shell profile; it tells you if that folder is not on
+your PATH. Both installs upgrade with `agent-webmcp upgrade`.
 
 `setup` downloads the index, installs the agent skill (Claude Code, OpenCode
 and any `~/.agents` client), adds the MCP server to OpenCode, and prints
@@ -100,7 +112,7 @@ Owners can ask for removal at support@orkestrate.space.
 | `setup` | First run: index, skill, MCP wiring, driver notes. |
 | `mcp` | Run an MCP server with one tool, `find`. |
 | `update` | Check for a newer index now (it also checks hourly). |
-| `upgrade [version]` | Upgrade agent-webmcp itself through npm (latest by default). |
+| `upgrade [version]` | Upgrade agent-webmcp itself the way you installed it (latest by default). |
 | `status` | Show the index in use and where it came from. |
 
 How matching, listing and index updates work: [docs/index.md](docs/index.md).

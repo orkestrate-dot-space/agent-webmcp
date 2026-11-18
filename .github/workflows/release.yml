@@ -6,6 +6,7 @@ on:
   pull_request:
     paths:
       - .github/workflows/release.yml
+      - install.sh
       - packages/**
       - Cargo.toml
       - src/**
@@ -82,6 +83,23 @@ jobs:
         with:
           name: npm-${{ matrix.pkg }}
           path: packages/out/${{ matrix.pkg }}
+      # Standalone archive for install.sh (Linux/macOS). tar keeps the exec
+      # bit that upload-artifact would drop.
+      - name: archive for install.sh
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p dist-archive
+          tar -czf dist-archive/agent-webmcp-${{ matrix.pkg }}.tar.gz -C target/${{ matrix.target }}/release ${{ matrix.exe }}
+      - name: archive for Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist-archive | Out-Null
+          Compress-Archive -Path target/${{ matrix.target }}/release/${{ matrix.exe }} -DestinationPath dist-archive/agent-webmcp-${{ matrix.pkg }}.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: archive-${{ matrix.pkg }}
+          path: dist-archive/*
 
   publish:
     needs: build
@@ -126,3 +144,35 @@ jobs:
           for d in packages/out/npm-*/; do (cd "$d" && npm publish --dry-run --access public --tag next); done
           cp README.md packages/agent-webmcp/README.md
           npm publish --dry-run --access public --tag next ./packages/agent-webmcp
+
+  # Standalone binaries + install.sh on the GitHub release. Created as a
+  # draft: `releases/latest/download/install.sh` keeps serving the previous
+  # release until tools/promote.sh publishes it, moves npm `latest`, and
+  # points the index's latest_cli at it, in that order.
+  github-release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: archive-*
+          path: dist-archive
+          merge-multiple: true
+      - name: checksums
+        run: |
+          cp install.sh dist-archive/install.sh
+          cd dist-archive && sha256sum agent-webmcp-* install.sh > SHA256SUMS && cat SHA256SUMS
+      - name: draft release (tag only)
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist-archive/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist-archive/* --draft --verify-tag \
+              --title "$GITHUB_REF_NAME" --notes "See CHANGELOG.md."
+          fi

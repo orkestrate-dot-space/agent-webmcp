@@ -1,6 +1,6 @@
-//! `agent-webmcp upgrade`: replace this CLI with a newer release through the
-//! package manager that installed it. Only npm global installs are upgraded
-//! in place; anything else gets the command to run by hand.
+//! `agent-webmcp upgrade`: replace this CLI with a newer release the way it
+//! was installed. npm global installs and install.sh copies upgrade in
+//! place; anything else gets the command to run by hand.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -107,6 +107,81 @@ fn resolve(prefix: &Path, target: &str) -> Result<String> {
     }
 }
 
+const INSTALL_SH: &str =
+    "https://github.com/orkestrate-dot-space/agent-webmcp/releases/latest/download/install.sh";
+
+/// The binary the install script wrote, when this is it. The script leaves
+/// a receipt naming the file it installed.
+fn script_install(exe: &Path) -> Option<PathBuf> {
+    let text = std::fs::read_to_string(crate::store::data_dir().join("install-receipt")).ok()?;
+    let mut lines = text.lines();
+    if lines.next()? != "script" {
+        return None;
+    }
+    let path = PathBuf::from(lines.next()?);
+    let canon = std::fs::canonicalize(&path).unwrap_or(path.clone());
+    (canon == exe).then_some(path)
+}
+
+/// Upgrade a copy installed by install.sh by running the script again. The
+/// version and directory go in as environment variables, never into the
+/// shell text.
+fn upgrade_script(path: &Path, target: &str, explicit: bool, current: &str) -> Result<()> {
+    let wanted = match target {
+        "latest" => crate::store::latest_cli_remote()
+            .filter(|v| is_exact_version(v))
+            .context(
+                "cannot read the latest release from the index; try again, or name a version",
+            )?,
+        "next" => bail!(
+            "`next` builds ship through npm only; name a version or use npm i -g {PACKAGE}@next"
+        ),
+        v => v.to_string(),
+    };
+    if wanted == current {
+        println!("agent-webmcp {current} is already the {target} release");
+        return Ok(());
+    }
+    if !explicit && !newer_available(current, &wanted) {
+        println!("agent-webmcp {current} is newer than {target} ({wanted}); nothing to do");
+        return Ok(());
+    }
+    let dir = path.parent().context("install path has no directory")?;
+    println!("upgrading agent-webmcp {current} -> {wanted}");
+    let status = Command::new("sh")
+        .arg("-c")
+        // Save the script first so a failed download fails the upgrade (`sh`
+        // has no pipefail). curl or wget, like install.sh itself.
+        .arg(format!(
+            r#"f=$(mktemp) || exit 1; trap 'rm -f "$f"' EXIT
+if command -v curl >/dev/null 2>&1; then curl -fsSL --proto '=https' --tlsv1.2 -o "$f" {INSTALL_SH} || exit 1
+elif command -v wget >/dev/null 2>&1; then wget -q -O "$f" {INSTALL_SH} || exit 1
+else echo 'agent-webmcp upgrade: needs curl or wget' >&2; exit 1; fi
+sh "$f""#
+        ))
+        .env("AGENT_WEBMCP_VERSION", &wanted)
+        .env("AGENT_WEBMCP_INSTALL_DIR", dir)
+        .status()
+        .context("running the install script")?;
+    if !status.success() {
+        bail!(
+            "the install script failed; run it yourself: curl -fsSL {INSTALL_SH} | sh -s -- --version {wanted}"
+        );
+    }
+    let now = Command::new(path)
+        .current_dir(std::env::temp_dir())
+        .arg("--version")
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+    if now != format!("agent-webmcp {wanted}") {
+        bail!("the script finished but {} reports {now:?}", path.display());
+    }
+    Ok(())
+}
+
 pub fn run(target: Option<String>) -> Result<()> {
     let explicit = target.is_some();
     let target = normalize_target(target.as_deref())?;
@@ -114,11 +189,17 @@ pub fn run(target: Option<String>) -> Result<()> {
     let exe = std::env::current_exe()?;
     let exe = std::fs::canonicalize(&exe).unwrap_or(exe);
 
+    if !cfg!(windows)
+        && let Some(path) = script_install(&exe)
+    {
+        return upgrade_script(&path, &target, explicit, current);
+    }
+
     let prefix = match detect(&exe) {
         Install::NpmGlobal(prefix) if shim(&prefix).exists() => prefix,
         _ => {
             println!(
-                "agent-webmcp {current} was not installed with npm i -g ({}).\nTo switch to the npm release, run: {}",
+                "agent-webmcp {current} was not installed by npm or the install script ({}).\nReinstall with: {}\n          or: curl -fsSL {INSTALL_SH} | sh",
                 exe.display(),
                 manual(None, &target)
             );

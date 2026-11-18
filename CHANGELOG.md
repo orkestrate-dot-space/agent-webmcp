@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.2 — 2026-11-18
+
+- curl install for Linux and macOS:
+  `curl -fsSL https://github.com/orkestrate-dot-space/agent-webmcp/releases/latest/download/install.sh | sh`.
+  One binary to `~/.local/bin`, checked against the release's SHA256SUMS.
+  `agent-webmcp upgrade` re-runs it for copies it installed.
+- The npm package has no install script any more, so npm 12 no longer
+  warns about a blocked `postinstall`. A missing platform binary is still
+  reported, by the `agent-webmcp` command itself.
+- GitHub releases carry standalone binaries for every platform.
+
 ## 0.2.1 — 2026-11-18
 
 - New `upgrade [version]` command: upgrades agent-webmcp itself through npm
