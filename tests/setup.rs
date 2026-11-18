@@ -1,4 +1,4 @@
-use agent_webmcp::setup::{chrome_report, merge_opencode_mcp, newer_available, skill_dirs};
+use agent_webmcp::setup::{browser_report, merge_opencode_mcp, newer_available, skill_dirs};
 use std::path::PathBuf;
 
 #[test]
@@ -43,6 +43,10 @@ fn skill_dirs_cover_the_three_clients() {
 }
 
 #[test]
-fn chrome_report_mentions_flags() {
-    assert!(!chrome_report().is_empty());
+fn browser_report_covers_drivers() {
+    let report = browser_report().join("\n");
+    assert!(report.contains("agent-browser"));
+    assert!(report.contains("Playwright"));
+    assert!(report.contains("DevTools"));
+    assert!(report.contains("Browse"));
 }

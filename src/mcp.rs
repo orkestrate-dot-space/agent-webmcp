@@ -17,10 +17,10 @@ use crate::index::Search;
 const LIMIT_DEFAULT: usize = 5;
 const LIMIT_MAX: usize = 20;
 
-pub const INSTRUCTIONS: &str = "Search websites' WebMCP tools by what you want to do. \
-`find` returns the page to open and the tool to call there. Open the page with your browser \
-driver; the tool is registered on the page and appears in your driver's WebMCP tools. \
-Call it with your driver.";
+pub const INSTRUCTIONS: &str = "Check whether a website offers WebMCP tools before opening it, \
+or search tools by task. `find` returns the page to open and the tool to call there. \
+Open the page with your browser driver; the tool is registered on the page and appears in \
+your driver's WebMCP tools. Call it with your driver.";
 
 pub struct Server {
     search: Arc<Mutex<Search>>,
@@ -96,7 +96,7 @@ fn find_tool() -> Tool {
     let schema = json!({
         "type": "object",
         "properties": {
-            "query": { "type": "string", "description": "What you want to do, in plain words. Example: search flights from SFO to JFK." },
+            "query": { "type": "string", "description": "A site (cal.com), a URL, or what you want to do, in plain words. Example: search flights from SFO to JFK." },
             "limit": { "type": "integer", "minimum": 1, "maximum": LIMIT_MAX, "description": "How many matches. Default 5." }
         },
         "required": ["query"],
@@ -107,9 +107,9 @@ fn find_tool() -> Tool {
     };
     Tool::new(
         "find",
-        "Find websites that offer a WebMCP tool for what you need. Returns, for each match, the page \
-         to open and the tool name and input schema. Open the page with your browser driver, then call \
-         the tool through the driver's WebMCP support.",
+        "Check whether a site offers WebMCP tools, or find a tool for a task. Pass a site, a URL, or what \
+         you need in plain words. Returns, for each match, the page to open and the tool name and input \
+         schema. Open the page with your browser driver, then call the tool through the driver's WebMCP support.",
         Arc::new(schema),
     )
     .annotate(ToolAnnotations::new().read_only(true).open_world(false))

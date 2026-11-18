@@ -3,6 +3,7 @@
 `agent-webmcp find` tells you which page has the tool you need.
 Your browser driver opens that page and calls the tool.
 This guide shows how to set up each supported driver.
+Verified against the drivers on 18 Nov 2026.
 
 Run first-run setup once:
 
@@ -12,37 +13,62 @@ agent-webmcp setup
 ```
 
 `setup` fetches the index, installs the skill, and wires the MCP
-server into OpenCode. It also reports which browser flags are missing.
+server into OpenCode. It also prints one-line installs for Claude
+Code and Codex. `find` doubles as a setup check: if it names tools
+for a site and your driver lists none on that page, the driver is
+misconfigured.
+
+## Check a site before you open it
+
+```bash
+agent-webmcp find cal.com
+```
+
+This is the main use: you already know the site, and `find` answers
+whether it registers WebMCP tools and which page they're on. Task
+search (`agent-webmcp find "search flights"`) works the same way but
+covers about a hundred sites, so a miss means no indexed tool does it.
 
 ## agent-browser
 
-agent-browser needs Chrome 157 with WebMCP features switched on.
-Set this before you launch it:
+agent-browser 0.43+ switches WebMCP on by itself. No flags needed.
 
 ```bash
-export AGENT_BROWSER_ARGS="--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport"
-```
-
-Open the page from the `find` result, then list and call:
-
-```bash
+agent-browser open <url-from-find>
 agent-browser webmcp list
 agent-browser webmcp invoke <tool> --params '{...}'
 ```
 
-Without the flag the page registers no tools and the list comes back empty.
-If a tool is missing, wait for the page to finish loading and list again.
+Without the tool in the list after the page loads, wait a moment
+and list again. Older versions needed
+`AGENT_BROWSER_ARGS="--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport"`;
+upgrade instead.
 
 ## Playwright MCP
 
-Open the page from the `find` result with Playwright MCP first.
-Tools named `webmcp_<tool>` appear after navigation.
-Call `webmcp_<tool>` with the arguments from the schema.
+Playwright MCP collects page tools by default, but it does not switch
+WebMCP on in its browser. Add the Chrome flag to its config, or pages
+register nothing and no error tells you:
 
-Check your driver's docs for passing Chrome launch flags.
-The flag you need is
-`--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport`.
-If tools do not appear, wait for the page to finish loading and look again.
+```json
+{ "browser": { "launchOptions": { "args": ["--enable-features=WebMCP"] } } }
+```
+
+Then open the page from the `find` result, take a snapshot, and tools
+named `webmcp_<tool>` appear. Tools arrive during snapshot capture,
+not on navigation alone. Call `webmcp_<tool>` with the arguments from
+the schema.
+
+## Chrome DevTools MCP
+
+Start the server with its experimental category switched on:
+
+```bash
+--categoryExperimentalWebmcp
+```
+
+List with `list_webmcp_tools` (it takes the page id), call with
+`execute_webmcp_tool`, whose `input` is a JSON string, not an object.
 
 ## OpenCode Browse
 

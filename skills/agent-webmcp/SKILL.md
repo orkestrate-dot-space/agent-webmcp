@@ -6,45 +6,55 @@ description: Find which websites offer a WebMCP tool for a task, before opening 
 # agent-webmcp
 
 Many websites register WebMCP tools: typed functions such as `searchFlights`
-or `search_docs` that your browser driver can call directly. `agent-webmcp
-find` searches those tools across sites, so you know where to go first.
+or `search_docs` that your browser driver can call directly. About to open a
+site? Check it first, so you land on the page that has the tools.
 
-## 1. Find
+## 1. Check the site
+
+```bash
+agent-webmcp find "<site or URL>"
+```
+
+`find cal.com` (or a full URL) answers whether that site registers WebMCP
+tools and names the exact page to open. Docs tools often live off the home
+page, and `find` prints the page that has them. If the site has nothing, skip
+WebMCP and drive the page as usual.
+
+## 2. Or search by task
 
 ```bash
 agent-webmcp find "<what you want to do>"
 ```
 
-Ask with the object of the task, not the verb. The tool that does it is often
-named differently: "order a pizza" is answered by `manage_pizza`. Naming a site
-("search stripe docs") narrows the search to that site.
+Ask with the object of the task, not the verb: "order a pizza" is answered by
+`manage_pizza`. Task search is a bonus; the index covers about a hundred
+sites, so a miss just means no indexed tool does this. Naming a site ("search
+stripe docs") narrows the search to that site.
 
 Each match gives the tool name, its site, the page to open, its input schema,
-and how strongly it matched. If nothing matches, the index has no tool for
-this: use your browser driver as usual instead of forcing a weak match.
+and how strongly it matched. `--json` returns the same matches as data,
+including `relevance` and any `flags`. The index is checked hourly;
+`agent-webmcp update` checks now if you need the very latest.
 
-`--json` returns the same matches as data, including `relevance` and any
-`flags`. The index is checked hourly; `agent-webmcp update` checks now if you
-need the very latest.
-
-## 2. Open and call, with your own driver
+## 3. Open and call, with your own driver
 
 Open the `open` URL. The tool is registered on that page and appears in your
-driver's WebMCP tools. Call it with the arguments from the schema.
+driver's WebMCP tools. Call it with the arguments from the schema. If the
+lookup says tools should be there and your driver lists none, the driver is
+misconfigured: check its WebMCP setup below.
 
 | Driver | List | Call |
 |---|---|---|
-| agent-browser | `agent-browser webmcp list` | `agent-browser webmcp invoke <tool> --params '{...}'` |
-| Playwright MCP | tools named `webmcp_<tool>` appear after navigation | call `webmcp_<tool>` |
+| agent-browser 0.43+ | `agent-browser webmcp list` | `agent-browser webmcp invoke <tool> --params '{...}'` |
+| Playwright MCP | tools named `webmcp_<tool>` appear after navigation **and a snapshot** | call `webmcp_<tool>` |
+| Chrome DevTools MCP | `list_webmcp_tools` (takes `pageId`) | `execute_webmcp_tool` (`input` is a JSON string) |
 | OpenCode Browse | `webmcp` with `action: "list"` | `webmcp` with `action: "call"` |
 
-The driver needs a Chrome with WebMCP switched on. agent-browser 0.43+ only
-enables WebMCP testing support by default, which is not enough on Chrome 157:
-run it with the feature flag, e.g.
-`export AGENT_BROWSER_ARGS="--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport"`.
-Without the flag the page registers nothing and `webmcp list` comes back empty.
-OpenCode Browse drives your own Chrome, which takes no flags: there only
-sites with a WebMCP origin-trial token show tools.
+agent-browser switches WebMCP on by itself; no flags needed. Playwright MCP
+needs `--enable-features=WebMCP` in its `browser.launchOptions.args`, or pages
+register nothing with no error. Chrome DevTools MCP needs
+`--categoryExperimentalWebmcp`. OpenCode Browse drives your own Chrome, which
+takes no flags: there only sites with a WebMCP origin-trial token show tools.
 
 A tool may register a moment after the page loads. If it is missing, wait for
 the page to finish loading and list again.

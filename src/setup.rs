@@ -1,5 +1,6 @@
 //! First-run setup: fetch the index, install the skill, wire the MCP server
-//! into OpenCode, and check the browser flags WebMCP needs.
+//! into OpenCode, print the one-line installs for Claude Code and Codex, and
+//! report the per-driver WebMCP setup.
 //!
 //! Everything here is additive: files are only created or extended, never
 //! overwritten, and `setup` reports each change it made.
@@ -56,9 +57,18 @@ pub fn run() -> Result<()> {
         }
     }
 
-    for line in chrome_report() {
+    for line in browser_report() {
         println!("{line}");
     }
+    println!("other clients (not configured automatically):");
+    println!(
+        "  claude mcp add agent-webmcp -s user -- {} mcp",
+        current_exe_string()?
+    );
+    println!(
+        "  codex mcp add agent-webmcp -- {} mcp",
+        current_exe_string()?
+    );
     Ok(())
 }
 
@@ -154,21 +164,18 @@ fn mcp_snippet(exe: &str) -> String {
     .unwrap_or_default()
 }
 
-/// Human-readable notes about the browser flags WebMCP needs.
-pub fn chrome_report() -> Vec<String> {
-    let mut out = Vec::new();
-    let args = std::env::var("AGENT_BROWSER_ARGS").unwrap_or_default();
-    if args.contains("WebMCP") {
-        out.push("browser: WebMCP flags are set (AGENT_BROWSER_ARGS).".to_string());
-    } else {
-        out.push("browser: WebMCP needs its Chrome flags, or pages register no tools:".to_string());
-        out.push(
-            "  export AGENT_BROWSER_ARGS=\"--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport\""
-                .to_string(),
-        );
-        out.push("  OpenCode Browse drives your own Chrome and needs no flags.".to_string());
-    }
-    out
+/// Human-readable notes about each driver's WebMCP setup, verified against
+/// the drivers on 18 Nov 2026. agent-browser turns WebMCP on itself; the
+/// others need a flag the user adds to their own config.
+pub fn browser_report() -> Vec<String> {
+    vec![
+        "browser: agent-browser 0.43+ enables WebMCP itself; no flags needed.".to_string(),
+        "browser: Playwright MCP needs --enable-features=WebMCP in browser.launchOptions.args,"
+            .to_string(),
+        "  and lists page tools after a snapshot, not on navigation alone.".to_string(),
+        "browser: Chrome DevTools MCP needs --categoryExperimentalWebmcp.".to_string(),
+        "browser: OpenCode Browse drives your own Chrome and takes no flags.".to_string(),
+    ]
 }
 
 /// True when `latest` names a newer release than `installed` ("x.y.z", numeric).

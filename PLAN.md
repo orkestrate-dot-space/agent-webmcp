@@ -18,7 +18,7 @@ for the agent.
 | Takedowns | By request to support@, applied by a maintainer with the admin token (`POST /takedown`). The host goes on the takedown list in KV and every listing for it is removed in the same publish. New submissions for it are refused. There is no public removal: an open endpoint let anyone delist any site. |
 | Weekly rebuild | A cron on the intake Worker starts `build.mjs` on the box over the whole seed list; the result is published automatically unless verified sites collapse (then the old index is kept and the reason recorded). The seed list and the snapshot of `index/index.json` are published with the index. |
 | Rollback | `node tools/index-rollback.mjs <sha>` points the live pointer at any earlier immutable version. `node tools/publish-index.mjs --adopt <pointer-url>` pulls the live index into the repo before a human edits it. |
-| Skill | `skills/agent-webmcp/SKILL.md`: find, then open and call with your own driver. Chrome 157 needs `AGENT_BROWSER_ARGS="--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport"` or the page registers nothing. |
+| Skill | `skills/agent-webmcp/SKILL.md`: check a site before opening it, then open and call with your own driver. agent-browser 0.43+ enables WebMCP itself; Playwright MCP needs `--enable-features=WebMCP` in its launch args, DevTools MCP needs `--categoryExperimentalWebmcp`. |
 | MCP server | One tool, `find`. Refreshes the index in the background every hour. |
 
 ## Not built yet

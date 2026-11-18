@@ -1,7 +1,7 @@
 # agent-webmcp
 
-Search websites' WebMCP tools by what you want to do, then call them with the
-browser driver you already use.
+Check whether a site offers WebMCP tools before you open it, then use them
+with the browser driver you already use.
 
 ```console
 $ agent-webmcp find "search flights"

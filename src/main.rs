@@ -11,7 +11,7 @@ use clap::{Parser, Subcommand};
 #[command(
     name = "agent-webmcp",
     version,
-    about = "Find websites' WebMCP tools by what you want to do"
+    about = "Check a site's WebMCP tools before you open it, or search tools by task"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -20,9 +20,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Search tools by what you want to do
+    /// Search tools by site, URL, or task
     Find {
-        /// What you want to do, in plain words
+        /// A site, a URL, or what you want to do, in plain words
         query: Vec<String>,
         #[arg(long, default_value_t = 5)]
         limit: usize,
