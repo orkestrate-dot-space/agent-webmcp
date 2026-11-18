@@ -50,9 +50,16 @@ pub fn run() -> Result<()> {
         Configured::Present(path) => {
             println!("opencode: {} already lists agent-webmcp", path.display())
         }
+        Configured::Skipped(path) => {
+            println!(
+                "opencode: {} was not changed (it has comments or is not plain JSON); add this under \"mcp\":",
+                path.display()
+            );
+            println!("{}", mcp_snippet(&mcp_command()?));
+        }
         Configured::Missing => {
             println!("opencode: no config file found; add this under \"mcp\":");
-            println!("{}", mcp_snippet(&current_exe_string()?));
+            println!("{}", mcp_snippet(&mcp_command()?));
         }
     }
 
@@ -62,12 +69,9 @@ pub fn run() -> Result<()> {
     println!("other clients (not configured automatically):");
     println!(
         "  claude mcp add agent-webmcp -s user -- {} mcp",
-        current_exe_string()?
+        mcp_command()?
     );
-    println!(
-        "  codex mcp add agent-webmcp -- {} mcp",
-        current_exe_string()?
-    );
+    println!("  codex mcp add agent-webmcp -- {} mcp", mcp_command()?);
     Ok(())
 }
 
@@ -89,10 +93,13 @@ pub fn skill_dirs(home: &Path) -> Vec<PathBuf> {
     .collect()
 }
 
-enum Configured {
+pub enum Configured {
     Added(PathBuf),
     Present(PathBuf),
     Missing,
+    /// The config exists but is not plain JSON (comments, JSONC): left
+    /// untouched, with the manual snippet printed instead.
+    Skipped(PathBuf),
 }
 
 fn opencode_config_path() -> Option<PathBuf> {
@@ -107,26 +114,91 @@ fn opencode_config_path() -> Option<PathBuf> {
         .filter(|p| p.exists())
 }
 
-fn current_exe_string() -> Result<String> {
-    Ok(std::env::current_exe()?.to_string_lossy().into_owned())
+/// The command that runs this program: the plain `agent-webmcp` from PATH
+/// when one is there (the npm wrapper survives `npm i -g` upgrades while the
+/// inner binary path changes with each platform-package layout), else this
+/// binary's own canonical path (argv[0] may be relative or a symlink).
+fn mcp_command() -> Result<String> {
+    if path_resolves_to_us() {
+        return Ok("agent-webmcp".to_string());
+    }
+    let exe = std::env::current_exe()?;
+    Ok(std::fs::canonicalize(&exe)
+        .unwrap_or(exe)
+        .to_string_lossy()
+        .into_owned())
 }
 
-fn configure_opencode() -> Result<Configured> {
+fn path_resolves_to_us() -> bool {
+    let exe = if cfg!(windows) {
+        "agent-webmcp.exe"
+    } else {
+        "agent-webmcp"
+    };
+    let current = match std::env::current_exe() {
+        Ok(exe) => std::fs::canonicalize(&exe).unwrap_or(exe),
+        Err(_) => return false,
+    };
+    let ours = format!("agent-webmcp {}", env!("CARGO_PKG_VERSION"));
+    let Some(paths) = std::env::var_os("PATH") else {
+        return false;
+    };
+    // Mirror shell resolution: only the first match on PATH matters. A stale
+    // install earlier in PATH wins over a good one later, so later entries
+    // must not qualify.
+    let cand = match std::env::split_paths(&paths)
+        .map(|dir| dir.join(exe))
+        .find(|cand| cand.is_file())
+    {
+        Some(cand) => cand,
+        None => return false,
+    };
+    // The same file (a symlinked or hardlinked install).
+    if std::fs::canonicalize(&cand).is_ok_and(|canon| canon == current) {
+        return true;
+    }
+    // The same file (a symlinked or hardlinked install).
+    if std::fs::canonicalize(&cand).is_ok_and(|canon| canon == current) {
+        return true;
+    }
+    // The same release under a different path (e.g. the npm wrapper shim,
+    // which survives `npm i -g` upgrades while the inner binary path does
+    // not). A stale install with another version does not qualify.
+    std::process::Command::new(&cand)
+        .arg("--version")
+        .output()
+        .is_ok_and(|out| String::from_utf8_lossy(&out.stdout).trim() == ours)
+}
+
+pub fn configure_opencode() -> Result<Configured> {
     let Some(path) = opencode_config_path() else {
         return Ok(Configured::Missing);
     };
     let text =
         std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
-    let exe = current_exe_string()?;
-    let Some(merged) = merge_opencode_mcp(&text, &exe)? else {
-        return Ok(Configured::Present(path));
-    };
-    std::fs::write(&path, merged).with_context(|| format!("writing {}", path.display()))?;
-    Ok(Configured::Added(path))
+    let exe = mcp_command()?;
+    match merge_opencode_mcp(&text, &exe) {
+        Ok(None) => Ok(Configured::Present(path)),
+        Ok(Some(merged)) => {
+            crate::store::write_atomically(&path, &merged)
+                .with_context(|| format!("writing {}", path.display()))?;
+            Ok(Configured::Added(path))
+        }
+        Err(e) => {
+            // Valid JSON with the wrong shape is a real error; text that is
+            // not JSON at all (comments, JSONC) just means hands off.
+            if serde_json::from_str::<serde_json::Value>(&text).is_ok() {
+                return Err(e);
+            }
+            Ok(Configured::Skipped(path))
+        }
+    }
 }
 
 /// Merge the agent-webmcp MCP server into an opencode.json document.
-/// Returns `Ok(None)` when the server is already listed.
+/// Returns `Ok(None)` when the server is already listed. A successful merge
+/// is re-serialised, so formatting and comments are normalised; callers leave
+/// non-JSON configs (JSONC with comments) untouched instead.
 pub fn merge_opencode_mcp(existing: &str, exe: &str) -> Result<Option<String>> {
     let mut doc: serde_json::Value =
         serde_json::from_str(existing).context("the opencode config is not valid JSON")?;
