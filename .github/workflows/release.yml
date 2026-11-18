@@ -2,6 +2,14 @@ name: release
 on:
   push:
     tags: ["v*"]
+  # Dry run: prove the full 5-runner build + publish shape before any tag.
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - packages/**
+      - Cargo.toml
+      - src/**
+  workflow_dispatch:
 
 # npm provenance needs an OIDC identity; the publish token comes from secrets.
 permissions:
@@ -10,6 +18,8 @@ permissions:
 
 jobs:
   check-tag:
+    # Tag pushes only; skipped (not failed) on PR / manual dry runs.
+    if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,35 +30,56 @@ jobs:
 
   build:
     needs: check-tag
+    # Run when check-tag passed (tag push) or was skipped (dry run).
+    if: always() && (needs.check-tag.result == 'success' || needs.check-tag.result == 'skipped')
     strategy:
       matrix:
         include:
+          # Linux builds are fully static musl binaries: no glibc floor at
+          # all, so they run on any distro (glibc 2.17+, Alpine/musl, ...).
+          # rusqlite (bundled) + ring both compile on musl; verified locally.
           - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
+            target: x86_64-unknown-linux-musl
+            musl: x86_64
             pkg: linux-x64
             exe: agent-webmcp
           - os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-gnu
+            target: aarch64-unknown-linux-musl
+            musl: aarch64
             pkg: linux-arm64
             exe: agent-webmcp
           - os: macos-latest
             target: aarch64-apple-darwin
+            musl: ""
             pkg: darwin-arm64
             exe: agent-webmcp
           - os: macos-15-intel
             target: x86_64-apple-darwin
+            musl: ""
             pkg: darwin-x64
             exe: agent-webmcp
           - os: windows-latest
             target: x86_64-pc-windows-msvc
+            musl: ""
             pkg: win32-x64
             exe: agent-webmcp.exe
     runs-on: ${{ matrix.os }}
+    env:
+      CC_x86_64_unknown_linux_musl: x86_64-linux-musl-gcc
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: x86_64-linux-musl-gcc
+      CC_aarch64_unknown_linux_musl: aarch64-linux-musl-gcc
+      CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-musl-gcc
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+      - name: install musl toolchain (linux)
+        if: runner.os == 'Linux'
+        run: |
+          curl -sL -o /tmp/musl-native.tgz "https://musl.cc/${{ matrix.musl }}-linux-musl-native.tgz"
+          tar xzf /tmp/musl-native.tgz -C /tmp
+          echo "/tmp/${{ matrix.musl }}-linux-musl-native/bin" >> "$GITHUB_PATH"
       - run: cargo build --release --target ${{ matrix.target }}
       - run: node packages/make-platform-package.mjs ${{ matrix.pkg }} target/${{ matrix.target }}/release/${{ matrix.exe }}
       - uses: actions/upload-artifact@v4
@@ -70,11 +101,27 @@ jobs:
           pattern: npm-*
           path: packages/out
           merge-multiple: true
-      # First release goes out under the `next` tag. After the clean-machine
-      # test passes, move it: `npm dist-tag add @orkestrate/agent-webmcp@<v> latest`.
+      # actions/upload-artifact does not preserve the exec bit; without this
+      # the binary in the npm tarball is non-executable and the wrapper fails
+      # with EACCES (the wrapper also chmod-repairs on EACCES as a backstop
+      # for already-published tarballs).
+      - run: chmod +x packages/out/*/bin/*
+      # Platform packages first (the wrapper depends on them), then the
+      # wrapper. First release goes out under the `next` tag. After the
+      # clean-machine test passes, move it:
+      # `npm dist-tag add @orkestrate/agent-webmcp@<v> latest`.
       # Rollback is the same command pointing at the previous version.
-      - run: |
-          for d in packages/out/*/; do (cd "$d" && npm publish --provenance --tag next); done
-          npm publish --provenance --tag next ./packages/agent-webmcp
+      # New scoped packages default to restricted: --access public is required.
+      - name: publish (real)
+        if: github.ref_type == 'tag'
+        run: |
+          for d in packages/out/*/; do (cd "$d" && npm publish --provenance --access public --tag next); done
+          npm publish --provenance --access public --tag next ./packages/agent-webmcp
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # Dry run needs no token and publishes nothing; proves the tarballs.
+      - name: publish (dry run)
+        if: github.ref_type != 'tag'
+        run: |
+          for d in packages/out/*/; do (cd "$d" && npm publish --dry-run --access public --tag next); done
+          npm publish --dry-run --access public --tag next ./packages/agent-webmcp

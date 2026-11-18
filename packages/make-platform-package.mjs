@@ -20,12 +20,18 @@ const out = join(repo, "packages", "out", pkg);
 mkdirSync(join(out, "bin"), { recursive: true });
 copyFileSync(join(repo, bin), join(out, "bin", exe));
 
+const repoUrl = "git+https://github.com/orkestrate-dot-space/agent-webmcp.git";
+
 writeFileSync(
   join(out, "package.json"),
   `${JSON.stringify(
     {
       name: `@orkestrate/agent-webmcp-${pkg}`,
       version,
+      description: "Platform binary for @orkestrate/agent-webmcp.",
+      license: "MIT",
+      homepage: "https://github.com/orkestrate-dot-space/agent-webmcp#readme",
+      repository: { type: "git", url: repoUrl },
       os: [npmOs],
       cpu: [cpu],
       files: ["bin"],

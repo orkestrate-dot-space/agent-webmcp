@@ -1,8 +1,13 @@
 {
   "name": "@orkestrate/agent-webmcp",
   "version": "0.2.0",
-  "description": "Find websites' WebMCP tools by what you want to do, then call them with the browser driver you already use.",
+  "description": "Check whether a site offers WebMCP tools before you open it, then use them with the browser driver you already use.",
   "license": "MIT",
+  "homepage": "https://github.com/orkestrate-dot-space/agent-webmcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/orkestrate-dot-space/agent-webmcp.git"
+  },
   "type": "module",
   "bin": {
     "agent-webmcp": "bin/agent-webmcp.js"

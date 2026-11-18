@@ -25,3 +25,4 @@ skills-lock.json
 # npm lock for the workers
 /worker/package-lock.json
 /intake/package-lock.json
+/packages/out/
