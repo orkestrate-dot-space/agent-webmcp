@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-17T23:55:54Z",
+  "generated_at": "2026-11-18T05:19:52Z",
   "sites": [
     {
       "host": "googlechromelabs.github.io",
@@ -23550,6 +23550,68 @@
             "read_only": true,
             "consequential": false,
             "untrusted_content": true
+          },
+          "flags": [],
+          "seen_by": [
+            "agent-browser"
+          ]
+        }
+      ],
+      "missed": 0,
+      "engines": [
+        "agent-browser"
+      ]
+    },
+    {
+      "host": "cubecade.openai.chatgpt.site",
+      "status": "verified",
+      "checked_at": "2026-11-18T05:19:51Z",
+      "pages_checked": [
+        "https://cubecade.openai.chatgpt.site/"
+      ],
+      "tools": [
+        {
+          "name": "get_cube_state",
+          "description": "Read every facelet, the move queue, solved status, and move count.",
+          "input_schema": {
+            "properties": {},
+            "type": "object"
+          },
+          "page": "https://cubecade.openai.chatgpt.site/",
+          "origin": "https://cubecade.openai.chatgpt.site",
+          "annotations": {
+            "read_only": false,
+            "consequential": false,
+            "untrusted_content": false
+          },
+          "flags": [],
+          "seen_by": [
+            "agent-browser"
+          ]
+        },
+        {
+          "name": "queue_cube_moves",
+          "description": "Queue moves to animate quickly, one by one. Use U D L R F B with optional apostrophe or 2.",
+          "input_schema": {
+            "properties": {
+              "moves": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "moves"
+            ],
+            "type": "object"
+          },
+          "page": "https://cubecade.openai.chatgpt.site/",
+          "origin": "https://cubecade.openai.chatgpt.site",
+          "annotations": {
+            "read_only": false,
+            "consequential": false,
+            "untrusted_content": false
           },
           "flags": [],
           "seen_by": [
