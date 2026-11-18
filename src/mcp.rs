@@ -40,8 +40,8 @@ impl Server {
 
     /// Check for a newer index every hour, with a little jitter so many
     /// clients do not ask at the same moment. A failure is reported once and
-    /// the current index is kept. `--index` and `AGENT_WEBMCP_INDEX` pin a
-    /// file, so nothing is fetched then.
+    /// the current index is kept. `AGENT_WEBMCP_INDEX` pins a file, so
+    /// nothing is fetched then.
     pub fn spawn_refresh(&self) {
         if std::env::var_os("AGENT_WEBMCP_INDEX").is_some() {
             return;

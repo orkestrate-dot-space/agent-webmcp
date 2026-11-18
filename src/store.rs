@@ -6,7 +6,8 @@
 //! only when its hash changed, verifies it, and swaps it in atomically. Any
 //! failure keeps the copy already on disk.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime};
 
 use anyhow::{Context, Result, bail};
@@ -97,6 +98,41 @@ pub fn resolve(pointer_url: &str, target: &str) -> String {
     format!("{base}/{}", target.trim_start_matches('/'))
 }
 
+/// Parse the index copy on disk. A corrupt copy names its own recovery:
+/// `update` re-downloads it.
+fn parse_cached(path: &Path) -> Result<Index> {
+    let text = std::fs::read_to_string(path)?;
+    parse(&text).map_err(|e| anyhow::anyhow!("{e:#}; run `agent-webmcp update` to re-download"))
+}
+
+/// A tmp file no other refresh can share: same directory (so the rename
+/// stays atomic), unique per process and per call.
+static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+fn unique_tmp_path(path: &Path) -> PathBuf {
+    let n = TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    path.with_file_name(format!(".index-{}-{n}.tmp", std::process::id()))
+}
+
+/// Write a file without ever truncating the destination in place: a crash
+/// mid-write leaves the old copy, never half a file. The state file is the
+/// caller's job, after the rename succeeded.
+pub(crate) fn write_atomically(path: &Path, text: &str) -> Result<()> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let tmp = unique_tmp_path(path);
+    let swapped = (|| -> Result<()> {
+        std::fs::write(&tmp, text)?;
+        std::fs::rename(&tmp, path)?;
+        Ok(())
+    })();
+    if swapped.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    swapped
+}
+
 pub fn sha256_hex(bytes: &[u8]) -> String {
     Sha256::digest(bytes)
         .iter()
@@ -134,12 +170,17 @@ pub fn load() -> Result<Index> {
             Err(e) => return Err(e.context("downloading the index")),
         }
     }
-    parse(&std::fs::read_to_string(&path)?)
+    parse_cached(&path)
 }
 
 /// Check for a newer index now (the `update` command).
 pub fn refresh() -> Result<Index> {
-    refresh_with(FIRST_TIMEOUT)
+    Ok(refresh_changed()?.0)
+}
+
+/// Check for a newer index now, reporting whether the copy on disk changed.
+pub fn refresh_changed() -> Result<(Index, bool)> {
+    refresh_with_changed(FIRST_TIMEOUT)
 }
 
 fn agent(timeout: Duration) -> ureq::Agent {
@@ -147,11 +188,20 @@ fn agent(timeout: Duration) -> ureq::Agent {
         .timeout_global(Some(timeout))
         .http_status_as_error(false)
         .user_agent(concat!("agent-webmcp/", env!("CARGO_PKG_VERSION")))
+        .tls_config(
+            ureq::tls::TlsConfig::builder()
+                .root_certs(ureq::tls::RootCerts::PlatformVerifier)
+                .build(),
+        )
         .build()
         .into()
 }
 
 fn refresh_with(timeout: Duration) -> Result<Index> {
+    Ok(refresh_with_changed(timeout)?.0)
+}
+
+fn refresh_with_changed(timeout: Duration) -> Result<(Index, bool)> {
     let candidates = pointer_urls();
     let mut first_error = None;
     for url in &candidates {
@@ -165,76 +215,95 @@ fn refresh_with(timeout: Duration) -> Result<Index> {
     Err(first_error.unwrap_or_else(|| anyhow::anyhow!("no index address configured")))
 }
 
-fn refresh_from(url: &str, timeout: Duration) -> Result<Index> {
+fn refresh_from(url: &str, timeout: Duration) -> Result<(Index, bool)> {
     let agent = agent(timeout);
     let path = index_path();
     let state = read_state();
 
-    // An ETag is only meaningful for the origin that issued it.
-    let mut req = agent.get(url);
-    if let (Some(etag), Some(origin), true) = (&state.etag, &state.origin, path.exists())
-        && origin == url
-    {
-        req = req.header("If-None-Match", etag);
-    }
-    let mut resp = req.call()?;
-    let status = resp.status().as_u16();
+    // An ETag is only meaningful for the origin that issued it. When the
+    // local copy claims to be current but no longer parses, the guards below
+    // drop it and this loop re-downloads it unconditionally (a 304 carries
+    // no body, and `path.exists()` stops the second request being
+    // conditional, so the loop always terminates).
+    loop {
+        let mut req = agent.get(url);
+        if let (Some(etag), Some(origin), true) = (&state.etag, &state.origin, path.exists())
+            && origin == url
+        {
+            req = req.header("If-None-Match", etag);
+        }
+        let mut resp = req.call()?;
+        let status = resp.status().as_u16();
 
-    if status == 304 && path.exists() {
-        touch(&path);
-        return parse(&std::fs::read_to_string(&path)?);
-    }
-    if status != 200 {
-        bail!("HTTP {status}");
-    }
-    let etag = resp
-        .headers()
-        .get("etag")
-        .and_then(|v| v.to_str().ok())
-        .map(str::to_string);
-    let pointer: Pointer = serde_json::from_str(
-        &resp
+        if status == 304 && path.exists() {
+            match parse_cached(&path) {
+                Ok(index) => {
+                    touch(&path);
+                    return Ok((index, false));
+                }
+                Err(_) => {
+                    let _ = std::fs::remove_file(&path);
+                    continue;
+                }
+            }
+        }
+        if status != 200 {
+            bail!("HTTP {status}");
+        }
+        let etag = resp
+            .headers()
+            .get("etag")
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string);
+        let pointer: Pointer = serde_json::from_str(
+            &resp
+                .body_mut()
+                .read_to_string()
+                .context("reading the pointer")?,
+        )
+        .context("the pointer file is not valid")?;
+
+        if path.exists()
+            && state.sha.as_deref() == Some(pointer.sha256.as_str())
+            && let Ok(index) = parse_cached(&path)
+        {
+            write_state(etag.as_deref(), &pointer.sha256, url);
+            touch(&path);
+            return Ok((index, false));
+        }
+        // The state claims the copy is current but it does not parse: fall
+        // through, treat it as missing, and re-download below.
+
+        let file_url = resolve(url, &pointer.url);
+        let mut file = agent.get(&file_url).call()?;
+        if file.status().as_u16() != 200 {
+            bail!("{file_url} answered HTTP {}", file.status().as_u16());
+        }
+        let bytes = file
             .body_mut()
-            .read_to_string()
-            .context("reading the pointer")?,
-    )
-    .context("the pointer file is not valid")?;
+            .with_config()
+            .limit(MAX_INDEX_BYTES)
+            .read_to_vec()
+            .context("reading the index")?;
+        let got = sha256_hex(&bytes);
+        if !got.eq_ignore_ascii_case(&pointer.sha256) {
+            bail!(
+                "the downloaded index does not match its hash (expected {}, got {got}); keeping the old copy",
+                pointer.sha256
+            );
+        }
+        let text = String::from_utf8(bytes).context("the index is not valid UTF-8")?;
+        let index = parse(&text)?;
 
-    if path.exists() && state.sha.as_deref() == Some(pointer.sha256.as_str()) {
+        write_atomically(&path, &text)?;
+        // The state is only stored after the new copy is on disk, so a crash
+        // or a concurrent refresh never marks a corrupt file as current.
         write_state(etag.as_deref(), &pointer.sha256, url);
-        touch(&path);
-        return parse(&std::fs::read_to_string(&path)?);
+        // A leftover fixed-name tmp from an older release never collides with
+        // the unique names above; sweep it so it confuses nobody.
+        let _ = std::fs::remove_file(path.with_extension("json.tmp"));
+        return Ok((index, true));
     }
-
-    let file_url = resolve(url, &pointer.url);
-    let mut file = agent.get(&file_url).call()?;
-    if file.status().as_u16() != 200 {
-        bail!("{file_url} answered HTTP {}", file.status().as_u16());
-    }
-    let bytes = file
-        .body_mut()
-        .with_config()
-        .limit(MAX_INDEX_BYTES)
-        .read_to_vec()
-        .context("reading the index")?;
-    let got = sha256_hex(&bytes);
-    if !got.eq_ignore_ascii_case(&pointer.sha256) {
-        bail!(
-            "the downloaded index does not match its hash (expected {}, got {got}); keeping the old copy",
-            pointer.sha256
-        );
-    }
-    let text = String::from_utf8(bytes).context("the index is not valid UTF-8")?;
-    let index = parse(&text)?;
-
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
-    let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, &text)?;
-    std::fs::rename(&tmp, &path)?;
-    write_state(etag.as_deref(), &pointer.sha256, url);
-    Ok(index)
 }
 
 /// The newest released CLI version, when the pointer names one. A failure

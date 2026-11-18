@@ -10,6 +10,7 @@ use clap::{Parser, Subcommand};
 #[derive(Parser)]
 #[command(
     name = "agent-webmcp",
+    bin_name = "agent-webmcp",
     version,
     about = "Check a site's WebMCP tools before you open it, or search tools by task"
 )]
@@ -23,6 +24,7 @@ enum Command {
     /// Search tools by site, URL, or task
     Find {
         /// A site, a URL, or what you want to do, in plain words
+        #[arg(required = true, num_args = 1..)]
         query: Vec<String>,
         #[arg(long, default_value_t = 5)]
         limit: usize,
@@ -45,10 +47,15 @@ async fn main() -> Result<()> {
     match Cli::parse().command {
         Command::Find { query, limit, json } => find(&query.join(" "), limit, json),
         Command::Update => {
-            let index = tokio::task::spawn_blocking(store::refresh).await??;
+            let (index, changed) = tokio::task::spawn_blocking(store::refresh_changed).await??;
             let search = Search::build(index)?;
             println!(
-                "index updated: {} sites, {} tools ({})",
+                "{}: {} sites, {} tools ({})",
+                if changed {
+                    "index updated"
+                } else {
+                    "index is up to date"
+                },
                 search.sites(),
                 search.tools(),
                 search.generated_at()
@@ -101,6 +108,9 @@ fn cli_update_note() -> Option<String> {
 }
 
 fn find(query: &str, limit: usize, json: bool) -> Result<()> {
+    // The MCP tool clamps to 1..=20; the CLI matches it so `--limit 0` cannot
+    // print a false "no tool" and huge values stay bounded.
+    let limit = limit.clamp(1, 20);
     let search = Search::build(store::load()?)?;
     let hits = search.find(query, limit)?;
     if json {
@@ -111,24 +121,110 @@ fn find(query: &str, limit: usize, json: bool) -> Result<()> {
         return Ok(());
     }
     if hits.is_empty() {
-        println!("No indexed site has a tool for {query:?}. Use your browser driver as usual.");
+        println!(
+            "No indexed site has a tool for {}. Use your browser driver as usual.",
+            short_query(query)
+        );
         return Ok(());
     }
     for h in hits {
         let shared = h
             .platform
             .as_ref()
-            .map(|p| format!("  (shared by {} {} sites)", p.sites, p.name))
+            .map(|p| format!("  (shared by {} {} sites)", p.sites, clean(&p.name)))
             .unwrap_or_default();
         let flags = if h.flags.is_empty() {
             String::new()
         } else {
-            format!("  [flagged: {}]", h.flags.join(", "))
+            format!(
+                "  [flagged: {}]",
+                h.flags
+                    .iter()
+                    .map(|f| clean(f))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            )
         };
         println!(
             "{}  [{}]{shared}{flags}\n    {}\n    open {}\n",
-            h.id, h.kind, h.description, h.open
+            clean(&h.id),
+            h.kind,
+            clean(&h.description),
+            clean(&h.open)
         );
     }
     Ok(())
+}
+
+/// The no-match line echoes the query; keep it to one short line.
+fn short_query(query: &str) -> String {
+    const MAX: usize = 79;
+    let flat: String = query.split_whitespace().collect::<Vec<_>>().join(" ");
+    if flat.chars().count() <= MAX {
+        return format!("{flat:?}");
+    }
+    let cut: String = flat.chars().take(MAX).collect();
+    format!("{:?}", format!("{cut}…"))
+}
+
+/// Strip control characters (including ANSI escapes) from site-provided text
+/// before printing. JSON output stays as-is.
+fn clean(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            // Skip an ANSI escape sequence: CSI (ESC [ … final byte) or OSC
+            // (ESC ] … BEL); anything else drops just the ESC and its
+            // introducer.
+            match chars.next() {
+                Some('[') => {
+                    for e in chars.by_ref() {
+                        if ('@'..='~').contains(&e) {
+                            break;
+                        }
+                    }
+                }
+                Some(']') => {
+                    for e in chars.by_ref() {
+                        if e == '\x07' {
+                            break;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        } else if !c.is_control() {
+            out.push(c);
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clean_strips_ansi_escapes_and_controls() {
+        assert_eq!(clean("a\x1b[31mred\x1b[0mb"), "aredb");
+        assert_eq!(clean("a\x07b\tc\nd"), "abcd");
+        assert_eq!(clean("plain text"), "plain text");
+        // Unicode is untouched.
+        assert_eq!(clean("héllo→world"), "héllo→world");
+    }
+
+    #[test]
+    fn short_query_keeps_short_queries_whole() {
+        assert_eq!(short_query("cal.com"), "\"cal.com\"");
+    }
+
+    #[test]
+    fn short_query_truncates_with_ellipsis() {
+        let long = "x".repeat(2000);
+        let short = short_query(&long);
+        assert!(short.len() < 2000, "{short}");
+        assert!(short.ends_with("…\""), "{short}");
+        assert!(short.lines().count() == 1);
+    }
 }
