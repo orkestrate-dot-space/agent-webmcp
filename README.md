@@ -1,18 +1,38 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/orkestrate-dot-space/agent-webmcp/main/.github/assets/banner.png" alt="agent-webmcp: tools for every site your agent visits" width="100%">
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@orkestrate/agent-webmcp"><img src="https://img.shields.io/npm/v/@orkestrate/agent-webmcp?color=000&label=npm" alt="npm version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-000" alt="MIT license"></a>
+  <a href="https://web.orkestrate.space/webmcp/sites"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fagent-webmcp-index.agent-webmcp.workers.dev%2Findex.json&query=%24.sites&suffix=%20sites&label=directory&color=000" alt="Sites in the directory"></a>
+</p>
+
 # agent-webmcp
 
 Check whether a site offers WebMCP tools before you open it, then use them
 with the browser driver you already use.
 
 ```console
+$ agent-webmcp find cal.com
+cal.com/ask_cal_com  [unspecified]
+    Ask a question about Cal.com (plans, features, integrations, self-hosting, the API) and get an answer grounded in the documentation.
+    open https://cal.com/
+```
+
+`find` also takes a full URL, or a task when you don't know the site yet:
+
+```console
 $ agent-webmcp find "search flights"
-googlechromelabs.github.io/searchFlights  [read]
+googlechromelabs.github.io/searchFlights  [unspecified]
     Searches for flights with the given parameters.
     open https://googlechromelabs.github.io/webmcp-tools/demos/react-flightsearch/
 ```
 
-Open that page with agent-browser, Playwright MCP or OpenCode Browse, and
-`searchFlights` is in the driver's WebMCP tools. See
-[docs/drivers.md](docs/drivers.md) for driver setup.
+Open that page with agent-browser, Playwright MCP, Chrome DevTools MCP or
+OpenCode Browse, and `searchFlights` is in the driver's WebMCP tools. See
+[docs/drivers.md](docs/drivers.md) for driver setup. Browse every indexed site
+at [web.orkestrate.space/webmcp/sites](https://web.orkestrate.space/webmcp/sites).
 
 Install from npm, then run first-run setup:
 

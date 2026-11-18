@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: List a site
+    url: https://web.orkestrate.space/webmcp/sites
+    about: Use "Add your site" on the sites page. A bot checks and lists it automatically.
+  - name: Remove a site or report a listing
+    url: mailto:support@orkestrate.space
+    about: Site owners email support@orkestrate.space and a maintainer applies the takedown.
+  - name: Security issue
+    url: https://github.com/orkestrate-dot-space/agent-webmcp/blob/main/SECURITY.md
+    about: Report vulnerabilities privately by email, not as an issue.
