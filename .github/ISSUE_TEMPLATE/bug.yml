@@ -1,0 +1,26 @@
+name: Bug report
+description: Something in the CLI, MCP server or index behaves wrong.
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `agent-webmcp --version`.
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: OS and architecture, e.g. macOS arm64, Linux x64, Windows x64.
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: The command you ran, what you expected, and what you got.
+      render: console
+    validations:
+      required: true
