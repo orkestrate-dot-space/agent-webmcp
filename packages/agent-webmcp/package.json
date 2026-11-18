@@ -1,0 +1,21 @@
+{
+  "name": "@orkestrate/agent-webmcp",
+  "version": "0.2.0",
+  "description": "Find websites' WebMCP tools by what you want to do, then call them with the browser driver you already use.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "agent-webmcp": "bin/agent-webmcp.js"
+  },
+  "files": ["bin"],
+  "optionalDependencies": {
+    "@orkestrate/agent-webmcp-linux-x64": "0.2.0",
+    "@orkestrate/agent-webmcp-linux-arm64": "0.2.0",
+    "@orkestrate/agent-webmcp-darwin-arm64": "0.2.0",
+    "@orkestrate/agent-webmcp-darwin-x64": "0.2.0",
+    "@orkestrate/agent-webmcp-win32-x64": "0.2.0"
+  },
+  "scripts": {
+    "postinstall": "node bin/check.js"
+  }
+}

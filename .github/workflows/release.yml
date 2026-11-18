@@ -1,0 +1,80 @@
+name: release
+on:
+  push:
+    tags: ["v*"]
+
+# npm provenance needs an OIDC identity; the publish token comes from secrets.
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  check-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          CARGO="$(sed -n 's/^version *= *"\(.*\)"/\1/p' Cargo.toml | head -1)"
+          [ "$TAG" = "$CARGO" ] || { echo "tag v$TAG does not match Cargo.toml $CARGO"; exit 1; }
+
+  build:
+    needs: check-tag
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            pkg: linux-x64
+            exe: agent-webmcp
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            pkg: linux-arm64
+            exe: agent-webmcp
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            pkg: darwin-arm64
+            exe: agent-webmcp
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            pkg: darwin-x64
+            exe: agent-webmcp
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            pkg: win32-x64
+            exe: agent-webmcp.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - run: cargo build --release --target ${{ matrix.target }}
+      - run: node packages/make-platform-package.mjs ${{ matrix.pkg }} target/${{ matrix.target }}/release/${{ matrix.exe }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-${{ matrix.pkg }}
+          path: packages/out/${{ matrix.pkg }}
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: npm-*
+          path: packages/out
+          merge-multiple: true
+      # First release goes out under the `next` tag. After the clean-machine
+      # test passes, move it: `npm dist-tag add @orkestrate/agent-webmcp@<v> latest`.
+      # Rollback is the same command pointing at the previous version.
+      - run: |
+          for d in packages/out/*/; do (cd "$d" && npm publish --provenance --tag next); done
+          npm publish --provenance --tag next ./packages/agent-webmcp
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

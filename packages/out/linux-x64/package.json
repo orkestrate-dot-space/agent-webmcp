@@ -1,0 +1,13 @@
+{
+  "name": "@orkestrate/agent-webmcp-linux-x64",
+  "version": "0.2.0",
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "files": [
+    "bin"
+  ]
+}
