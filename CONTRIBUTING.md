@@ -43,6 +43,7 @@ from scratch.
 
 ## Takedown
 
-Use **Remove a site** on the sites page. The host goes on the takedown list
-immediately: never scanned, never listed, and new submissions for it are
-refused. No questions asked.
+Email support@orkestrate.space from an address at the domain, or with another
+way to show you run it. A maintainer puts the host on the takedown list: it is
+removed from the index, never scanned again, and new submissions for it are
+refused.

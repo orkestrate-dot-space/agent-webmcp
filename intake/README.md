@@ -44,7 +44,7 @@ cf deploy
 |---|---|
 | `POST /submit` `{url, pages?, turnstile?}` | the site form |
 | `GET /status?id=` | the status page |
-| `POST /takedown` `{host, turnstile?}` | the site form |
+| `POST /takedown` `{host}` | admin bearer only; a maintainer applies an emailed request |
 | `GET /seeds.txt` | the rebuild job |
 | `POST /callback?id=&token=` | the scan job (one-time token) |
 | `POST /callback/rebuild?token=` | the rebuild job |

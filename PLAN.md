@@ -15,7 +15,7 @@ for the agent.
 | Index | `index/index.json`, built by `tools/build-index` from `seeds/launch.txt` with agent-browser (Chrome 157 plus the WebMCP feature flag; Lightpanda stays available for cross-checks). Each record says which page a tool was found on and when it was checked. A site that misses one check keeps its tools, marked with the date they were last seen; two misses drop it. |
 | Delivery | KV holds the live index; the Worker `agent-webmcp-index` serves it as a pointer (`index.json`) plus immutable, hash-addressed versions (`indexes/index-<sha>.json`) and the takedown list. The CLI checks hourly with a conditional GET, verifies the sha256, swaps atomically, and keeps the last good copy on any failure. `agent-webmcp status` shows the addresses tried. Static assets in the Worker are the fallback if KV has no key. |
 | Submissions | Automatic. The site form posts to `agent-webmcp-intake`, which validates the URL (https, public DNS, rate limit, takedown list), queues it in D1, and starts a scan on an instabox box through the HTTP API. The box scans as an unprivileged user, posts the record back, and the Worker validates it, decides, and splices it into the index. A clean verified result is listed in a minute or two; anything else is reported on the request's status page. |
-| Takedowns | Automatic: the host goes on the takedown list in KV and every listing for it is removed in the same publish. New submissions for it are refused. |
+| Takedowns | By request to support@, applied by a maintainer with the admin token (`POST /takedown`). The host goes on the takedown list in KV and every listing for it is removed in the same publish. New submissions for it are refused. There is no public removal: an open endpoint let anyone delist any site. |
 | Weekly rebuild | A cron on the intake Worker starts `build.mjs` on the box over the whole seed list; the result is published automatically unless verified sites collapse (then the old index is kept and the reason recorded). The seed list and the snapshot of `index/index.json` are published with the index. |
 | Rollback | `node tools/index-rollback.mjs <sha>` points the live pointer at any earlier immutable version. `node tools/publish-index.mjs --adopt <pointer-url>` pulls the live index into the repo before a human edits it. |
 | Skill | `skills/agent-webmcp/SKILL.md`: find, then open and call with your own driver. Chrome 157 needs `AGENT_BROWSER_ARGS="--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport"` or the page registers nothing. |
@@ -30,7 +30,7 @@ for the agent.
    (npm `@orkestrate/agent-webmcp@0.2.0` under the `next` tag, then `latest`;
    v1 `0.1.0` deprecated after). CI, the npm wrapper, and skill install exist.
    First-run `setup` is built (index, skill, OpenCode MCP entry, flag check).
-3. **Website.** The site form, status page, and takedown form; registry pages.
+3. **Website.** The site form and status; registry pages.
 4. **Launch.** Archive push, website deploy, force-push `main`, tag, publish.
 
 ## Rollback

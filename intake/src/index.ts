@@ -3,7 +3,7 @@
 /// Public endpoints (CORS for the website):
 ///   POST /submit         {url, pages?, turnstile?}  -> {id, state}
 ///   GET  /status?id=     -> status view
-///   POST /takedown       {host, reason?, turnstile?} -> {ok, removed}
+///   POST /takedown       {host, reason?}  admin only -> {ok, removed}
 ///   GET  /seeds.txt      the seed list the weekly rebuild scans
 /// Box endpoints (one-time token from the start command):
 ///   POST /callback?id=&token=          a site record
@@ -88,15 +88,13 @@ export default {
       return json(view, 200, origin);
     }
 
+    // Takedowns are admin-only: a public endpoint let anyone delist any site.
+    // Owners ask by email; a maintainer runs it with the admin token.
     if (url.pathname === "/takedown" && request.method === "POST") {
-      const body = await bodyOf<{ host?: string; reason?: string; turnstile?: string }>(request);
+      if (bearer(request) !== env.ADMIN_TOKEN) return json({ error: "unauthorized" }, 401, origin);
+      const body = await bodyOf<{ host?: string; reason?: string }>(request);
       if (!body) return json({ error: "expected a JSON body" }, 400, origin);
-      const out = await takedown(
-        env,
-        body,
-        request.headers.get("cf-connecting-ip"),
-        bearer(request) === env.ADMIN_TOKEN,
-      );
+      const out = await takedown(env, body, request.headers.get("cf-connecting-ip"), true);
       return json(out.body, out.status, origin);
     }
 

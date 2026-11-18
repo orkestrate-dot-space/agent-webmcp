@@ -51,9 +51,9 @@ search) are not indexed yet.
 
 To list a site, use **Add your site** on the sites page. A bot checks it in a
 fresh Chromium and lists it automatically when the result is clean; the status
-page shows the verdict and anything to fix. **Remove a site** puts a host on the
-takedown list, which stops all checks and drops the listing. No ownership proof
-is needed: the bot lists only what the site registers with WebMCP on.
+page shows the verdict and anything to fix. No ownership proof is needed to
+list: the bot lists only what the site registers with WebMCP on. To have a site
+removed, its owner emails support@orkestrate.space.
 
 `find` needs the object of your request, not the verb: "order a pizza" finds
 `manage_pizza`. A word that names an indexed site narrows the search to that
