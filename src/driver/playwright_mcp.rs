@@ -1,0 +1,49 @@
+//! Playwright MCP: plan steps in its own tool names.
+
+use super::{CallRequest, Detection, Driver, Kind, Plan, Step};
+use crate::config::Config;
+
+/// Plan driver: the agent drives the page through Playwright MCP.
+pub struct PlaywrightMcp;
+
+impl Driver for PlaywrightMcp {
+    fn id(&self) -> &'static str {
+        "playwright-mcp"
+    }
+
+    fn kind(&self) -> Kind {
+        Kind::Plan
+    }
+
+    fn detect(&self, _cfg: &Config) -> Detection {
+        Detection::Unknown
+    }
+
+    fn note(&self) -> Option<&'static str> {
+        Some("needs --enable-features=WebMCP in browser.launchOptions.args")
+    }
+
+    fn plan(&self, req: &CallRequest) -> Plan {
+        Plan {
+            driver: self.id(),
+            note: self.note().map(str::to_string),
+            steps: vec![
+                Step {
+                    tool: "browser_navigate".to_string(),
+                    args: serde_json::json!({"url": req.page}),
+                    why: "open the page".to_string(),
+                },
+                Step {
+                    tool: "browser_snapshot".to_string(),
+                    args: serde_json::json!({}),
+                    why: "WebMCP tools appear after a snapshot".to_string(),
+                },
+                Step {
+                    tool: format!("webmcp_{}", req.tool),
+                    args: req.input.clone(),
+                    why: "call the tool with the validated input".to_string(),
+                },
+            ],
+        }
+    }
+}

@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use agent_webmcp::config;
+use agent_webmcp::driver;
 use agent_webmcp::index::Search;
 use agent_webmcp::mcp::Server;
 use agent_webmcp::setup;
@@ -107,6 +108,33 @@ async fn main() -> Result<()> {
             );
             if let Some(note) = cli_update_note() {
                 println!("{note}");
+            }
+            // A bad config must not kill status; report it and carry on.
+            let cfg = match config::load() {
+                Ok(loaded) => {
+                    for warning in &loaded.warnings {
+                        eprintln!("warning: {warning}");
+                    }
+                    loaded.config
+                }
+                Err(e) => {
+                    println!("config: {e:#}");
+                    config::Config::default()
+                }
+            };
+            for driver in driver::all(&cfg) {
+                println!("{}", driver::status_line(driver.as_ref(), &cfg));
+            }
+            match driver::choose(&cfg) {
+                driver::Choice::Run(driver, _) => {
+                    println!("selected: {} (run)", driver.id());
+                }
+                driver::Choice::Plan(driver) => {
+                    println!("selected: {} (plan)", driver.id());
+                }
+                driver::Choice::Unusable { driver, .. } => {
+                    println!("selected: {driver} (unusable)");
+                }
             }
             Ok(())
         }

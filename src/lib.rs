@@ -1,4 +1,5 @@
 pub mod config;
+pub mod driver;
 pub mod index;
 pub mod mcp;
 pub mod model;
