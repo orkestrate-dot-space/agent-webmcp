@@ -33,6 +33,26 @@ for the agent.
 3. **Website.** The site form, status page, and takedown form; registry pages.
 4. **Launch.** Archive push, website deploy, force-push `main`, tag, publish.
 
+## Rollback
+
+Order matters: stop the bleeding first, then restore.
+
+1. **npm is broken (bad binary):** `npm dist-tag add @orkestrate/agent-webmcp@<prev> latest`
+   (and `next` if the bad version holds it). The CLI keeps working: the index
+   is independent of the binary. Never unpublish; move the tag.
+2. **Website is broken:** Vercel dashboard → redeploy the previous production
+   deployment. The `/webmcp/sites` form degrades to the registry counts; the
+   intake API is unaffected.
+3. **Index is bad:** `node tools/index-rollback.mjs index-<sha>.json` points the
+   live pointer at the last good version (KV keeps every version). Verify with
+   `node tools/health-check.mjs`.
+4. **Intake Worker is broken:** redeploy this repo's `intake/` from the last
+   good commit (or promote the previous Worker version). Submissions pause;
+   the index and CLI are unaffected.
+
+Nothing in 1–4 deletes data. The D1 request log and every index version stay,
+so a rollback is always a pointer move, never a rebuild.
+
 ## How the index stays honest
 
 - Only what a browser actually saw is listed; a tool that needs interaction to
