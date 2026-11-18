@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use agent_webmcp::config;
 use agent_webmcp::index::Search;
 use agent_webmcp::mcp::Server;
 use agent_webmcp::setup;
@@ -44,8 +45,26 @@ enum Command {
     Setup,
     /// Show the index in use
     Status,
+    /// Show or check the effective configuration
+    Config {
+        /// Print machine-readable JSON instead of text
+        #[arg(long, global = true)]
+        json: bool,
+        #[command(subcommand)]
+        action: Option<ConfigAction>,
+    },
     /// Run the MCP server on stdio
     Mcp,
+}
+
+#[derive(Subcommand)]
+enum ConfigAction {
+    /// Print the effective config and where each value came from
+    Show,
+    /// Print the config file locations
+    Path,
+    /// Check the config files for errors
+    Validate,
 }
 
 #[tokio::main]
@@ -91,6 +110,11 @@ async fn main() -> Result<()> {
             }
             Ok(())
         }
+        Command::Config { json, action } => match action.unwrap_or(ConfigAction::Show) {
+            ConfigAction::Show => config_show(json),
+            ConfigAction::Path => config_path(),
+            ConfigAction::Validate => config_validate(),
+        },
         Command::Mcp => {
             use rmcp::ServiceExt;
             let search = Search::build(tokio::task::spawn_blocking(store::load).await??)?;
@@ -111,6 +135,78 @@ fn cli_update_note() -> Option<String> {
         ))
     } else {
         None
+    }
+}
+
+/// Print the merged config and, unless `--json`, the sources below it.
+fn config_show(json: bool) -> Result<()> {
+    let loaded = config::load()?;
+    for warning in &loaded.warnings {
+        eprintln!("warning: {warning}");
+    }
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "config": loaded.config,
+                "sources": loaded.sources,
+                "warnings": loaded.warnings,
+            }))?
+        );
+        return Ok(());
+    }
+    println!(
+        "{}\n\nsources:",
+        serde_json::to_string_pretty(&loaded.config)?
+    );
+    if loaded.sources.is_empty() {
+        println!("(none, using defaults)");
+    }
+    for source in &loaded.sources {
+        println!("{source}");
+    }
+    Ok(())
+}
+
+/// Print where the user and project configs live, whether they exist or not.
+fn config_path() -> Result<()> {
+    let env = |key: &str| std::env::var(key).ok();
+    let cwd = std::env::current_dir()?;
+    let found = config::locate(&env, &cwd);
+    for warning in &found.warnings {
+        eprintln!("warning: {warning}");
+    }
+    if found.user_exists {
+        println!("user: {}", found.user.display());
+    } else {
+        println!("user: {} (not found)", found.user.display());
+    }
+    if let Some(project) = found.project {
+        println!("project: {}", project.display());
+    }
+    Ok(())
+}
+
+/// Load the configs and report success or the first error.
+fn config_validate() -> Result<()> {
+    match config::load() {
+        Ok(loaded) => {
+            for warning in &loaded.warnings {
+                eprintln!("warning: {warning}");
+            }
+            println!("ok");
+            for source in &loaded.sources {
+                println!("{source}");
+            }
+            if loaded.sources.is_empty() {
+                println!("(no config files, using defaults)");
+            }
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("{e:#}");
+            std::process::exit(1);
+        }
     }
 }
 

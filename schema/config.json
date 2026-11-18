@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://web.orkestrate.space/webmcp/config.json",
+  "title": "agent-webmcp configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Schema URL for editor validation; read and ignored."
+    },
+    "driver": {
+      "type": "string",
+      "enum": ["auto", "agent-browser", "playwright-mcp", "chrome-devtools-mcp", "browse", "none"],
+      "default": "auto",
+      "description": "Which driver call uses: the run driver, a plan driver, or none."
+    },
+    "drivers": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "description": "Per-driver settings; only agent-browser runs outside the agent session.",
+      "properties": {
+        "agent-browser": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "How to reach agent-browser: command, session, and how to show it.",
+          "properties": {
+            "command": {
+              "type": "string",
+              "default": "agent-browser",
+              "description": "Program to run; user config only, never the project file."
+            },
+            "session": {
+              "type": "string",
+              "default": "agent-webmcp",
+              "description": "Named session to reuse, so logins persist across calls."
+            },
+            "headed": {
+              "type": "boolean",
+              "default": false,
+              "description": "Show the browser window instead of running headless."
+            },
+            "profile": {
+              "type": ["string", "null"],
+              "default": null,
+              "description": "Logged-in Chrome profile dir; user config only."
+            },
+            "cdp": {
+              "type": ["string", "null"],
+              "default": null,
+              "description": "Attach to a running Chrome; user config only."
+            }
+          }
+        }
+      }
+    },
+    "call": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "description": "Call-wide settings shared by every driver.",
+      "properties": {
+        "timeout": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 60000,
+          "description": "How long one tool call may take, in milliseconds."
+        }
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "description": "Tool patterns governing whether a call runs, asks, or is refused.",
+      "properties": {
+        "allow": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Patterns allowed without asking."
+        },
+        "ask": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Patterns needing confirmation first."
+        },
+        "deny": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Patterns never called; deny wins over ask and allow."
+        }
+      }
+    }
+  }
+}
