@@ -100,6 +100,7 @@ Owners can ask for removal at support@orkestrate.space.
 | `setup` | First run: index, skill, MCP wiring, driver notes. |
 | `mcp` | Run an MCP server with one tool, `find`. |
 | `update` | Check for a newer index now (it also checks hourly). |
+| `upgrade [version]` | Upgrade agent-webmcp itself through npm (latest by default). |
 | `status` | Show the index in use and where it came from. |
 
 How matching, listing and index updates work: [docs/index.md](docs/index.md).

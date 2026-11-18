@@ -34,7 +34,8 @@ stripe docs") narrows the search to that site.
 Each match gives the tool name, its site, the page to open, and how strongly it
 matched. Add `--json` to get each tool's input schema as data, including
 `relevance` and any `flags`. The index is checked hourly;
-`agent-webmcp update` checks now if you need the very latest.
+`agent-webmcp update` checks now if you need the very latest. If it reports
+a newer agent-webmcp, `agent-webmcp upgrade` installs it.
 
 ## 3. Open and call, with your own driver
 

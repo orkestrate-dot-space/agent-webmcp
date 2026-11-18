@@ -115,6 +115,7 @@ jobs:
         if: github.ref_type == 'tag'
         run: |
           for d in packages/out/npm-*/; do (cd "$d" && npm publish --provenance --access public --tag next); done
+          cp README.md packages/agent-webmcp/README.md
           npm publish --provenance --access public --tag next ./packages/agent-webmcp
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -123,4 +124,5 @@ jobs:
         if: github.ref_type != 'tag'
         run: |
           for d in packages/out/npm-*/; do (cd "$d" && npm publish --dry-run --access public --tag next); done
+          cp README.md packages/agent-webmcp/README.md
           npm publish --dry-run --access public --tag next ./packages/agent-webmcp

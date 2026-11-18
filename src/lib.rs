@@ -4,3 +4,4 @@ pub mod model;
 pub mod platform;
 pub mod setup;
 pub mod store;
+pub mod upgrade;

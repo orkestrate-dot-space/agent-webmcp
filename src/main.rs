@@ -4,6 +4,7 @@ use agent_webmcp::index::Search;
 use agent_webmcp::mcp::Server;
 use agent_webmcp::setup;
 use agent_webmcp::store;
+use agent_webmcp::upgrade;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
@@ -34,6 +35,11 @@ enum Command {
     },
     /// Download the latest index now
     Update,
+    /// Upgrade agent-webmcp itself to the latest or a given version
+    Upgrade {
+        /// Version to install (with or without a leading v), or `next`
+        target: Option<String>,
+    },
     /// First-run setup: fetch the index, install the skill, wire up OpenCode
     Setup,
     /// Show the index in use
@@ -65,6 +71,7 @@ async fn main() -> Result<()> {
             }
             Ok(())
         }
+        Command::Upgrade { target } => upgrade::run(target),
         Command::Setup => setup::run(),
         Command::Status => {
             let search = Search::build(tokio::task::spawn_blocking(store::load).await??)?;
@@ -100,7 +107,7 @@ fn cli_update_note() -> Option<String> {
     let latest = store::latest_cli_remote()?;
     if setup::newer_available(env!("CARGO_PKG_VERSION"), &latest) {
         Some(format!(
-            "a newer agent-webmcp is available ({latest}); update the package you installed it from"
+            "agent-webmcp {latest} is available; run: agent-webmcp upgrade"
         ))
     } else {
         None
