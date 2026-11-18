@@ -15,7 +15,7 @@
 
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -108,12 +108,20 @@ copyFileSync(source, join(indexesDir, file));
 const verified = index.sites.filter((s) => s.status === "verified");
 const counts = countIndex(index.sites);
 // The newest released CLI. The client prints a one-line notice when this is
-// newer than itself. Defaults to the workspace version; override for a
-// hotfix release with --latest-cli=x.y.z, or "none" to leave it unnamed.
+// newer than itself, and tells the user to run `upgrade`, which installs
+// npm's `latest`. So the default is npm's `latest` tag, never the workspace
+// version: a release still under `next` must not be announced. Override with
+// --latest-cli=x.y.z, or "none" to leave it unnamed.
 let latestCli = arg("latest-cli", "");
 if (!latestCli) {
-  const cargo = readFileSync(join(repo, "Cargo.toml"), "utf8").match(/^version\s*=\s*"([^"]+)"/m);
-  latestCli = cargo ? cargo[1] : "";
+  try {
+    latestCli = JSON.parse(
+      execFileSync("npm", ["view", "--json", "@orkestrate/agent-webmcp@latest", "version"], { encoding: "utf8" }),
+    );
+    if (Array.isArray(latestCli)) latestCli = latestCli[0] ?? "";
+  } catch {
+    throw new Error("cannot read npm's latest version; pass --latest-cli=x.y.z or --latest-cli=none");
+  }
 }
 const pointer = {
   schema_version: index.schema_version,

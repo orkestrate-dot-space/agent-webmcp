@@ -39,6 +39,13 @@ fn targets_normalize() {
 }
 
 #[test]
+fn ranges_refused() {
+    assert!(normalize_target(Some("0.2")).is_err());
+    assert!(normalize_target(Some("^0.2.0")).is_err());
+    assert!(normalize_target(Some("0.2.x")).is_err());
+}
+
+#[test]
 fn bad_targets_refused() {
     assert!(normalize_target(Some("")).is_err());
     assert!(normalize_target(Some("0.2.1; rm -rf /")).is_err());
