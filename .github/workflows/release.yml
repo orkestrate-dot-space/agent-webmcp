@@ -33,6 +33,7 @@ jobs:
     # Run when check-tag passed (tag push) or was skipped (dry run).
     if: always() && (needs.check-tag.result == 'success' || needs.check-tag.result == 'skipped')
     strategy:
+      fail-fast: false
       matrix:
         include:
           # Linux builds are fully static musl binaries: no glibc floor at
@@ -40,35 +41,30 @@ jobs:
           # rusqlite (bundled) + ring both compile on musl; verified locally.
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
-            musl: x86_64
             pkg: linux-x64
             exe: agent-webmcp
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-musl
-            musl: aarch64
             pkg: linux-arm64
             exe: agent-webmcp
           - os: macos-latest
             target: aarch64-apple-darwin
-            musl: ""
             pkg: darwin-arm64
             exe: agent-webmcp
           - os: macos-15-intel
             target: x86_64-apple-darwin
-            musl: ""
             pkg: darwin-x64
             exe: agent-webmcp
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            musl: ""
             pkg: win32-x64
             exe: agent-webmcp.exe
     runs-on: ${{ matrix.os }}
     env:
-      CC_x86_64_unknown_linux_musl: x86_64-linux-musl-gcc
-      CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: x86_64-linux-musl-gcc
-      CC_aarch64_unknown_linux_musl: aarch64-linux-musl-gcc
-      CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-musl-gcc
+      CC_x86_64_unknown_linux_musl: musl-gcc
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+      CC_aarch64_unknown_linux_musl: musl-gcc
+      CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -76,10 +72,10 @@ jobs:
           targets: ${{ matrix.target }}
       - name: install musl toolchain (linux)
         if: runner.os == 'Linux'
-        run: |
-          curl -sL -o /tmp/musl-native.tgz "https://musl.cc/${{ matrix.musl }}-linux-musl-native.tgz"
-          tar xzf /tmp/musl-native.tgz -C /tmp
-          echo "/tmp/${{ matrix.musl }}-linux-musl-native/bin" >> "$GITHUB_PATH"
+        # musl-tools ships the native-arch musl-gcc (amd64 on x64 runners,
+        # aarch64 on ARM runners) — apt is fast and reliable, unlike the
+        # ~90MB musl.cc tarball, which times out from GitHub runners.
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq musl-tools
       - run: cargo build --release --target ${{ matrix.target }}
       - run: node packages/make-platform-package.mjs ${{ matrix.pkg }} target/${{ matrix.target }}/release/${{ matrix.exe }}
       - uses: actions/upload-artifact@v4
