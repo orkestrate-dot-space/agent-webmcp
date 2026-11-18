@@ -1,7 +1,7 @@
 {
   "name": "@orkestrate/agent-webmcp",
   "version": "0.2.0",
-  "description": "Find websites' WebMCP tools by what you want to do, then call them with the browser driver you already use.",
+  "description": "Check whether a site offers WebMCP tools before you open it, then call them with the browser driver you already use.",
   "license": "MIT",
   "type": "module",
   "bin": {

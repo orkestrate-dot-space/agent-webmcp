@@ -1,6 +1,6 @@
 ---
 name: agent-webmcp
-description: Find which websites offer a WebMCP tool for a task, before opening any page. Use when a task needs a web service and you do not know which site can do it, or want a typed tool instead of clicking.
+description: Check whether a site offers a WebMCP tool before opening any page, or find tools by task. Use when about to open a site, when a task needs a web service and you do not know which site can do it, or when you want a typed tool instead of clicking.
 ---
 
 # agent-webmcp
