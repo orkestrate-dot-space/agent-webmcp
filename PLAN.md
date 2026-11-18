@@ -23,15 +23,19 @@ for the agent.
 
 ## Not built yet
 
-1. **Registry.** Static item JSON, `add`/`remove`/`list`/`outdated`/`update`, a
-   lockfile with hashes, the generated extension folder, `setup`, and the first
-   `@orkestrate` items. Reviewed `@orkestrate` only at first.
-2. **Distribution.** Binaries per platform ship from CI on the first `v*` tag
+1. **Distribution.** Binaries per platform ship from CI on the first `v*` tag
    (npm `@orkestrate/agent-webmcp@0.2.0` under the `next` tag, then `latest`;
    v1 `0.1.0` deprecated after). CI, the npm wrapper, and skill install exist.
    First-run `setup` is built (index, skill, OpenCode MCP entry, flag check).
-3. **Website.** The site form and status; registry pages.
-4. **Launch.** Archive push, website deploy, force-push `main`, tag, publish.
+2. **Website.** The site form and status.
+3. **Launch.** Archive push, website deploy, force-push `main`, tag, publish.
+
+## Deferred to 0.3.0
+
+**Registry.** Deferred past 0.2.0: static item JSON,
+`add`/`remove`/`list`/`outdated`/`update`, a lockfile with hashes, the
+generated extension folder, `setup`, and the first `@orkestrate` items.
+Reviewed `@orkestrate` only at first.
 
 ## Rollback
 
@@ -41,7 +45,7 @@ Order matters: stop the bleeding first, then restore.
    (and `next` if the bad version holds it). The CLI keeps working: the index
    is independent of the binary. Never unpublish; move the tag.
 2. **Website is broken:** Vercel dashboard → redeploy the previous production
-   deployment. The `/webmcp/sites` form degrades to the registry counts; the
+   deployment. The `/webmcp/sites` form degrades to the index counts; the
    intake API is unaffected.
 3. **Index is bad:** `node tools/index-rollback.mjs index-<sha>.json` points the
    live pointer at the last good version (KV keeps every version). Verify with
