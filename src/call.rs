@@ -627,32 +627,45 @@ pub fn decide(id: &str, kind: ToolKind, perms: &Permissions) -> Decision {
     }
 }
 
-/// The CLI pipeline: resolve, input, permissions, then run or plan.
-pub fn run_call(
+/// Resolve and validate up to the permission decision, without running.
+#[derive(Debug, Clone)]
+pub struct Prepared {
+    pub resolved: Resolved,
+    pub input: Value,
+    pub decision: Decision,
+}
+
+/// Resolve, check the input shape, and decide. No driver runs here.
+pub fn prepare(
     target: &str,
-    positional: Option<&str>,
-    params: Option<&str>,
-    opts: &CallOptions,
+    input: Value,
     cfg: &Config,
     search: &Search,
-) -> Result<Outcome, CallError> {
+) -> Result<Prepared, CallError> {
     let resolved = resolve(target, search)?;
-    let input = parse_input(positional, params)?;
+    if !input.is_object() {
+        return Err(CallError {
+            code: "invalid_input",
+            message: "input must be a JSON object".to_string(),
+            data: None,
+        });
+    }
     if let Some(schema) = &resolved.schema {
         validate_input(schema, &input)?;
     }
-    execute(&resolved, input, opts, cfg)
+    let id = resolved.id();
+    let decision = decide(&id, resolved.kind, &cfg.permissions);
+    Ok(Prepared {
+        resolved,
+        input,
+        decision,
+    })
 }
 
-/// The core both front ends share: permissions, then run or plan.
-pub fn execute(
-    resolved: &Resolved,
-    input: Value,
-    opts: &CallOptions,
-    cfg: &Config,
-) -> Result<Outcome, CallError> {
-    let id = resolved.id();
-    match decide(&id, resolved.kind, &cfg.permissions) {
+/// Enforce the decision, then run or plan. Shared by the CLI and MCP.
+pub fn finish(prepared: Prepared, opts: &CallOptions, cfg: &Config) -> Result<Outcome, CallError> {
+    let id = prepared.resolved.id();
+    match prepared.decision {
         Decision::Deny => {
             let pattern = cfg
                 .permissions
@@ -673,10 +686,10 @@ pub fn execute(
                 message: format!(
                     "{} ({}) needs confirmation to run",
                     id,
-                    kind_str(resolved.kind)
+                    kind_str(prepared.resolved.kind)
                 ),
                 data: Some(serde_json::json!({
-                    "kind": kind_str(resolved.kind),
+                    "kind": kind_str(prepared.resolved.kind),
                     "id": id,
                     "retry": opts.retry_hint,
                 })),
@@ -685,9 +698,9 @@ pub fn execute(
         Decision::Ask | Decision::Allow => {}
     }
     let req = CallRequest {
-        page: resolved.page.clone(),
-        tool: resolved.tool.clone(),
-        input,
+        page: prepared.resolved.page.clone(),
+        tool: prepared.resolved.tool.clone(),
+        input: prepared.input,
     };
     match driver::choose(cfg) {
         Choice::Run(driver, _) => {
@@ -695,8 +708,8 @@ pub fn execute(
                 let plan = driver.plan(&req);
                 Ok(Outcome::Planned {
                     id,
-                    tool: resolved.tool.clone(),
-                    page: resolved.page.clone(),
+                    tool: prepared.resolved.tool.clone(),
+                    page: prepared.resolved.page.clone(),
                     plan,
                 })
             } else {
@@ -717,8 +730,8 @@ pub fn execute(
                 } = outcome;
                 Ok(Outcome::Ran {
                     id,
-                    tool: resolved.tool.clone(),
-                    page: resolved.page.clone(),
+                    tool: prepared.resolved.tool.clone(),
+                    page: prepared.resolved.page.clone(),
                     driver: driver.id(),
                     output,
                     duration_ms,
@@ -730,8 +743,8 @@ pub fn execute(
             let plan = driver.plan(&req);
             Ok(Outcome::Planned {
                 id,
-                tool: resolved.tool.clone(),
-                page: resolved.page.clone(),
+                tool: prepared.resolved.tool.clone(),
+                page: prepared.resolved.page.clone(),
                 plan,
             })
         }
@@ -739,8 +752,8 @@ pub fn execute(
             if opts.plan_only {
                 Ok(Outcome::Planned {
                     id,
-                    tool: resolved.tool.clone(),
-                    page: resolved.page.clone(),
+                    tool: prepared.resolved.tool.clone(),
+                    page: prepared.resolved.page.clone(),
                     plan: unusable_plan(&req, &detection),
                 })
             } else {
@@ -750,7 +763,34 @@ pub fn execute(
     }
 }
 
-/// A plan for an unusable driver: the generic steps plus the install line.
+/// The CLI pipeline: parse input, then the shared prepare/finish path.
+pub fn run_call(
+    target: &str,
+    positional: Option<&str>,
+    params: Option<&str>,
+    opts: &CallOptions,
+    cfg: &Config,
+    search: &Search,
+) -> Result<Outcome, CallError> {
+    let input = parse_input(positional, params)?;
+    finish(prepare(target, input, cfg, search)?, opts, cfg)
+}
+
+/// The pre-`prepare` entry point both front ends used; kept for tests.
+pub fn execute(
+    resolved: &Resolved,
+    input: Value,
+    opts: &CallOptions,
+    cfg: &Config,
+) -> Result<Outcome, CallError> {
+    let prepared = Prepared {
+        resolved: resolved.clone(),
+        input,
+        decision: decide(&resolved.id(), resolved.kind, &cfg.permissions),
+    };
+    finish(prepared, opts, cfg)
+}
+
 fn unusable_plan(req: &CallRequest, detection: &Detection) -> Plan {
     let mut plan = driver::generic::Generic.plan(req);
     let install = match detection {
@@ -791,21 +831,9 @@ pub fn run_mcp(
     cfg: &Config,
     search: &Search,
 ) -> (Value, bool) {
-    let outcome: Result<Outcome, CallError> = (|| {
-        let resolved = resolve(target, search)?;
-        if !input.is_object() {
-            return Err(CallError {
-                code: "invalid_input",
-                message: "input must be a JSON object".to_string(),
-                data: None,
-            });
-        }
-        if let Some(schema) = &resolved.schema {
-            validate_input(schema, &input)?;
-        }
-        execute(
-            &resolved,
-            input,
+    let outcome = prepare(target, input, cfg, search).and_then(|prepared| {
+        finish(
+            prepared,
             &CallOptions {
                 confirm,
                 plan_only: false,
@@ -814,9 +842,15 @@ pub fn run_mcp(
             },
             cfg,
         )
-    })();
+    });
     match outcome {
         Ok(done) => (done.envelope(), false),
         Err(e) => (e.envelope(), true),
     }
+}
+
+/// Opaque approval handle: hex SHA-256 of target and canonical input.
+pub fn approval_state(target: &str, input: &Value) -> String {
+    let canonical = serde_json::to_string(input).unwrap_or_default();
+    crate::store::sha256_hex(format!("{target}\n{canonical}").as_bytes())
 }

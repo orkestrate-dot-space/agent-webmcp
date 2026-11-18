@@ -4,9 +4,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use rmcp::model::{
-    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
-    InitializeResult, ListToolsResult, PaginatedRequestParams, ServerCapabilities, Tool,
-    ToolAnnotations,
+    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, ElicitRequest,
+    ElicitRequestParams, ElicitationAction, Implementation, InitializeResult, InputRequest,
+    InputRequests, InputRequiredResult, ListToolsResult, PaginatedRequestParams, ProtocolVersion,
+    ServerCapabilities, Tool, ToolAnnotations,
 };
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData as McpError, RoleServer, ServerHandler};
@@ -68,11 +69,16 @@ impl Server {
         });
     }
 
-    async fn call(&self, args: &serde_json::Map<String, Value>) -> CallToolResult {
+    async fn call(
+        &self,
+        request: &CallToolRequestParams,
+        context: &RequestContext<RoleServer>,
+    ) -> CallToolResponse {
+        let args = request.arguments.clone().unwrap_or_default();
         let Some(target) = args.get("target").and_then(Value::as_str) else {
-            return CallToolResult::error(vec![ContentBlock::text(
+            return complete_error(
                 "`target` is required: site/tool from find, or https://page#tool",
-            )]);
+            );
         };
         let target = target.to_string();
         let input = args.get("input").cloned().unwrap_or(json!(null));
@@ -82,37 +88,191 @@ impl Server {
             .and_then(Value::as_bool)
             .unwrap_or(false);
         let shared = self.shared();
-        // The pipeline blocks on child processes; keep it off the executor.
-        // rmcp carries text and structured content side by side, so failures
-        // use error() with the envelope as text AND as structured content.
-        let joined = tokio::task::spawn_blocking(move || {
+        // Config is cheap; the pipeline below may block on child processes.
+        let cfg = match crate::config::load() {
+            Ok(loaded) => loaded.config,
+            Err(e) => return complete_error(format!("could not load config: {e:#}")),
+        };
+        let prepared = {
             let search = shared.lock().expect("search lock");
-            let cfg = match crate::config::load() {
-                Ok(loaded) => loaded.config,
-                Err(e) => {
-                    let envelope = crate::call::CallError {
-                        code: "driver_error",
-                        message: format!("could not load config: {e:#}"),
-                        data: None,
-                    }
-                    .envelope();
-                    return (envelope, true);
-                }
-            };
-            crate::call::run_mcp(&target, input, confirm, &cfg, &search)
-        })
-        .await;
+            match crate::call::prepare(&target, input.clone(), &cfg, &search) {
+                Ok(prepared) => prepared,
+                Err(e) => return complete_envelope(e.envelope()),
+            }
+        };
+        if !matches!(prepared.decision, crate::call::Decision::Ask) {
+            return self.run_prepared(prepared, mcp_opts(confirm), cfg).await;
+        }
+        // The model asked for an `ask` tool: with form elicitation the human
+        // decides, and the model's `confirm` is ignored entirely.
+        if !client_supports_form(context) {
+            let (mut envelope, _) = self
+                .run_prepared_outcome(prepared, mcp_opts(confirm), cfg)
+                .await;
+            if !confirm {
+                note_no_elicitation(&mut envelope);
+            }
+            return complete_envelope(envelope);
+        }
+        let id = prepared.resolved.id();
+        let message = approval_message(&prepared);
+        let state = crate::call::approval_state(&target, &input);
+        if let Some(responses) = request.input_responses.as_ref() {
+            return self
+                .retry_after_approval(
+                    prepared,
+                    &id,
+                    request.request_state.as_deref(),
+                    &state,
+                    responses,
+                    cfg,
+                )
+                .await;
+        }
+        if negotiated_version(context).is_some_and(|v| v >= ProtocolVersion::V_2026_07_28) {
+            let mut requests = InputRequests::new();
+            requests.insert("approve".to_string(), elicitation_request(&message));
+            return InputRequiredResult::new(Some(requests), Some(state)).into();
+        }
+        self.elicit_old(prepared, &message, &id, cfg, context).await
+    }
+
+    /// Run a prepared call off the executor; child processes block.
+    async fn run_prepared(
+        &self,
+        prepared: crate::call::Prepared,
+        opts: crate::call::CallOptions,
+        cfg: crate::config::Config,
+    ) -> CallToolResponse {
+        let (envelope, is_error) = self.run_prepared_outcome(prepared, opts, cfg).await;
+        complete_envelope_with(envelope, is_error)
+    }
+
+    /// The blocking half of `run_prepared`, shared with the approval retry.
+    /// rmcp carries text and structured content side by side, so results
+    /// carry the envelope as text AND as structured content.
+    async fn run_prepared_outcome(
+        &self,
+        prepared: crate::call::Prepared,
+        opts: crate::call::CallOptions,
+        cfg: crate::config::Config,
+    ) -> (Value, bool) {
+        let joined =
+            tokio::task::spawn_blocking(move || crate::call::finish(prepared, &opts, &cfg)).await;
         match joined {
-            Ok((envelope, is_error)) => {
-                let text = serde_json::to_string_pretty(&envelope).unwrap_or_default();
-                let mut result = CallToolResult::success(vec![ContentBlock::text(text)]);
-                result.structured_content = Some(envelope);
-                result.is_error = Some(is_error);
-                result
-            }
+            Ok(Ok(done)) => (done.envelope(), false),
+            Ok(Err(e)) => (e.envelope(), true),
             Err(e) => {
-                CallToolResult::error(vec![ContentBlock::text(format!("call task failed: {e}"))])
+                let envelope = crate::call::CallError {
+                    code: "driver_error",
+                    message: format!("call task failed: {e}"),
+                    data: None,
+                }
+                .envelope();
+                (envelope, true)
             }
+        }
+    }
+
+    /// A retried `call` carrying the user's answer: verify it, then run.
+    async fn retry_after_approval(
+        &self,
+        prepared: crate::call::Prepared,
+        id: &str,
+        echoed: Option<&str>,
+        expected: &str,
+        responses: &rmcp::model::InputResponses,
+        cfg: crate::config::Config,
+    ) -> CallToolResponse {
+        if echoed != Some(expected) {
+            return complete_envelope(
+                crate::call::CallError {
+                    code: "invalid_input",
+                    message: "the approval does not match this call".to_string(),
+                    data: None,
+                }
+                .envelope(),
+            );
+        }
+        if !is_approved(responses) {
+            return complete_envelope(
+                crate::call::CallError {
+                    code: "denied",
+                    message: format!("the user declined {id}"),
+                    data: None,
+                }
+                .envelope(),
+            );
+        }
+        // The user approved; their answer stands in for `confirm: true`.
+        self.run_prepared(
+            prepared,
+            crate::call::CallOptions {
+                confirm: true,
+                plan_only: false,
+                fresh: false,
+                retry_hint: crate::call::RETRY_MCP,
+            },
+            cfg,
+        )
+        .await
+    }
+
+    /// Old protocols: ask over a server-to-client request, 120 s to answer.
+    async fn elicit_old(
+        &self,
+        prepared: crate::call::Prepared,
+        message: &str,
+        id: &str,
+        cfg: crate::config::Config,
+        context: &RequestContext<RoleServer>,
+    ) -> CallToolResponse {
+        let params = approval_params(message);
+        match context
+            .peer
+            .create_elicitation_with_timeout(params, Some(std::time::Duration::from_secs(120)))
+            .await
+        {
+            Ok(result)
+                if result.action == ElicitationAction::Accept
+                    && is_approved_content(&result.content) =>
+            {
+                self.run_prepared(
+                    prepared,
+                    crate::call::CallOptions {
+                        confirm: true,
+                        plan_only: false,
+                        fresh: false,
+                        retry_hint: crate::call::RETRY_MCP,
+                    },
+                    cfg,
+                )
+                .await
+            }
+            Ok(_) => complete_envelope(
+                crate::call::CallError {
+                    code: "denied",
+                    message: format!("the user declined {id}"),
+                    data: None,
+                }
+                .envelope(),
+            ),
+            Err(rmcp::service::ServiceError::Timeout { .. }) => complete_envelope(
+                crate::call::CallError {
+                    code: "needs_confirmation",
+                    message: "no answer from the user".to_string(),
+                    data: None,
+                }
+                .envelope(),
+            ),
+            Err(e) => complete_envelope(
+                crate::call::CallError {
+                    code: "driver_error",
+                    message: format!("could not ask the user: {e}"),
+                    data: None,
+                }
+                .envelope(),
+            ),
         }
     }
 
@@ -188,14 +348,11 @@ impl ServerHandler for Server {
     async fn call_tool(
         &self,
         request: CallToolRequestParams,
-        _context: RequestContext<RoleServer>,
+        context: RequestContext<RoleServer>,
     ) -> Result<CallToolResponse, McpError> {
         match request.name.as_ref() {
             "find" => Ok(self.find(&request.arguments.unwrap_or_default()).into()),
-            "call" => Ok(self
-                .call(&request.arguments.unwrap_or_default())
-                .await
-                .into()),
+            "call" => Ok(self.call(&request, &context).await),
             other => Err(McpError::invalid_params(
                 format!("unknown tool {other:?}"),
                 None,
@@ -222,7 +379,9 @@ pub fn call_tool() -> Tool {
     Tool::new(
         "call",
         "Call a WebMCP tool: if agent-webmcp can drive a browser (agent-browser) it returns \
-         the tool's output, otherwise it returns exact steps for your own browser driver.",
+         the tool's output, otherwise it returns exact steps for your own browser driver. \
+         When the client supports it, agent-webmcp asks the user itself before calls that \
+         need approval; `confirm` only applies to clients that cannot ask.",
         Arc::new(schema),
     )
     .annotate(
@@ -231,4 +390,128 @@ pub fn call_tool() -> Tool {
             .destructive(true)
             .open_world(true),
     )
+}
+
+/// `confirm: true` only matters where the client cannot ask the user.
+fn mcp_opts(confirm: bool) -> crate::call::CallOptions {
+    crate::call::CallOptions {
+        confirm,
+        plan_only: false,
+        fresh: false,
+        retry_hint: crate::call::RETRY_MCP,
+    }
+}
+
+/// A failure envelope as a complete tool result.
+fn complete_error(message: impl Into<String>) -> CallToolResponse {
+    complete_envelope(
+        crate::call::CallError {
+            code: "driver_error",
+            message: message.into(),
+            data: None,
+        }
+        .envelope(),
+    )
+}
+
+/// An envelope as a complete tool result.
+fn complete_envelope(envelope: Value) -> CallToolResponse {
+    complete_envelope_with(envelope, true)
+}
+
+/// An envelope as a complete tool result, with an explicit error flag.
+fn complete_envelope_with(envelope: Value, is_error: bool) -> CallToolResponse {
+    let text = serde_json::to_string_pretty(&envelope).unwrap_or_default();
+    let mut result = CallToolResult::success(vec![ContentBlock::text(text)]);
+    result.structured_content = Some(envelope);
+    result.is_error = Some(is_error);
+    result.into()
+}
+
+/// Whether the client renders a form the user can answer.
+fn client_supports_form(context: &RequestContext<RoleServer>) -> bool {
+    // New-protocol requests carry capabilities per call, but may arrive
+    // empty; the handshake stays authoritative for what it names.
+    let from_meta = context.client_capabilities().and_then(|c| c.elicitation);
+    let from_peer = context
+        .peer
+        .peer_info()
+        .and_then(|info| info.capabilities.elicitation.clone());
+    [from_meta, from_peer].into_iter().flatten().any(|e| {
+        // No mode listed means form, matching the SDK's own fallback.
+        e.form.is_some() || e.url.is_none()
+    })
+}
+
+/// Negotiated protocol version from request meta or the handshake.
+fn negotiated_version(context: &RequestContext<RoleServer>) -> Option<ProtocolVersion> {
+    context.protocol_version().or_else(|| {
+        context
+            .peer
+            .peer_info()
+            .map(|info| info.protocol_version.clone())
+    })
+}
+
+/// The question the user answers, with the call it approves.
+fn approval_message(prepared: &crate::call::Prepared) -> String {
+    let id = prepared.resolved.id();
+    let mut input = serde_json::to_string(&prepared.input).unwrap_or_default();
+    if input.chars().count() > 300 {
+        input = input.chars().take(300).collect();
+    }
+    format!(
+        "Allow agent-webmcp to call {id} on {}? It is {}; input: {input}",
+        prepared.resolved.page,
+        crate::call::kind_str(prepared.resolved.kind),
+    )
+}
+
+/// Human approval form: one boolean, required.
+fn approval_params(message: &str) -> ElicitRequestParams {
+    let requested_schema = serde_json::from_value(json!({
+        "type": "object",
+        "properties": {"approve": {"type": "boolean", "title": "Approve this call"}},
+        "required": ["approve"]
+    }))
+    .expect("approval schema is fixed");
+    ElicitRequestParams::FormElicitationParams {
+        meta: None,
+        message: message.to_string(),
+        requested_schema,
+    }
+}
+
+/// The `approve` elicitation request, keyed `"approve"` per the MRTR pattern.
+fn elicitation_request(message: &str) -> InputRequest {
+    InputRequest::Elicitation(ElicitRequest::new(approval_params(message)))
+}
+
+/// Approval only counts from the user's answer: accept plus approve true.
+fn is_approved(responses: &rmcp::model::InputResponses) -> bool {
+    responses
+        .get("approve")
+        .filter(|r| r.get("action").and_then(Value::as_str) == Some("accept"))
+        .and_then(|r| {
+            r.get("content")
+                .and_then(|c| c.get("approve"))
+                .and_then(Value::as_bool)
+        })
+        .unwrap_or(false)
+}
+
+/// Same check for a direct elicitation result on old protocols.
+fn is_approved_content(content: &Option<Value>) -> bool {
+    content
+        .as_ref()
+        .and_then(|c| c.get("approve"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+}
+
+/// Clients without elicitation get a hint to configure approval themselves.
+fn note_no_elicitation(envelope: &mut Value) {
+    envelope["data"]["note"] = json!(
+        "this client cannot ask you directly; set the agent-webmcp call tool to ask in your agent's permission settings"
+    );
 }
