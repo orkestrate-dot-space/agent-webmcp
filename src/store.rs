@@ -44,10 +44,12 @@ pub struct Pointer {
 }
 
 pub fn data_dir() -> PathBuf {
-    if let Some(dir) = std::env::var_os("AGENT_WEBMCP_HOME") {
+    // Empty values count as unset, matching install.sh.
+    let set = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty());
+    if let Some(dir) = set("AGENT_WEBMCP_HOME") {
         return PathBuf::from(dir);
     }
-    if let Some(dir) = std::env::var_os("XDG_DATA_HOME") {
+    if let Some(dir) = set("XDG_DATA_HOME") {
         return PathBuf::from(dir).join("agent-webmcp");
     }
     let home = std::env::var_os("HOME")

@@ -157,10 +157,6 @@ fn path_resolves_to_us() -> bool {
     if std::fs::canonicalize(&cand).is_ok_and(|canon| canon == current) {
         return true;
     }
-    // The same file (a symlinked or hardlinked install).
-    if std::fs::canonicalize(&cand).is_ok_and(|canon| canon == current) {
-        return true;
-    }
     // The same release under a different path (e.g. the npm wrapper shim,
     // which survives `npm i -g` upgrades while the inner binary path does
     // not). A stale install with another version does not qualify.
@@ -237,9 +233,7 @@ fn mcp_snippet(exe: &str) -> String {
 pub fn browser_report() -> Vec<String> {
     vec![
         "browser: agent-browser 0.43+ enables WebMCP itself; no flags needed.".to_string(),
-        "browser: Playwright MCP needs --enable-features=WebMCP in browser.launchOptions.args,"
-            .to_string(),
-        "  and lists page tools after a snapshot, not on navigation alone.".to_string(),
+        "browser: Playwright MCP needs --enable-features=WebMCP in browser.launchOptions.args; tools appear after a snapshot.".to_string(),
         "browser: Chrome DevTools MCP needs --categoryExperimentalWebmcp.".to_string(),
         "browser: OpenCode Browse drives your own Chrome and takes no flags.".to_string(),
     ]
