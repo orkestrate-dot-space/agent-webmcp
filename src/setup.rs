@@ -119,7 +119,7 @@ fn opencode_config_path() -> Option<PathBuf> {
 /// inner binary path changes with each platform-package layout), else this
 /// binary's own canonical path (argv[0] may be relative or a symlink).
 fn mcp_command() -> Result<String> {
-    if path_has_agent_webmcp() {
+    if path_resolves_to_us() {
         return Ok("agent-webmcp".to_string());
     }
     let exe = std::env::current_exe()?;
@@ -129,14 +129,45 @@ fn mcp_command() -> Result<String> {
         .into_owned())
 }
 
-fn path_has_agent_webmcp() -> bool {
+fn path_resolves_to_us() -> bool {
     let exe = if cfg!(windows) {
         "agent-webmcp.exe"
     } else {
         "agent-webmcp"
     };
-    std::env::var_os("PATH")
-        .is_some_and(|paths| std::env::split_paths(&paths).any(|dir| dir.join(exe).is_file()))
+    let current = match std::env::current_exe() {
+        Ok(exe) => std::fs::canonicalize(&exe).unwrap_or(exe),
+        Err(_) => return false,
+    };
+    let ours = format!("agent-webmcp {}", env!("CARGO_PKG_VERSION"));
+    let Some(paths) = std::env::var_os("PATH") else {
+        return false;
+    };
+    // Mirror shell resolution: only the first match on PATH matters. A stale
+    // install earlier in PATH wins over a good one later, so later entries
+    // must not qualify.
+    let cand = match std::env::split_paths(&paths)
+        .map(|dir| dir.join(exe))
+        .find(|cand| cand.is_file())
+    {
+        Some(cand) => cand,
+        None => return false,
+    };
+    // The same file (a symlinked or hardlinked install).
+    if std::fs::canonicalize(&cand).is_ok_and(|canon| canon == current) {
+        return true;
+    }
+    // The same file (a symlinked or hardlinked install).
+    if std::fs::canonicalize(&cand).is_ok_and(|canon| canon == current) {
+        return true;
+    }
+    // The same release under a different path (e.g. the npm wrapper shim,
+    // which survives `npm i -g` upgrades while the inner binary path does
+    // not). A stale install with another version does not qualify.
+    std::process::Command::new(&cand)
+        .arg("--version")
+        .output()
+        .is_ok_and(|out| String::from_utf8_lossy(&out.stdout).trim() == ours)
 }
 
 pub fn configure_opencode() -> Result<Configured> {
