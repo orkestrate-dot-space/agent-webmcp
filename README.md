@@ -14,30 +14,42 @@ Open that page with agent-browser, Playwright MCP or OpenCode Browse, and
 `searchFlights` is in the driver's WebMCP tools. See
 [docs/drivers.md](docs/drivers.md) for driver setup.
 
-Status: pre-launch. The npm package is not published yet; until it is, build
-from source (`cargo build --release`) and run `agent-webmcp setup`, which
-fetches the index, installs the skill, and wires the MCP server into OpenCode.
+Install from npm, then run first-run setup:
+
+```console
+$ npm i -g @orkestrate/agent-webmcp
+$ agent-webmcp setup
+```
+
+`setup` fetches the index, installs the skill into `~/.agents/skills`,
+`~/.claude/skills` and `~/.config/opencode/skills`, adds the MCP server to
+an existing OpenCode config (or prints the snippet to add yourself), prints
+one-line `claude mcp add` / `codex mcp add` installs, and prints per-driver
+WebMCP notes.
 The live index is served from KV by the `agent-webmcp-index` Worker;
 `index/index.json` is a snapshot of it. Listings
 are automatic: the `agent-webmcp-intake` Worker scans submissions on an
 instabox box and publishes clean results. The previous version is on the
 `archive/v1-main` branch.
 
+Contributors: build from source with `cargo build --release`; the release
+binary is identical to what npm ships.
+
 ## Privacy
 
 No analytics. The CLI fetches only the public index pointer (hourly, or on
 demand with `update`); the index server stores nothing about readers. Site
 submissions keep a salted hash of the submitter's IP for rate limiting, plus
-the submitted URL — see the sites page privacy policy.
+the submitted URL.
 
 ## Commands
 
 | Command | What it does |
 |---|---|
-| `find <task>` | Search the index. `--json` for machine output. |
+| `find <site, URL, or task>` | Check a site first, or search by task. `--json` for machine output. |
 | `update` | Check for a newer index now (it also checks hourly). |
 | `status` | Show the index in use and the addresses it was fetched from. |
-| `setup` | First run: fetch the index, install the skill, wire up OpenCode. |
+| `setup` | First run: fetch the index, install the skill, wire up OpenCode, print Claude/Codex installs and driver notes. |
 | `mcp` | Run an MCP server with one tool, `find`. |
 
 ## The index

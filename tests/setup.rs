@@ -1,5 +1,11 @@
-use agent_webmcp::setup::{browser_report, merge_opencode_mcp, newer_available, skill_dirs};
+use agent_webmcp::setup::{
+    Configured, browser_report, configure_opencode, merge_opencode_mcp, newer_available, skill_dirs,
+};
 use std::path::PathBuf;
+use std::sync::Mutex;
+
+/// Tests below mutate XDG_CONFIG_HOME; serialise them.
+static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 #[test]
 fn merge_adds_server() {
@@ -49,4 +55,48 @@ fn browser_report_covers_drivers() {
     assert!(report.contains("Playwright"));
     assert!(report.contains("DevTools"));
     assert!(report.contains("Browse"));
+}
+
+/// A config with comments (JSONC) is not valid strict JSON: setup must leave
+/// it untouched and report Skipped instead of aborting.
+#[test]
+fn jsonc_config_is_left_untouched() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let cfg_dir = dir.path().join("opencode");
+    std::fs::create_dir_all(&cfg_dir).unwrap();
+    let path = cfg_dir.join("opencode.json");
+    let original = "{\n  // comments are not strict JSON\n  \"mcp\": {}\n}\n";
+    std::fs::write(&path, original).unwrap();
+
+    let old = std::env::var_os("XDG_CONFIG_HOME");
+    unsafe { std::env::set_var("XDG_CONFIG_HOME", dir.path()) };
+    let result = configure_opencode();
+    match old {
+        Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+        None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
+    }
+
+    assert!(matches!(result.unwrap(), Configured::Skipped(_)));
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
+}
+
+/// Valid JSON with the wrong shape is a real error, not a silent skip.
+#[test]
+fn valid_json_with_wrong_shape_still_errors() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let cfg_dir = dir.path().join("opencode");
+    std::fs::create_dir_all(&cfg_dir).unwrap();
+    std::fs::write(cfg_dir.join("opencode.json"), r#"{"mcp": 42}"#).unwrap();
+
+    let old = std::env::var_os("XDG_CONFIG_HOME");
+    unsafe { std::env::set_var("XDG_CONFIG_HOME", dir.path()) };
+    let result = configure_opencode();
+    match old {
+        Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
+        None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
+    }
+
+    assert!(result.is_err());
 }

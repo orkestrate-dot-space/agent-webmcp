@@ -34,6 +34,13 @@ export async function exec(env: Env, boxId: string, cmd: string, timeout = 30): 
   return (await res.json()) as ExecResult;
 }
 
+/// The egress guard (iptables/ip6tables for the scanner user) does not survive
+/// a reboot, so every job re-applies it before the handoff to the scanner
+/// user. guard.sh exits 40 when a rule is still missing afterwards, and the
+/// && means the scan never starts in that case. Fail closed: the request
+/// stays scanning, the pump retries it, and /health flags the stuck queue.
+const GUARD = "sudo /opt/awm-scan/guard.sh &&";
+
 /// Start the scan detached: the exec returns in about a second, and the job
 /// posts its result to /callback when it is done.
 export async function startScan(
@@ -41,6 +48,7 @@ export async function startScan(
   opts: { id: string; entry: string; extras?: string[]; callback: string; token: string },
 ): Promise<void> {
   const cmd = [
+    GUARD,
     "sudo -u scanner",
     "nohup",
     "/opt/awm-scan/scan-job.sh",
@@ -61,6 +69,7 @@ export async function startRebuildShard(
   opts: { id: string; callback: string; token: string; boxId: string; shard: number; count: number },
 ): Promise<void> {
   const cmd = [
+    GUARD,
     "sudo -u scanner",
     "nohup",
     "/opt/awm-scan/rebuild-job.sh",

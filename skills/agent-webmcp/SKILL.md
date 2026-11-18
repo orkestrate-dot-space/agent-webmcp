@@ -1,6 +1,6 @@
 ---
 name: agent-webmcp
-description: Find which websites offer a WebMCP tool for a task, before opening any page. Use when a task needs a web service and you do not know which site can do it, or want a typed tool instead of clicking.
+description: Check whether a site offers a WebMCP tool before opening any page, or find tools by task. Use when about to open a site, when a task needs a web service and you do not know which site can do it, or when you want a typed tool instead of clicking.
 ---
 
 # agent-webmcp
@@ -31,17 +31,22 @@ Ask with the object of the task, not the verb: "order a pizza" is answered by
 sites, so a miss just means no indexed tool does this. Naming a site ("search
 stripe docs") narrows the search to that site.
 
-Each match gives the tool name, its site, the page to open, its input schema,
-and how strongly it matched. `--json` returns the same matches as data,
-including `relevance` and any `flags`. The index is checked hourly;
+Each match gives the tool name, its site, the page to open, and how strongly it
+matched. Add `--json` to get each tool's input schema as data, including
+`relevance` and any `flags`. The index is checked hourly;
 `agent-webmcp update` checks now if you need the very latest.
 
 ## 3. Open and call, with your own driver
 
 Open the `open` URL. The tool is registered on that page and appears in your
-driver's WebMCP tools. Call it with the arguments from the schema. If the
-lookup says tools should be there and your driver lists none, the driver is
-misconfigured: check its WebMCP setup below.
+driver's WebMCP tools. Call it with the arguments from the schema: add
+`--json` to `find` to get each tool's input schema, and if the schema is
+empty, read it from the page with your driver before calling (`agent-browser
+webmcp list <tool> --json`; the `webmcp_<tool>` tool's own input schema in
+Playwright MCP; `list_webmcp_tools` in DevTools MCP; `webmcp` with
+`action: "list"` in Browse). If the lookup says tools should be there and
+your driver lists none, the driver is misconfigured: check its WebMCP setup
+below.
 
 | Driver | List | Call |
 |---|---|---|

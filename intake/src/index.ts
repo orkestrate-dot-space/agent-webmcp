@@ -15,6 +15,7 @@
 
 import type { Env } from "./env";
 import {
+  REBUILD_BODY_MAX_BYTES,
   maybeStartRebuild,
   pumpQueue,
   receiveRebuild,
@@ -63,6 +64,20 @@ function bearer(request: Request): string {
   return h.startsWith("Bearer ") ? h.slice("Bearer ".length) : "";
 }
 
+/// Compare two strings without an early exit on the first differing byte.
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+/// An empty or unset ADMIN_TOKEN must never grant admin: without the !!
+/// guard, bearer("") === "" would pass every admin gate.
+function isAdmin(request: Request, env: Env): boolean {
+  return !!env.ADMIN_TOKEN && safeEqual(bearer(request), env.ADMIN_TOKEN);
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -77,7 +92,7 @@ export default {
         env,
         body,
         request.headers.get("cf-connecting-ip"),
-        bearer(request) === env.ADMIN_TOKEN,
+        isAdmin(request, env),
       );
       return json(out.body, out.status, origin);
     }
@@ -91,7 +106,7 @@ export default {
     // Takedowns are admin-only: a public endpoint let anyone delist any site.
     // Owners ask by email; a maintainer runs it with the admin token.
     if (url.pathname === "/takedown" && request.method === "POST") {
-      if (bearer(request) !== env.ADMIN_TOKEN) return json({ error: "unauthorized" }, 401, origin);
+      if (!isAdmin(request, env)) return json({ error: "unauthorized" }, 401, origin);
       const body = await bodyOf<{ host?: string; reason?: string }>(request);
       if (!body) return json({ error: "expected a JSON body" }, 400, origin);
       const out = await takedown(env, body, request.headers.get("cf-connecting-ip"), true);
@@ -127,7 +142,19 @@ export default {
     }
 
     if (url.pathname === "/callback/rebuild" && request.method === "POST") {
-      const body = await bodyOf<unknown>(request);
+      // Cap the body before parsing: a compromised box (or anyone with the
+      // token) must not make the Worker JSON.parse an arbitrarily large body.
+      const raw = await request.text().catch(() => null);
+      if (raw === null) return json({ error: "expected a body" }, 400, null);
+      if (raw.length > REBUILD_BODY_MAX_BYTES) {
+        return json({ error: "rebuild body too large" }, 413, null);
+      }
+      let body: unknown = null;
+      try {
+        body = JSON.parse(raw) as unknown;
+      } catch {
+        body = null;
+      }
       const out = await receiveRebuild(
         env,
         { token: url.searchParams.get("token") ?? "", shard: url.searchParams.get("shard") ?? undefined },
@@ -137,7 +164,7 @@ export default {
     }
 
     if (url.pathname.startsWith("/admin/")) {
-      if (bearer(request) !== env.ADMIN_TOKEN) return json({ error: "unauthorized" }, 401, origin);
+      if (!isAdmin(request, env)) return json({ error: "unauthorized" }, 401, origin);
       if (url.pathname === "/admin/queue" && request.method === "GET") {
         const rows = await env.DB.prepare(
           "SELECT id, kind, host, entry, state, outcome, message, tools, attempts, created_at, updated_at FROM requests WHERE state IN ('queued','scanning') OR (state='done' AND updated_at > ?) ORDER BY created_at DESC LIMIT 100",

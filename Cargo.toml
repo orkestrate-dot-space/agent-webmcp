@@ -12,7 +12,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 sha2 = "0.11.1"
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "io-util"] }
-ureq = "3.5.2"
+ureq = { version = "3.5.2", features = ["platform-verifier"] }
 
 [dev-dependencies]
 tempfile = "3.27.0"
