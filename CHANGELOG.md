@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.3 — 2026-11-18
+
+- `upgrade` on an install-script copy now refuses releases before 0.2.2,
+  which ship no script binaries (the archives started with 0.2.2), and
+  points at npm for those versions instead of failing on a 404.
+- `find` drops fuzzy matches that earn less than one relevance point per
+  query word, so gibberish gets the no-match line instead of weak hits.
+- `find` scores camelCase tool names the way the index splits them, so a
+  fallback match on the name counts.
+
 ## 0.2.2 — 2026-11-18
 
 - curl install for Linux and macOS:

@@ -351,3 +351,35 @@ fn a_brand_with_several_domains_still_narrows() {
     // Stripe has no tools here, and its neighbours are not the answer.
     assert!(s.find("search stripe docs", 3).unwrap().is_empty());
 }
+
+#[test]
+fn gibberish_gets_the_no_match_line() {
+    let idx = Index {
+        schema_version: SCHEMA_VERSION,
+        generated_at: "2026-11-17T00:00:00Z".into(),
+        sites: vec![site(
+            "plumbing.example",
+            None,
+            vec![tool(
+                "fix_sink",
+                "No job too big and no mess too small.",
+                "https://plumbing.example/",
+            )],
+        )],
+    };
+    let s = Search::build(idx).unwrap();
+    // Only "no" and "job" land (4 points); the rest matches nothing.
+    assert!(s.find("zzzz no job xyz qqq", 5).unwrap().is_empty());
+    // The tool is still findable by a query that names it.
+    assert_eq!(s.find("fix sink", 5).unwrap()[0].tool, "fix_sink");
+}
+
+#[test]
+fn fallback_scores_camel_case_names_like_the_index_splits_them() {
+    let s = Search::build(index()).unwrap();
+    // "xyz" matches nothing, so this goes through the any-two fallback;
+    // "flight" has to score through the camelCase name to clear the floor.
+    let hits = s.find("search flight xyz", 5).unwrap();
+    assert_eq!(hits[0].id, "googlechromelabs.github.io/searchFlights");
+    assert!(hits[0].relevance >= 12.0, "{:#?}", hits[0]);
+}
