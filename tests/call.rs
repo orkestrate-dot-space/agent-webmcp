@@ -393,6 +393,116 @@ fn find_hit_carries_call() {
     );
 }
 
+// --- inferred read ---
+
+#[test]
+fn name_inference_table() {
+    let none = Annotations::default();
+    for name in ["ask_cal_com", "searchFlights", "search_docs", "read_page"] {
+        assert_eq!(call::kind_of(name, &none), (ToolKind::Read, true), "{name}");
+        assert!(call::inferred_read(name), "{name}");
+    }
+    for name in [
+        "create_order",
+        "get_and_delete",
+        "manage_pizza",
+        "checkout",
+        "do_thing",
+    ] {
+        assert_eq!(
+            call::kind_of(name, &none),
+            (ToolKind::Unspecified, false),
+            "{name}"
+        );
+    }
+    // Explicit hints always win over the name.
+    assert_eq!(
+        call::kind_of("search_x", &consequential()),
+        (ToolKind::Consequential, false)
+    );
+    assert_eq!(
+        call::kind_of(
+            "delete_y",
+            &Annotations {
+                read_only: true,
+                ..Default::default()
+            }
+        ),
+        (ToolKind::Read, false)
+    );
+    assert_eq!(call::kind_str(ToolKind::Read), "read");
+}
+
+fn inferred_index() -> Index {
+    Index {
+        schema_version: 1,
+        generated_at: "2026-11-19T00:00:00Z".into(),
+        sites: vec![site(
+            "help.example",
+            vec![Tool {
+                name: "lookup_faq".into(),
+                description: "Look up answers.".into(),
+                input_schema: json!({"type": "object"}),
+                page: "https://help.example/".into(),
+                origin: "https://help.example".into(),
+                annotations: Annotations::default(),
+                flags: vec![],
+            }],
+        )],
+    }
+}
+
+#[test]
+fn inferred_read_is_allowed_without_confirm() {
+    let search = Search::build(inferred_index()).unwrap();
+    let resolved = resolve("help.example/lookup_faq", &search).unwrap();
+    assert_eq!(resolved.kind, ToolKind::Read);
+    assert!(resolved.kind_inferred);
+    let mut cfg = config::Config::default();
+    cfg.driver = config::DriverChoice::None;
+    match execute(&resolved, json!({}), &opts(), &cfg) {
+        Ok(Outcome::Planned { plan, .. }) => assert_eq!(plan.driver, "generic"),
+        other => panic!("inferred read should be allowed, got {other:?}"),
+    }
+}
+
+#[test]
+fn ask_pattern_still_stops_inferred_read() {
+    let search = Search::build(inferred_index()).unwrap();
+    let resolved = resolve("help.example/lookup_faq", &search).unwrap();
+    let mut cfg = config::Config::default();
+    cfg.driver = config::DriverChoice::None;
+    cfg.permissions.ask.push("help.example/*".into());
+    let e = execute(
+        &resolved,
+        json!({}),
+        &CallOptions {
+            confirm: false,
+            plan_only: true,
+            fresh: false,
+            retry_hint: call::RETRY_CLI,
+        },
+        &cfg,
+    )
+    .unwrap_err();
+    assert_eq!(e.code, "needs_confirmation");
+}
+
+#[test]
+fn find_marks_inferred_kind() {
+    let search = Search::build(inferred_index()).unwrap();
+    let hits = search.find("help.example faq", 5).unwrap();
+    let hit = hits
+        .iter()
+        .find(|h| h.id == "help.example/lookup_faq")
+        .expect("fixture hit missing");
+    assert_eq!(hit.kind, "read");
+    assert!(hit.kind_inferred);
+    let json = serde_json::to_value(hit).unwrap();
+    assert_eq!(json["kind"], json!("read"));
+    assert_eq!(json["kind_inferred"], json!(true));
+}
+
 // --- envelope shapes + exit codes ---
 
 #[test]

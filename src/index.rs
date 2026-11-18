@@ -20,6 +20,9 @@ pub struct Hit {
     /// Open this page with your browser driver; the tool is registered there.
     pub open: String,
     pub kind: &'static str,
+    /// True when the kind was inferred from the name (no index hint).
+    #[serde(skip_serializing_if = "is_false")]
+    pub kind_inferred: bool,
     pub input_schema: Value,
     pub checked_at: String,
     /// How to call this hit.
@@ -54,6 +57,8 @@ pub struct CallInfo {
 /// One tool looked up by host and name, for `call` target resolution.
 #[derive(Debug, Clone)]
 pub struct ToolRef {
+    /// Tool name.
+    pub name: String,
     /// Page the tool was seen on.
     pub page: String,
     /// The tool's input schema.
@@ -65,6 +70,10 @@ pub struct ToolRef {
 struct Row {
     site: usize,
     tool: usize,
+}
+
+fn is_false(b: &bool) -> bool {
+    !b
 }
 
 pub struct Search {
@@ -125,6 +134,7 @@ impl Search {
             for tool in &site.tools {
                 if tool.name == name {
                     return Some(ToolRef {
+                        name: tool.name.clone(),
                         page: tool.page.clone(),
                         input_schema: tool.input_schema.clone(),
                         annotations: tool.annotations.clone(),
@@ -250,19 +260,16 @@ impl Search {
                 target: id.clone(),
                 input: crate::call::example_input(&tool.input_schema),
             };
+            let (tool_kind, kind_inferred) = crate::call::kind_of(&tool.name, &tool.annotations);
+            let kind = crate::call::kind_str(tool_kind);
             let hit = Hit {
                 id,
                 site: site.host.clone(),
                 tool: tool.name.clone(),
                 description: tool.description.clone(),
                 open: tool.page.clone(),
-                kind: if tool.annotations.consequential {
-                    "consequential"
-                } else if tool.annotations.read_only {
-                    "read"
-                } else {
-                    "unspecified"
-                },
+                kind,
+                kind_inferred,
                 input_schema: tool.input_schema.clone(),
                 checked_at: site.checked_at.clone(),
                 call,

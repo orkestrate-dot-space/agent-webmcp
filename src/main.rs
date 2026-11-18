@@ -340,10 +340,14 @@ fn find(query: &str, limit: usize, json: bool) -> Result<()> {
         };
         let example =
             serde_json::to_string(&call::example_input(&h.input_schema)).unwrap_or_default();
+        let kind = if h.kind_inferred {
+            "[read, inferred]".to_string()
+        } else {
+            format!("[{}]", h.kind)
+        };
         println!(
-            "{}  [{}]{shared}{flags}\n    {}\n    open {}\n    call agent-webmcp call {} '{}'\n",
+            "{}  {kind}{shared}{flags}\n    {}\n    open {}\n    call agent-webmcp call {} '{}'\n",
             text::clean(&h.id),
-            h.kind,
             text::clean(&h.description),
             text::clean(&h.open),
             text::clean(&h.id),

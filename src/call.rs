@@ -30,6 +30,8 @@ pub struct Resolved {
     /// Input schema from the index, if the tool is indexed.
     pub schema: Option<Value>,
     pub kind: ToolKind,
+    /// True when the kind was inferred from the name (no index hint).
+    pub kind_inferred: bool,
 }
 
 impl Resolved {
@@ -215,18 +217,93 @@ fn format_duration(ms: u64) -> String {
     format!("{:.1}s", ms as f64 / 1000.0)
 }
 
-/// The tool kind from annotations, like `find` reports it.
-pub fn kind_of(annotations: &Annotations) -> ToolKind {
+/// The tool kind from annotations, like `find` reports it. When neither
+/// hint is set, a safe-looking name counts as read, and says so.
+pub fn kind_of(name: &str, annotations: &Annotations) -> (ToolKind, bool) {
     if annotations.consequential {
-        ToolKind::Consequential
+        (ToolKind::Consequential, false)
     } else if annotations.read_only {
-        ToolKind::Read
+        (ToolKind::Read, false)
+    } else if inferred_read(name) {
+        (ToolKind::Read, true)
     } else {
-        ToolKind::Unspecified
+        (ToolKind::Unspecified, false)
     }
 }
 
-fn kind_str(kind: ToolKind) -> &'static str {
+/// Whether a hintless tool name looks read-only: a read verb first and no
+/// write verb anywhere. Explicit annotations always win over this.
+pub fn inferred_read(name: &str) -> bool {
+    const READ: &[&str] = &[
+        "ask", "search", "get", "list", "read", "find", "lookup", "query", "fetch", "view", "show",
+        "describe", "check",
+    ];
+    const WRITE: &[&str] = &[
+        "create",
+        "add",
+        "delete",
+        "remove",
+        "update",
+        "edit",
+        "set",
+        "submit",
+        "send",
+        "post",
+        "buy",
+        "purchase",
+        "pay",
+        "checkout",
+        "book",
+        "reserve",
+        "cancel",
+        "order",
+        "place",
+        "write",
+        "upload",
+        "transfer",
+        "subscribe",
+        "unsubscribe",
+        "invite",
+        "share",
+        "publish",
+        "deploy",
+        "start",
+        "stop",
+        "run",
+        "execute",
+        "manage",
+    ];
+    let words = split_name(name);
+    match words.first() {
+        Some(first) if READ.contains(&first.as_str()) => {
+            !words.iter().any(|w| WRITE.contains(&w.as_str()))
+        }
+        _ => false,
+    }
+}
+
+/// Split snake_case, kebab, dots and camelCase into lowercase words.
+fn split_name(name: &str) -> Vec<String> {
+    let mut words = Vec::new();
+    for part in name.split(['_', '-', '.']) {
+        let mut current = String::new();
+        let mut prev_lower = false;
+        for c in part.chars() {
+            if c.is_uppercase() && prev_lower && !current.is_empty() {
+                words.push(std::mem::take(&mut current).to_lowercase());
+            }
+            current.push(c);
+            prev_lower = c.is_lowercase() || c.is_ascii_digit();
+        }
+        if !current.is_empty() {
+            words.push(current.to_lowercase());
+        }
+    }
+    words.into_iter().filter(|w| !w.is_empty()).collect()
+}
+
+/// The kind as the index and envelopes spell it.
+pub fn kind_str(kind: ToolKind) -> &'static str {
     match kind {
         ToolKind::Read => "read",
         ToolKind::Consequential => "consequential",
@@ -249,12 +326,17 @@ pub fn resolve(target: &str, search: &Search) -> Result<Resolved, CallError> {
             CallError::usage("target must be site/tool (from find) or https://page#tool")
         })?;
         let found = search.tool(&site, tool);
+        let (kind, kind_inferred) = found
+            .as_ref()
+            .map(|t| kind_of(&t.name, &t.annotations))
+            .unwrap_or((ToolKind::Unspecified, false));
         return Ok(Resolved {
             page: url.to_string(),
             tool: tool.to_string(),
             site,
             schema: found.as_ref().map(|t| t.input_schema.clone()),
-            kind: found.map_or(ToolKind::Unspecified, |t| kind_of(&t.annotations)),
+            kind,
+            kind_inferred,
         });
     }
     let (site, tool) = target.split_once('/').ok_or_else(|| {
@@ -266,13 +348,17 @@ pub fn resolve(target: &str, search: &Search) -> Result<Resolved, CallError> {
         ));
     }
     match search.tool(site, tool) {
-        Some(found) => Ok(Resolved {
-            page: found.page.clone(),
-            tool: tool.to_string(),
-            site: site.to_string(),
-            schema: Some(found.input_schema.clone()),
-            kind: kind_of(&found.annotations),
-        }),
+        Some(found) => {
+            let (kind, kind_inferred) = kind_of(&found.name, &found.annotations);
+            Ok(Resolved {
+                page: found.page.clone(),
+                tool: tool.to_string(),
+                site: site.to_string(),
+                schema: Some(found.input_schema.clone()),
+                kind,
+                kind_inferred,
+            })
+        }
         None => Err(CallError {
             code: "tool_not_found",
             message: format!(
