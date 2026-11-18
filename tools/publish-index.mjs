@@ -36,7 +36,10 @@ clean-tree and staleness guards.`);
 }
 const arg = (name, fallback) => {
   const i = args.indexOf(`--${name}`);
-  return i >= 0 ? args[i + 1] : fallback;
+  if (i >= 0) return args[i + 1];
+  // The usage line advertises `--name=value`; accept that form too.
+  const eq = args.find((a) => a.startsWith(`--${name}=`));
+  return eq ? eq.slice(name.length + 3) : fallback;
 };
 
 // --adopt <pointer-url>: pull the live index into index/index.json first, so a
