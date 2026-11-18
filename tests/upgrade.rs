@@ -1,4 +1,4 @@
-use agent_webmcp::upgrade::{Install, detect, normalize_target};
+use agent_webmcp::upgrade::{Install, detect, normalize_target, script_reaches};
 use std::path::{Path, PathBuf};
 
 #[test]
@@ -51,4 +51,13 @@ fn bad_targets_refused() {
     assert!(normalize_target(Some("0.2.1; rm -rf /")).is_err());
     assert!(normalize_target(Some("--registry=evil")).is_err());
     assert!(normalize_target(Some("github:x/y")).is_err());
+}
+
+#[test]
+fn script_installs_refuse_releases_without_binaries() {
+    // v0.2.0/v0.2.1 tags ship no archives; the script would 404.
+    assert!(script_reaches("0.2.0").is_err());
+    assert!(script_reaches("0.2.1").is_err());
+    assert!(script_reaches("0.2.2").is_ok());
+    assert!(script_reaches("0.3.0").is_ok());
 }

@@ -110,6 +110,21 @@ fn resolve(prefix: &Path, target: &str) -> Result<String> {
 const INSTALL_SH: &str =
     "https://github.com/orkestrate-dot-space/agent-webmcp/releases/latest/download/install.sh";
 
+/// The first release with install-script binaries attached. The release
+/// workflow only started building archives then, so earlier tags 404.
+const MIN_SCRIPT_VERSION: &str = "0.2.2";
+
+/// A script install cannot move to a release that ships no script
+/// binaries; npm carries every version, so point there instead.
+pub fn script_reaches(wanted: &str) -> Result<()> {
+    if newer_available(wanted, MIN_SCRIPT_VERSION) {
+        bail!(
+            "release {wanted} ships no install-script binaries (script installs start at {MIN_SCRIPT_VERSION}); use npm instead: npm i -g {PACKAGE}@{wanted}"
+        );
+    }
+    Ok(())
+}
+
 /// The binary the install script wrote, when this is it. The script leaves
 /// a receipt naming the file it installed.
 fn script_install(exe: &Path) -> Option<PathBuf> {
@@ -138,6 +153,7 @@ fn upgrade_script(path: &Path, target: &str, explicit: bool, current: &str) -> R
         ),
         v => v.to_string(),
     };
+    script_reaches(&wanted)?;
     if wanted == current {
         println!("agent-webmcp {current} is already the {target} release");
         return Ok(());

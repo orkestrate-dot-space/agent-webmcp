@@ -130,10 +130,12 @@ impl Search {
             &subjects
         };
         let mut ids = self.match_rows(required, site.as_deref())?;
+        let mut fuzzy = false;
         if ids.is_empty() && words.len() > 1 {
             // Nothing has the object. Accept a match on any two words, which
             // still needs more than one coincidental term.
             ids = self.any_two_rows(&words, site.as_deref())?;
+            fuzzy = !ids.is_empty();
         }
 
         // Order by where the words land: a tool named for the task beats one
@@ -160,6 +162,14 @@ impl Search {
                 .unwrap_or(std::cmp::Ordering::Equal)
                 .then(a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
         });
+        if fuzzy {
+            // The fallback above is guessy by design: two coincidental words
+            // can land anywhere. A hit has to earn about a point per query
+            // word (a description mention is 2), or the query gets the
+            // no-match line instead of confident-looking nonsense.
+            let floor = words.len() as f64;
+            scored.retain(|(score, _, _)| *score >= floor);
+        }
 
         let mut seen_ids: Vec<String> = Vec::new();
         let mut seen_platform_tools: Vec<(String, String)> = Vec::new();
