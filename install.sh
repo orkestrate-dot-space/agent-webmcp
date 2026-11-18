@@ -1,7 +1,7 @@
 #!/bin/sh
 # Install agent-webmcp from GitHub releases (Linux and macOS).
 #
-#   curl -fsSL https://github.com/orkestrate-dot-space/agent-webmcp/releases/latest/download/install.sh | sh
+#   curl -fsSL https://web.orkestrate.space/webmcp/install | bash
 #
 # Options (flags after `sh -s --`, or environment variables):
 #   --version X     AGENT_WEBMCP_VERSION       exact version, default latest
