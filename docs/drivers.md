@@ -93,3 +93,10 @@ You should see `searchFlights` on
 `https://googlechromelabs.github.io/webmcp-tools/demos/react-flightsearch/`.
 Open that page with your driver and list its WebMCP tools.
 If the tool appears, your driver is ready.
+
+Add `--json` to `find` to get each tool's input schema. If the schema is
+empty (as for `searchFlights`), read it from the page with your driver
+before calling: `agent-browser webmcp list <tool> --json`, the
+`webmcp_<tool>` tool's own input schema (Playwright MCP),
+`list_webmcp_tools` (DevTools MCP), or `webmcp` with `action: "list"`
+(Browse).
