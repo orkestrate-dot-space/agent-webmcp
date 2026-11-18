@@ -4,7 +4,13 @@
 /// Tool names a platform ships on every site. Only these collapse in search.
 const SHARED: &[(&str, &[&str])] = &[(
     "mintlify",
-    &["search_docs", "read_page", "navigate_page", "get_site_overview", "read_skill"],
+    &[
+        "search_docs",
+        "read_page",
+        "navigate_page",
+        "get_site_overview",
+        "read_skill",
+    ],
 )];
 
 pub fn is_shared(platform: &str, tool: &str) -> bool {

@@ -4,8 +4,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use rmcp::model::{
-    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation, InitializeResult,
-    ListToolsResult, PaginatedRequestParams, ServerCapabilities, Tool, ToolAnnotations,
+    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
+    InitializeResult, ListToolsResult, PaginatedRequestParams, ServerCapabilities, Tool,
+    ToolAnnotations,
 };
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData as McpError, RoleServer, ServerHandler};
@@ -27,7 +28,9 @@ pub struct Server {
 
 impl Server {
     pub fn new(search: Search) -> Self {
-        Self { search: Arc::new(Mutex::new(search)) }
+        Self {
+            search: Arc::new(Mutex::new(search)),
+        }
     }
 
     /// The shared search, so a background task can swap in a newer index.
@@ -66,7 +69,9 @@ impl Server {
 
     fn find(&self, args: &serde_json::Map<String, Value>) -> CallToolResult {
         let Some(query) = args.get("query").and_then(Value::as_str) else {
-            return CallToolResult::error(vec![ContentBlock::text("`query` is required: say what you want to do")]);
+            return CallToolResult::error(vec![ContentBlock::text(
+                "`query` is required: say what you want to do",
+            )]);
         };
         let limit = args
             .get("limit")
@@ -80,7 +85,9 @@ impl Server {
                 "note": "No indexed site has a tool for this. Use your browser driver as usual."
             })),
             Ok(hits) => CallToolResult::structured(json!({ "matches": hits })),
-            Err(e) => CallToolResult::error(vec![ContentBlock::text(format!("search failed: {e:#}"))]),
+            Err(e) => {
+                CallToolResult::error(vec![ContentBlock::text(format!("search failed: {e:#}"))])
+            }
         }
     }
 }
@@ -95,7 +102,9 @@ fn find_tool() -> Tool {
         "required": ["query"],
         "additionalProperties": false
     });
-    let Value::Object(schema) = schema else { unreachable!() };
+    let Value::Object(schema) = schema else {
+        unreachable!()
+    };
     Tool::new(
         "find",
         "Find websites that offer a WebMCP tool for what you need. Returns, for each match, the page \
@@ -109,7 +118,10 @@ fn find_tool() -> Tool {
 impl ServerHandler for Server {
     fn get_info(&self) -> InitializeResult {
         InitializeResult::new(ServerCapabilities::builder().enable_tools().build())
-            .with_server_info(Implementation::new("agent-webmcp", env!("CARGO_PKG_VERSION")))
+            .with_server_info(Implementation::new(
+                "agent-webmcp",
+                env!("CARGO_PKG_VERSION"),
+            ))
             .with_instructions(INSTRUCTIONS)
     }
 
@@ -128,7 +140,10 @@ impl ServerHandler for Server {
     ) -> Result<CallToolResponse, McpError> {
         match request.name.as_ref() {
             "find" => Ok(self.find(&request.arguments.unwrap_or_default()).into()),
-            other => Err(McpError::invalid_params(format!("unknown tool {other:?}"), None)),
+            other => Err(McpError::invalid_params(
+                format!("unknown tool {other:?}"),
+                None,
+            )),
         }
     }
 }

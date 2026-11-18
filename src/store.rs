@@ -49,7 +49,9 @@ pub fn data_dir() -> PathBuf {
     if let Some(dir) = std::env::var_os("XDG_DATA_HOME") {
         return PathBuf::from(dir).join("agent-webmcp");
     }
-    let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
+    let home = std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
     home.join(".local/share/agent-webmcp")
 }
 
@@ -88,19 +90,26 @@ pub fn resolve(pointer_url: &str, target: &str) -> String {
     if target.starts_with("https://") || target.starts_with("http://") {
         return target.to_string();
     }
-    let base = pointer_url.rsplit_once('/').map(|(b, _)| b).unwrap_or(pointer_url);
+    let base = pointer_url
+        .rsplit_once('/')
+        .map(|(b, _)| b)
+        .unwrap_or(pointer_url);
     format!("{base}/{}", target.trim_start_matches('/'))
 }
 
 pub fn sha256_hex(bytes: &[u8]) -> String {
-    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
+    Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 /// Load the local index, checking for a newer one when it is missing or
 /// older than an hour. A failed check falls back to the copy on disk.
 pub fn load() -> Result<Index> {
     if let Some(path) = std::env::var_os("AGENT_WEBMCP_INDEX") {
-        let text = std::fs::read_to_string(&path).with_context(|| format!("reading {}", PathBuf::from(&path).display()))?;
+        let text = std::fs::read_to_string(&path)
+            .with_context(|| format!("reading {}", PathBuf::from(&path).display()))?;
         return parse(&text);
     }
     let path = index_path();
@@ -110,11 +119,17 @@ pub fn load() -> Result<Index> {
         .map(|t| SystemTime::now().duration_since(t).unwrap_or_default() > STALE_AFTER)
         .unwrap_or(true);
     if stale {
-        let timeout = if have_copy { QUICK_TIMEOUT } else { FIRST_TIMEOUT };
+        let timeout = if have_copy {
+            QUICK_TIMEOUT
+        } else {
+            FIRST_TIMEOUT
+        };
         match refresh_with(timeout) {
             Ok(index) => return Ok(index),
             Err(e) if have_copy => {
-                eprintln!("agent-webmcp: could not check for a newer index ({e:#}); using the copy on disk");
+                eprintln!(
+                    "agent-webmcp: could not check for a newer index ({e:#}); using the copy on disk"
+                );
             }
             Err(e) => return Err(e.context("downloading the index")),
         }
@@ -172,9 +187,18 @@ fn refresh_from(url: &str, timeout: Duration) -> Result<Index> {
     if status != 200 {
         bail!("HTTP {status}");
     }
-    let etag = resp.headers().get("etag").and_then(|v| v.to_str().ok()).map(str::to_string);
-    let pointer: Pointer = serde_json::from_str(&resp.body_mut().read_to_string().context("reading the pointer")?)
-        .context("the pointer file is not valid")?;
+    let etag = resp
+        .headers()
+        .get("etag")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
+    let pointer: Pointer = serde_json::from_str(
+        &resp
+            .body_mut()
+            .read_to_string()
+            .context("reading the pointer")?,
+    )
+    .context("the pointer file is not valid")?;
 
     if path.exists() && state.sha.as_deref() == Some(pointer.sha256.as_str()) {
         write_state(etag.as_deref(), &pointer.sha256, url);
@@ -195,7 +219,10 @@ fn refresh_from(url: &str, timeout: Duration) -> Result<Index> {
         .context("reading the index")?;
     let got = sha256_hex(&bytes);
     if !got.eq_ignore_ascii_case(&pointer.sha256) {
-        bail!("the downloaded index does not match its hash (expected {}, got {got}); keeping the old copy", pointer.sha256);
+        bail!(
+            "the downloaded index does not match its hash (expected {}, got {got}); keeping the old copy",
+            pointer.sha256
+        );
     }
     let text = String::from_utf8(bytes).context("the index is not valid UTF-8")?;
     let index = parse(&text)?;
@@ -213,7 +240,11 @@ fn refresh_from(url: &str, timeout: Duration) -> Result<Index> {
 /// The newest released CLI version, when the pointer names one. A failure
 /// means "unknown", never an error: the index itself is what matters.
 pub fn latest_cli_remote() -> Option<String> {
-    let timeout = if index_path().exists() { QUICK_TIMEOUT } else { FIRST_TIMEOUT };
+    let timeout = if index_path().exists() {
+        QUICK_TIMEOUT
+    } else {
+        FIRST_TIMEOUT
+    };
     let agent = agent(timeout);
     for url in pointer_urls() {
         let Ok(mut resp) = agent.get(&url).call() else {
@@ -255,9 +286,16 @@ fn read_state() -> State {
     };
     let mut lines = text.lines();
     let field = |l: Option<&str>| l.filter(|v| !v.is_empty()).map(str::to_string);
-    State { etag: field(lines.next()), sha: field(lines.next()), origin: field(lines.next()) }
+    State {
+        etag: field(lines.next()),
+        sha: field(lines.next()),
+        origin: field(lines.next()),
+    }
 }
 
 fn write_state(etag: Option<&str>, sha: &str, origin: &str) {
-    let _ = std::fs::write(state_path(), format!("{}\n{sha}\n{origin}\n", etag.unwrap_or("")));
+    let _ = std::fs::write(
+        state_path(),
+        format!("{}\n{sha}\n{origin}\n", etag.unwrap_or("")),
+    );
 }

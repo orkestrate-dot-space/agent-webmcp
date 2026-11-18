@@ -3,7 +3,9 @@ use std::path::PathBuf;
 
 #[test]
 fn merge_adds_server() {
-    let out = merge_opencode_mcp(r#"{"mcp": {}}"#, "/bin/agent-webmcp").unwrap().unwrap();
+    let out = merge_opencode_mcp(r#"{"mcp": {}}"#, "/bin/agent-webmcp")
+        .unwrap()
+        .unwrap();
     let doc: serde_json::Value = serde_json::from_str(&out).unwrap();
     assert_eq!(doc["mcp"]["agent-webmcp"]["type"], "local");
     assert_eq!(doc["mcp"]["agent-webmcp"]["command"][1], "mcp");
@@ -12,7 +14,11 @@ fn merge_adds_server() {
 #[test]
 fn merge_keeps_existing_when_present() {
     let existing = r#"{"mcp": {"agent-webmcp": {"type": "local", "command": ["x", "mcp"]}}}"#;
-    assert!(merge_opencode_mcp(existing, "/bin/agent-webmcp").unwrap().is_none());
+    assert!(
+        merge_opencode_mcp(existing, "/bin/agent-webmcp")
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[test]

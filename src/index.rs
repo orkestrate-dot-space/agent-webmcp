@@ -85,11 +85,20 @@ impl Search {
                 }
             }
         }
-        Ok(Self { conn, rows, index, platform_sites })
+        Ok(Self {
+            conn,
+            rows,
+            index,
+            platform_sites,
+        })
     }
 
     pub fn sites(&self) -> usize {
-        self.index.sites.iter().filter(|s| s.status == Status::Verified).count()
+        self.index
+            .sites
+            .iter()
+            .filter(|s| s.status == Status::Verified)
+            .count()
     }
 
     pub fn tools(&self) -> usize {
@@ -114,8 +123,16 @@ impl Search {
         // The verb in a request describes what the caller wants to do, not what
         // the tool is called: "order a pizza" is answered by `manage_pizza`, so
         // only the object words have to be present.
-        let subjects: Vec<String> = words.iter().filter(|w| !ACTION_WORDS.contains(&w.as_str())).cloned().collect();
-        let required = if subjects.is_empty() { &words } else { &subjects };
+        let subjects: Vec<String> = words
+            .iter()
+            .filter(|w| !ACTION_WORDS.contains(&w.as_str()))
+            .cloned()
+            .collect();
+        let required = if subjects.is_empty() {
+            &words
+        } else {
+            &subjects
+        };
         let mut ids = self.match_rows(required, site.as_deref())?;
         if ids.is_empty() && words.len() > 1 {
             // Nothing has the object. Accept a match on any two words, which
@@ -132,11 +149,21 @@ impl Search {
                 let row = &self.rows[(id - 1) as usize];
                 let site = &self.index.sites[row.site];
                 let tool = &site.tools[row.tool];
-                let score = relevance(&words, &site.host, &tool.name, &tool.description, &tool.input_schema);
+                let score = relevance(
+                    &words,
+                    &site.host,
+                    &tool.name,
+                    &tool.description,
+                    &tool.input_schema,
+                );
                 (score, rank, id)
             })
             .collect();
-        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal).then(a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)));
+        scored.sort_by(|a, b| {
+            b.0.partial_cmp(&a.0)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+        });
 
         let mut seen_ids: Vec<String> = Vec::new();
         let mut seen_platform_tools: Vec<(String, String)> = Vec::new();
@@ -189,7 +216,11 @@ impl Search {
                 flags: tool.flags.clone(),
                 relevance,
             };
-            if hit.flags.is_empty() { clean.push(hit) } else { flagged.push(hit) }
+            if hit.flags.is_empty() {
+                clean.push(hit)
+            } else {
+                flagged.push(hit)
+            }
             if clean.len() >= limit {
                 break;
             }
@@ -201,7 +232,11 @@ impl Search {
 
     /// Rows matching every content word, best first.
     fn match_rows(&self, words: &[String], site: Option<&str>) -> Result<Vec<(i64, f64)>> {
-        let expr = words.iter().map(|w| term(w)).collect::<Vec<_>>().join(" AND ");
+        let expr = words
+            .iter()
+            .map(|w| term(w))
+            .collect::<Vec<_>>()
+            .join(" AND ");
         self.ranked(&expr, site)
     }
 
@@ -255,11 +290,16 @@ impl Search {
             if families.is_empty() {
                 continue;
             }
-            let names_the_brand = families.iter().all(|f| f.split('.').next() == Some(word.as_str()));
+            let names_the_brand = families
+                .iter()
+                .all(|f| f.split('.').next() == Some(word.as_str()));
             if !names_the_brand {
                 continue;
             }
-            if best.as_ref().is_none_or(|(count, _)| families.len() < *count) {
+            if best
+                .as_ref()
+                .is_none_or(|(count, _)| families.len() < *count)
+            {
                 best = Some((families.len(), word.clone()));
             }
         }
@@ -316,8 +356,8 @@ fn words(s: &str) -> String {
 const STOPWORDS: &[&str] = &[
     "a", "an", "and", "any", "are", "as", "at", "be", "by", "can", "do", "for", "from", "how", "i",
     "in", "is", "it", "me", "my", "of", "on", "or", "please", "so", "that", "the", "this", "to",
-    "up", "what", "when", "where", "which", "with", "you", "want", "need", "some", "site", "website",
-    // FTS5 query operators: never treat them as search terms.
+    "up", "what", "when", "where", "which", "with", "you", "want", "need", "some", "site",
+    "website", // FTS5 query operators: never treat them as search terms.
     "and", "or", "not", "near",
 ];
 
@@ -394,9 +434,8 @@ fn camel_pieces(word: &str) -> impl Iterator<Item = String> + '_ {
 /// Words that say what the caller wants to do. A tool rarely carries them in
 /// its name, so they rank but do not have to match.
 const ACTION_WORDS: &[&str] = &[
-    "add", "ask", "book", "buy", "cancel", "check", "create", "delete", "deploy", "edit", "find", "get",
-    "list", "look", "make", "manage", "open", "order", "read", "remove", "reserve", "search", "send",
-    "set", "share", "show", "start", "submit", "track", "update", "view", "write",
+    "add", "ask", "book", "buy", "cancel", "check", "create", "delete", "deploy", "edit", "find",
+    "get", "list", "look", "make", "manage", "open", "order", "read", "remove", "reserve",
+    "search", "send", "set", "share", "show", "start", "submit", "track", "update", "view",
+    "write",
 ];
-
-

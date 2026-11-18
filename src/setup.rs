@@ -13,7 +13,12 @@ const SKILL: &str = include_str!("../skills/agent-webmcp/SKILL.md");
 /// Run the whole setup and report what changed.
 pub fn run() -> Result<()> {
     let index = crate::store::refresh()?;
-    println!("index: {} sites, {} tools ({})", index.sites.len(), tool_count(&index), index.generated_at);
+    println!(
+        "index: {} sites, {} tools ({})",
+        index.sites.len(),
+        tool_count(&index),
+        index.generated_at
+    );
 
     let home = home_dir()?;
     let mut installed = Vec::new();
@@ -38,8 +43,13 @@ pub fn run() -> Result<()> {
     }
 
     match configure_opencode()? {
-        Configured::Added(path) => println!("opencode: added the agent-webmcp MCP server to {}", path.display()),
-        Configured::Present(path) => println!("opencode: {} already lists agent-webmcp", path.display()),
+        Configured::Added(path) => println!(
+            "opencode: added the agent-webmcp MCP server to {}",
+            path.display()
+        ),
+        Configured::Present(path) => {
+            println!("opencode: {} already lists agent-webmcp", path.display())
+        }
         Configured::Missing => {
             println!("opencode: no config file found; add this under \"mcp\":");
             println!("{}", mcp_snippet(&current_exe_string()?));
@@ -64,10 +74,14 @@ fn home_dir() -> Result<PathBuf> {
 
 /// The well-known local skill directories.
 pub fn skill_dirs(home: &Path) -> Vec<PathBuf> {
-    [".agents/skills", ".claude/skills", ".config/opencode/skills"]
-        .iter()
-        .map(|d| home.join(d))
-        .collect()
+    [
+        ".agents/skills",
+        ".claude/skills",
+        ".config/opencode/skills",
+    ]
+    .iter()
+    .map(|d| home.join(d))
+    .collect()
 }
 
 enum Configured {
@@ -83,7 +97,9 @@ fn opencode_config_path() -> Option<PathBuf> {
             return Some(p);
         }
     }
-    std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config/opencode/opencode.json")).filter(|p| p.exists())
+    std::env::var_os("HOME")
+        .map(|h| PathBuf::from(h).join(".config/opencode/opencode.json"))
+        .filter(|p| p.exists())
 }
 
 fn current_exe_string() -> Result<String> {
@@ -94,7 +110,8 @@ fn configure_opencode() -> Result<Configured> {
     let Some(path) = opencode_config_path() else {
         return Ok(Configured::Missing);
     };
-    let text = std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+    let text =
+        std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
     let exe = current_exe_string()?;
     let Some(merged) = merge_opencode_mcp(&text, &exe)? else {
         return Ok(Configured::Present(path));
@@ -144,9 +161,7 @@ pub fn chrome_report() -> Vec<String> {
     if args.contains("WebMCP") {
         out.push("browser: WebMCP flags are set (AGENT_BROWSER_ARGS).".to_string());
     } else {
-        out.push(
-            "browser: WebMCP needs its Chrome flags, or pages register no tools:".to_string(),
-        );
+        out.push("browser: WebMCP needs its Chrome flags, or pages register no tools:".to_string());
         out.push(
             "  export AGENT_BROWSER_ARGS=\"--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport\""
                 .to_string(),
