@@ -24,6 +24,16 @@ const NAMESPACE = "c489f55fb6d04a0a97a9143c15ec2f33";
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, "..");
 const args = process.argv.slice(2);
+if (args.includes("--help") || args.includes("-h")) {
+  console.log(`usage: node tools/publish-index.mjs [--index index/index.json] [--denylist index/denylist.json]
+       [--adopt <live-pointer-url>] [--latest-cli=x.y.z|none] [--kv] [--deploy] [--force]
+
+Without --kv, writes the version file, pointer and denylist into worker/public
+(the Worker's static fallback). With --kv, writes them into the INDEX KV
+namespace instead. --adopt pulls the live index first. --force skips the
+clean-tree and staleness guards.`);
+  process.exit(0);
+}
 const arg = (name, fallback) => {
   const i = args.indexOf(`--${name}`);
   return i >= 0 ? args[i + 1] : fallback;
