@@ -181,7 +181,36 @@ export default {
     }
 
     if (url.pathname === "/" || url.pathname === "/health") {
-      return json({ ok: true, service: "agent-webmcp-intake" }, 200, origin);
+      // Public and secret-free: queue depth, the oldest waiting request, and
+      // the last rebuild outcome. Point any uptime monitor at /health and alert
+      // on queued_oldest_s or last_rebuild_outcome=error.
+      const hour = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const counts = await env.DB.prepare(
+        "SELECT state, COUNT(*) AS n, MIN(created_at) AS oldest FROM requests WHERE state IN ('queued','scanning') GROUP BY state",
+      ).all();
+      const lastRebuild = await env.DB.prepare(
+        "SELECT state, outcome, message, updated_at FROM requests WHERE kind='rebuild' ORDER BY created_at DESC LIMIT 1",
+      ).first<{ state: string; outcome: string | null; message: string | null; updated_at: string }>();
+      const lastSite = await env.DB.prepare(
+        "SELECT updated_at FROM requests WHERE kind='site' AND state='done' ORDER BY updated_at DESC LIMIT 1",
+      ).first<{ updated_at: string }>();
+      const byState: Record<string, { n: number; oldest: string | null }> = {};
+      for (const r of (counts.results ?? []) as { state: string; n: number; oldest: string }[]) {
+        byState[r.state] = { n: r.n, oldest: r.oldest };
+      }
+      return json(
+        {
+          ok: true,
+          service: "agent-webmcp-intake",
+          queued: byState.queued ?? { n: 0, oldest: null },
+          scanning: byState.scanning ?? { n: 0, oldest: null },
+          last_rebuild: lastRebuild,
+          last_site_scan: lastSite?.updated_at ?? null,
+          checked_within_hour: hour,
+        },
+        200,
+        origin,
+      );
     }
 
     return json({ error: "not found" }, 404, origin);

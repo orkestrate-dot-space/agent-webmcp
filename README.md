@@ -13,11 +13,21 @@ googlechromelabs.github.io/searchFlights  [read]
 Open that page with agent-browser, Playwright MCP or OpenCode Browse, and
 `searchFlights` is in the driver's WebMCP tools.
 
-Status: pre-launch. The live index is served from KV by the
-`agent-webmcp-index` Worker; `index/index.json` is a snapshot of it. Listings
+Status: pre-launch. The npm package is not published yet; until it is, build
+from source (`cargo build --release`) and run `agent-webmcp setup`, which
+fetches the index, installs the skill, and wires the MCP server into OpenCode.
+The live index is served from KV by the `agent-webmcp-index` Worker;
+`index/index.json` is a snapshot of it. Listings
 are automatic: the `agent-webmcp-intake` Worker scans submissions on an
 instabox box and publishes clean results. The previous version is on the
 `archive/v1-main` branch.
+
+## Privacy
+
+No analytics. The CLI fetches only the public index pointer (hourly, or on
+demand with `update`); the index server stores nothing about readers. Site
+submissions keep a salted hash of the submitter's IP for rate limiting, plus
+the submitted URL — see the sites page privacy policy.
 
 ## Commands
 
@@ -26,6 +36,7 @@ instabox box and publishes clean results. The previous version is on the
 | `find <task>` | Search the index. `--json` for machine output. |
 | `update` | Check for a newer index now (it also checks hourly). |
 | `status` | Show the index in use and the addresses it was fetched from. |
+| `setup` | First run: fetch the index, install the skill, wire up OpenCode. |
 | `mcp` | Run an MCP server with one tool, `find`. |
 
 ## The index

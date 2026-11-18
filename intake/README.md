@@ -99,6 +99,21 @@ Requirements on the box (instabox's `agent-browser` template has all three):
 
 Refresh `tools/` after changing the scanner; the box never holds a token.
 
+## Monitoring
+
+`/health` is public and secret-free: queue depth, the oldest waiting request,
+the last rebuild outcome, and the last finished site scan. Point any uptime
+monitor at it, or run the checker from any cron:
+
+```console
+*/10 * * * * node /path/to/agent-webmcp/tools/health-check.mjs || notify...
+node tools/health-check.mjs https://agent-webmcp-intake.agent-webmcp.workers.dev
+```
+
+It exits nonzero when a request waits over 30 minutes (the pump runs every
+minute; a rebuild scanning for an hour is normal, not an alert) or when the
+last rebuild failed.
+
 ## Rollback
 
 ```console

@@ -26,8 +26,10 @@ for the agent.
 1. **Registry.** Static item JSON, `add`/`remove`/`list`/`outdated`/`update`, a
    lockfile with hashes, the generated extension folder, `setup`, and the first
    `@orkestrate` items. Reviewed `@orkestrate` only at first.
-2. **Distribution.** CI, binaries per platform, npm `@orkestrate/agent-webmcp@0.2.0`
-   (v1 `0.1.0` deprecated), skill install.
+2. **Distribution.** Binaries per platform ship from CI on the first `v*` tag
+   (npm `@orkestrate/agent-webmcp@0.2.0` under the `next` tag, then `latest`;
+   v1 `0.1.0` deprecated after). CI, the npm wrapper, and skill install exist.
+   First-run `setup` is built (index, skill, OpenCode MCP entry, flag check).
 3. **Website.** The site form, status page, and takedown form; registry pages.
 4. **Launch.** Archive push, website deploy, force-push `main`, tag, publish.
 
@@ -51,6 +53,7 @@ for the agent.
 | `find <task>` | Search the index. `--json` for machine output. |
 | `update` | Check for a newer index now. |
 | `status` | Show the index in use and the addresses tried. |
+| `setup` | First run: fetch the index, install the skill, wire up OpenCode. |
 | `mcp` | Run the MCP server with one tool, `find`. |
 | `node tools/publish-index.mjs --kv` | Publish `index/index.json` to KV (human path; refuses to drop live sites). |
 | `node tools/publish-index.mjs --adopt <url>` | Pull the live index into the repo. |
