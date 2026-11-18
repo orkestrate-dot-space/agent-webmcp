@@ -65,6 +65,28 @@ const worker = resolve(repo, arg("worker", "worker"));
 const publicDir = join(worker, "public");
 const indexesDir = join(publicDir, "indexes");
 
+// How many sites and tools the index holds, as every reader reports it:
+// sites is the number of distinct `host` values among verified records with
+// at least one tool; tools is, for each of those hosts, the number of
+// distinct tool names across all that host's verified records, summed. One
+// host can hold several records (the Chrome Labs demos), and the same tool
+// can appear in more than one of them; it counts once.
+function countIndex(sites) {
+  const perHost = new Map();
+  for (const s of sites ?? []) {
+    if (s.status !== "verified" || !s.tools?.length) continue;
+    let names = perHost.get(s.host);
+    if (!names) {
+      names = new Set();
+      perHost.set(s.host, names);
+    }
+    for (const t of s.tools) names.add(t.name);
+  }
+  let tools = 0;
+  for (const names of perHost.values()) tools += names.size;
+  return { sites: perHost.size, tools };
+}
+
 const text = readFileSync(source, "utf8");
 const index = JSON.parse(text);
 const sha = createHash("sha256").update(text).digest("hex");
@@ -74,6 +96,7 @@ mkdirSync(indexesDir, { recursive: true });
 copyFileSync(source, join(indexesDir, file));
 
 const verified = index.sites.filter((s) => s.status === "verified");
+const counts = countIndex(index.sites);
 // The newest released CLI. The client prints a one-line notice when this is
 // newer than itself. Defaults to the workspace version; override for a
 // hotfix release with --latest-cli=x.y.z, or "none" to leave it unnamed.
@@ -88,8 +111,8 @@ const pointer = {
   sha256: sha,
   url: `indexes/${file}`,
   bytes: Buffer.byteLength(text),
-  sites: verified.length,
-  tools: verified.reduce((n, s) => n + s.tools.length, 0),
+  sites: counts.sites,
+  tools: counts.tools,
   ...(latestCli && latestCli !== "none" ? { latest_cli: latestCli } : {}),
 };
 const pointerText = `${JSON.stringify(pointer, null, 2)}\n`;
@@ -120,13 +143,20 @@ if (args.includes("--kv")) {
     // Compare hosts, not counts: the bot may have added one site while this
     // file dropped another, which a count check cannot see.
     const liveHosts = new Set();
+    let liveCounts = null;
     const liveName = live.url?.split("/").pop() ?? "";
     const liveFile = spawnSync("cf", ["kv", "keys", "get", `version:${liveName}`, "--namespace-id", NAMESPACE], { encoding: "utf8" });
     try {
       const parsed = JSON.parse(liveFile.stdout);
-      for (const site of parsed.sites ?? []) if (site.status === "verified") liveHosts.add(site.host);
+      for (const site of parsed.sites ?? [])
+        if (site.status === "verified" && site.tools?.length) liveHosts.add(site.host);
+      // The pointer now counts hosts, not records, so the drop check must
+      // compare like with like: count the live version's own records with the
+      // same definition instead of trusting its `sites` number, which an
+      // old-style live pointer still reports as a record count.
+      liveCounts = countIndex(parsed.sites);
     } catch {}
-    const localHosts = new Set(verified.map((s) => s.host));
+    const localHosts = new Set(verified.filter((s) => s.tools?.length).map((s) => s.host));
     const missing = [...liveHosts].filter((h) => !localHosts.has(h));
     if (missing.length) {
       console.error(
@@ -140,10 +170,17 @@ if (args.includes("--kv")) {
       );
       process.exit(1);
     }
-    const drop = live.sites - pointer.sites;
-    if (drop > Math.max(1, Math.floor(live.sites * 0.05))) {
+    // With the live records in hand this is hosts vs hosts. Without them
+    // (the version fetch failed) fall back to the pointer's `sites` against
+    // the local verified record count: for an old-style record-count pointer
+    // that is exact, and for a new-style host-count pointer it only refuses
+    // when the host drop is real (hosts <= records on both sides), so neither
+    // style false-positives.
+    const drop = liveCounts ? liveCounts.sites - pointer.sites : live.sites - verified.length;
+    const base = liveCounts ? liveCounts.sites : live.sites;
+    if (drop > Math.max(1, Math.floor(base * 0.05))) {
       console.error(
-        `refusing: this file has ${pointer.sites} verified sites but the live index has ${live.sites}.\n` +
+        `refusing: this file has ${pointer.sites} sites but the live index has ${liveCounts ? liveCounts.sites : live.sites}.\n` +
           `The bot may have listed sites since this file was written. Pull it first:\n` +
           `  node tools/publish-index.mjs --adopt <live pointer url>\n` +
           `or pass --force to overwrite anyway.`,

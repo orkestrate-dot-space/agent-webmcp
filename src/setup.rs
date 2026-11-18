@@ -14,10 +14,9 @@ const SKILL: &str = include_str!("../skills/agent-webmcp/SKILL.md");
 /// Run the whole setup and report what changed.
 pub fn run() -> Result<()> {
     let index = crate::store::refresh()?;
+    let (sites, tools) = crate::model::count_index(&index.sites);
     println!(
-        "index: {} sites, {} tools ({})",
-        index.sites.len(),
-        tool_count(&index),
+        "index: {sites} sites, {tools} tools ({})",
         index.generated_at
     );
 
@@ -70,10 +69,6 @@ pub fn run() -> Result<()> {
         current_exe_string()?
     );
     Ok(())
-}
-
-fn tool_count(index: &crate::model::Index) -> usize {
-    index.sites.iter().map(|s| s.tools.len()).sum()
 }
 
 fn home_dir() -> Result<PathBuf> {

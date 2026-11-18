@@ -301,6 +301,48 @@ fn one_host_with_several_records_does_not_repeat_a_tool() {
 }
 
 #[test]
+fn counts_merge_records_by_host_and_names_by_tool() {
+    // Two records on one host sharing a tool name, plus a verified record
+    // with no tools and a non-verified record with tools: one site, three tools.
+    let page_a = "https://dup.example/a";
+    let page_b = "https://dup.example/b";
+    let mut first = site(
+        "dup.example",
+        None,
+        vec![
+            tool("alpha", "First tool.", page_a),
+            tool("shared", "Seen on both pages.", page_a),
+        ],
+    );
+    first.pages_checked = vec![page_a.into()];
+    let mut second = site(
+        "dup.example",
+        None,
+        vec![
+            tool("shared", "Seen on both pages.", page_b),
+            tool("beta", "Second tool.", page_b),
+        ],
+    );
+    second.pages_checked = vec![page_b.into()];
+    let mut empty = site("empty.example", None, vec![]);
+    empty.pages_checked = vec!["https://empty.example/".into()];
+    let mut blocked = site(
+        "blocked.example",
+        None,
+        vec![tool("hidden", "Not listed.", "https://blocked.example/")],
+    );
+    blocked.status = Status::Blocked;
+    let idx = Index {
+        schema_version: SCHEMA_VERSION,
+        generated_at: "2026-11-17T00:00:00Z".into(),
+        sites: vec![first, second, empty, blocked],
+    };
+    let s = Search::build(idx).unwrap();
+    assert_eq!(s.sites(), 1);
+    assert_eq!(s.tools(), 3);
+}
+
+#[test]
 fn a_brand_with_several_domains_still_narrows() {
     let mut idx = index();
     idx.sites.push(site("stripe.dev", None, vec![]));

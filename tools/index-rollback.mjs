@@ -16,6 +16,25 @@ const NAMESPACE = "c489f55fb6d04a0a97a9143c15ec2f33";
 const args = process.argv.slice(2);
 const kv = (argv) => spawnSync("cf", ["kv", ...argv, "--namespace-id", NAMESPACE], { encoding: "utf8" });
 
+// Sites and tools as every reader reports them: distinct hosts among
+// verified records with at least one tool, and distinct tool names per host,
+// summed. One host can hold several records; a tool on two of them counts once.
+function countIndex(sites) {
+  const perHost = new Map();
+  for (const s of sites ?? []) {
+    if (s.status !== "verified" || !s.tools?.length) continue;
+    let names = perHost.get(s.host);
+    if (!names) {
+      names = new Set();
+      perHost.set(s.host, names);
+    }
+    for (const t of s.tools) names.add(t.name);
+  }
+  let tools = 0;
+  for (const names of perHost.values()) tools += names.size;
+  return { sites: perHost.size, tools };
+}
+
 const raw = args.find((a) => !a.startsWith("--"));
 if (args.includes("--list") || !raw) {
   const out = kv(["keys", "list"]);
@@ -35,8 +54,8 @@ if (args.includes("--list") || !raw) {
     let summary = "(unreadable)";
     try {
       const index = JSON.parse(get.stdout);
-      const verified = index.sites.filter((s) => s.status === "verified");
-      summary = `${index.generated_at}  ${verified.length} sites, ${verified.reduce((n, s) => n + s.tools.length, 0)} tools`;
+      const counts = countIndex(index.sites);
+      summary = `${index.generated_at}  ${counts.sites} sites, ${counts.tools} tools`;
     } catch {}
     console.log(`${key.slice("version:".length)}  ${summary}`);
   }
@@ -56,15 +75,15 @@ if (get.status !== 0 || !get.stdout.trim()) {
 }
 const text = get.stdout;
 const index = JSON.parse(text);
-const verified = index.sites.filter((s) => s.status === "verified");
+const counts = countIndex(index.sites);
 const pointer = {
   schema_version: index.schema_version,
   generated_at: index.generated_at,
   sha256: createHash("sha256").update(text).digest("hex"),
   url: `indexes/${file}`,
   bytes: Buffer.byteLength(text),
-  sites: verified.length,
-  tools: verified.reduce((n, s) => n + s.tools.length, 0),
+  sites: counts.sites,
+  tools: counts.tools,
 };
 
 const tmp = "/tmp/agent-webmcp-pointer.json";

@@ -53,6 +53,28 @@ fn is_zero(n: &u32) -> bool {
     *n == 0
 }
 
+/// How many sites and tools the index holds, as every reader reports it:
+/// sites is the number of distinct `host` values among verified records with
+/// at least one tool; tools is, for each of those hosts, the number of
+/// distinct tool names across all that host's verified records, summed. One
+/// host can hold several records (demos), and the same tool can appear in
+/// more than one of them; it counts once.
+pub fn count_index(sites: &[Site]) -> (usize, usize) {
+    use std::collections::{BTreeMap, BTreeSet};
+    let mut per_host: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+    for site in sites {
+        if site.status != Status::Verified || site.tools.is_empty() {
+            continue;
+        }
+        let names = per_host.entry(site.host.as_str()).or_default();
+        for tool in &site.tools {
+            names.insert(tool.name.as_str());
+        }
+    }
+    let tools = per_host.values().map(|names| names.len()).sum();
+    (per_host.len(), tools)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Tool {
     pub name: String,

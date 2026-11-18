@@ -50,12 +50,34 @@ export async function readDenylist(env: Env): Promise<string[]> {
   }
 }
 
+/// How many sites and tools the index holds, as every reader reports it:
+/// sites is the number of distinct `host` values among verified records with
+/// at least one tool; tools is, for each of those hosts, the number of
+/// distinct tool names across all that host's verified records, summed. One
+/// host can hold several records (demos), and the same tool can appear in
+/// more than one of them; it counts once.
+export function countIndex(sites: SiteRecord[]): { sites: number; tools: number } {
+  const perHost = new Map<string, Set<string>>();
+  for (const s of sites) {
+    if (s.status !== "verified" || !s.tools.length) continue;
+    let names = perHost.get(s.host);
+    if (!names) {
+      names = new Set();
+      perHost.set(s.host, names);
+    }
+    for (const t of s.tools) names.add(t.name);
+  }
+  let tools = 0;
+  for (const names of perHost.values()) tools += names.size;
+  return { sites: perHost.size, tools };
+}
+
 /// Write a new version, then the pointer. Returns what was published.
 export async function publishIndex(env: Env, index: IndexFile): Promise<Pointer> {
   const text = `${JSON.stringify(index, null, 2)}\n`;
   const sha = await sha256Hex(text);
   const file = `index-${sha.slice(0, 12)}.json`;
-  const verified = index.sites.filter((s) => s.status === "verified");
+  const counts = countIndex(index.sites);
   // latest_cli names a released CLI, not this Worker: carry the current value
   // so a rebuild never renames or drops it.
   const current = await readPointer(env);
@@ -65,8 +87,8 @@ export async function publishIndex(env: Env, index: IndexFile): Promise<Pointer>
     sha256: sha,
     url: `indexes/${file}`,
     bytes: new TextEncoder().encode(text).length,
-    sites: verified.length,
-    tools: verified.reduce((n, s) => n + s.tools.length, 0),
+    sites: counts.sites,
+    tools: counts.tools,
     ...(current?.latest_cli ? { latest_cli: current.latest_cli } : {}),
   };
   await env.INDEX.put(`version:${file}`, text);

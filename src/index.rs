@@ -94,15 +94,11 @@ impl Search {
     }
 
     pub fn sites(&self) -> usize {
-        self.index
-            .sites
-            .iter()
-            .filter(|s| s.status == Status::Verified)
-            .count()
+        crate::model::count_index(&self.index.sites).0
     }
 
     pub fn tools(&self) -> usize {
-        self.rows.len()
+        crate::model::count_index(&self.index.sites).1
     }
 
     pub fn generated_at(&self) -> &str {
