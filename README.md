@@ -40,7 +40,7 @@ binary is identical to what npm ships.
 No analytics. The CLI fetches only the public index pointer (hourly, or on
 demand with `update`); the index server stores nothing about readers. Site
 submissions keep a salted hash of the submitter's IP for rate limiting, plus
-the submitted URL — see the sites page privacy policy.
+the submitted URL.
 
 ## Commands
 
