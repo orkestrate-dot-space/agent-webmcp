@@ -11,7 +11,8 @@ googlechromelabs.github.io/searchFlights  [read]
 ```
 
 Open that page with agent-browser, Playwright MCP or OpenCode Browse, and
-`searchFlights` is in the driver's WebMCP tools.
+`searchFlights` is in the driver's WebMCP tools. See
+[docs/drivers.md](docs/drivers.md) for driver setup.
 
 Status: pre-launch. The npm package is not published yet; until it is, build
 from source (`cargo build --release`) and run `agent-webmcp setup`, which
