@@ -74,6 +74,14 @@ mkdirSync(indexesDir, { recursive: true });
 copyFileSync(source, join(indexesDir, file));
 
 const verified = index.sites.filter((s) => s.status === "verified");
+// The newest released CLI. The client prints a one-line notice when this is
+// newer than itself. Defaults to the workspace version; override for a
+// hotfix release with --latest-cli=x.y.z, or "none" to leave it unnamed.
+let latestCli = arg("latest-cli", "");
+if (!latestCli) {
+  const cargo = readFileSync(join(repo, "Cargo.toml"), "utf8").match(/^version\s*=\s*"([^"]+)"/m);
+  latestCli = cargo ? cargo[1] : "";
+}
 const pointer = {
   schema_version: index.schema_version,
   generated_at: index.generated_at,
@@ -82,6 +90,7 @@ const pointer = {
   bytes: Buffer.byteLength(text),
   sites: verified.length,
   tools: verified.reduce((n, s) => n + s.tools.length, 0),
+  ...(latestCli && latestCli !== "none" ? { latest_cli: latestCli } : {}),
 };
 const pointerText = `${JSON.stringify(pointer, null, 2)}\n`;
 writeFileSync(join(publicDir, "index.json"), pointerText);

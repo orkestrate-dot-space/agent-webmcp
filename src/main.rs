@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use agent_webmcp::index::Search;
+use agent_webmcp::setup;
 use agent_webmcp::mcp::Server;
 use agent_webmcp::store;
 use anyhow::Result;
@@ -27,6 +28,8 @@ enum Command {
     },
     /// Download the latest index now
     Update,
+    /// First-run setup: fetch the index, install the skill, wire up OpenCode
+    Setup,
     /// Show the index in use
     Status,
     /// Run the MCP server on stdio
@@ -41,8 +44,12 @@ async fn main() -> Result<()> {
             let index = tokio::task::spawn_blocking(store::refresh).await??;
             let search = Search::build(index)?;
             println!("index updated: {} sites, {} tools ({})", search.sites(), search.tools(), search.generated_at());
+            if let Some(note) = cli_update_note() {
+                println!("{note}");
+            }
             Ok(())
         }
+        Command::Setup => setup::run(),
         Command::Status => {
             let search = Search::build(tokio::task::spawn_blocking(store::load).await??)?;
             let file = std::env::var_os("AGENT_WEBMCP_INDEX").map(PathBuf::from).unwrap_or_else(store::index_path);
@@ -54,6 +61,9 @@ async fn main() -> Result<()> {
                 file.display(),
                 store::pointer_urls().join(" then ")
             );
+            if let Some(note) = cli_update_note() {
+                println!("{note}");
+            }
             Ok(())
         }
         Command::Mcp => {
@@ -68,8 +78,18 @@ async fn main() -> Result<()> {
     }
 }
 
-fn find(query: &str, limit: usize, json: bool) -> Result<()> {
-    let search = Search::build(store::load()?)?;
+fn cli_update_note() -> Option<String> {
+    let latest = store::latest_cli_remote()?;
+    if setup::newer_available(env!("CARGO_PKG_VERSION"), &latest) {
+        Some(format!(
+            "a newer agent-webmcp is available ({latest}); update the package you installed it from"
+        ))
+    } else {
+        None
+    }
+}
+
+fn find(query: &str, limit: usize, json: bool) -> Result<()> {    let search = Search::build(store::load()?)?;
     let hits = search.find(query, limit)?;
     if json {
         println!("{}", serde_json::to_string_pretty(&serde_json::json!({ "matches": hits }))?);

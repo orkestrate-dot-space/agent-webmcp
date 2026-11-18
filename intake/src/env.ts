@@ -59,4 +59,5 @@ export interface Pointer {
   bytes: number;
   sites: number;
   tools: number;
+  latest_cli?: string;
 }

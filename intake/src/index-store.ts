@@ -56,6 +56,9 @@ export async function publishIndex(env: Env, index: IndexFile): Promise<Pointer>
   const sha = await sha256Hex(text);
   const file = `index-${sha.slice(0, 12)}.json`;
   const verified = index.sites.filter((s) => s.status === "verified");
+  // latest_cli names a released CLI, not this Worker: carry the current value
+  // so a rebuild never renames or drops it.
+  const current = await readPointer(env);
   const pointer: Pointer = {
     schema_version: index.schema_version,
     generated_at: index.generated_at,
@@ -64,6 +67,7 @@ export async function publishIndex(env: Env, index: IndexFile): Promise<Pointer>
     bytes: new TextEncoder().encode(text).length,
     sites: verified.length,
     tools: verified.reduce((n, s) => n + s.tools.length, 0),
+    ...(current?.latest_cli ? { latest_cli: current.latest_cli } : {}),
   };
   await env.INDEX.put(`version:${file}`, text);
   await env.INDEX.put(POINTER_KEY, `${JSON.stringify(pointer, null, 2)}\n`);

@@ -37,6 +37,9 @@ pub struct Pointer {
     pub sha256: String,
     /// Relative to the pointer's URL, or absolute.
     pub url: String,
+    /// Newest released CLI; absent until the first release publishes one.
+    #[serde(default)]
+    pub latest_cli: Option<String>,
 }
 
 pub fn data_dir() -> PathBuf {
@@ -205,6 +208,31 @@ fn refresh_from(url: &str, timeout: Duration) -> Result<Index> {
     std::fs::rename(&tmp, &path)?;
     write_state(etag.as_deref(), &pointer.sha256, url);
     Ok(index)
+}
+
+/// The newest released CLI version, when the pointer names one. A failure
+/// means "unknown", never an error: the index itself is what matters.
+pub fn latest_cli_remote() -> Option<String> {
+    let timeout = if index_path().exists() { QUICK_TIMEOUT } else { FIRST_TIMEOUT };
+    let agent = agent(timeout);
+    for url in pointer_urls() {
+        let Ok(mut resp) = agent.get(&url).call() else {
+            continue;
+        };
+        if resp.status().as_u16() != 200 {
+            continue;
+        }
+        let Ok(text) = resp.body_mut().read_to_string() else {
+            continue;
+        };
+        if let Ok(pointer) = serde_json::from_str::<Pointer>(&text)
+            && let Some(latest) = pointer.latest_cli
+            && !latest.is_empty()
+        {
+            return Some(latest);
+        }
+    }
+    None
 }
 
 /// Mark the local copy as just checked, so the next check waits an hour.
