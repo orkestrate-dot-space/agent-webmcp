@@ -1,8 +1,12 @@
 /// Validation for submissions and for the records the box sends back.
 ///
 /// Submissions and callback records are validated here. DNS uses DNS over HTTPS
-/// because a Worker cannot call the resolver directly. The box checks DNS again
-/// before it loads a page; this check exists so a hostile URL never reaches it.
+/// because a Worker cannot call the resolver directly. DNS is checked once at
+/// submit time (resolvesPublic refuses private, loopback and metadata
+/// answers); a host that rebinds to such an address afterwards is still
+/// contained by the network-layer guard for the scanner user on IPv4 and
+/// IPv6, which covers every fetch the browser makes no matter what DNS
+/// says later.
 
 import type { SiteRecord } from "./env";
 

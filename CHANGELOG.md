@@ -1,12 +1,18 @@
 # Changelog
 
-## Unreleased — 0.2.0
+## 0.2.0 — 2026-11-18
 
 The CLI is now a single Rust binary shipped through npm as
 `@orkestrate/agent-webmcp` (per-platform packages, no runtime needed).
 
-- New `setup` command: fetches the index, installs the skill, adds the MCP
-  server to your OpenCode config, and reports the Chrome flags WebMCP needs.
+- New `setup` command: fetches the index, installs the skill into
+  `~/.agents/skills`, `~/.claude/skills` and `~/.config/opencode/skills`,
+  adds the MCP server to an existing OpenCode config (or prints the snippet),
+  prints one-line `claude mcp add` / `codex mcp add` installs, and prints
+  per-driver WebMCP notes.
+- `find` checks a site or URL first (the main use); task search covers the
+  ~100 indexed sites.
+- Counts fixed: sites counted by host, tools by name, everywhere.
 - `update` and `status` print one line when a newer CLI is released.
 - The index pointer carries `latest_cli`; the intake Worker preserves it
   across rebuilds.
