@@ -5,10 +5,12 @@ Your browser driver opens that page and calls the tool.
 This guide shows how to set up each supported driver.
 Verified against the drivers on 18 Nov 2026.
 
-Run first-run setup once:
+Install with one of these, then run first-run setup once:
 
 ```bash
-npm i -g @orkestrate/agent-webmcp
+curl -fsSL https://web.orkestrate.space/webmcp/install | bash   # Linux, macOS
+npm i -g @orkestrate/agent-webmcp                               # any OS
+
 agent-webmcp setup
 ```
 

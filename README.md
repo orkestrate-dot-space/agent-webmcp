@@ -47,7 +47,7 @@ Install one of two ways:
 
 | | |
 |---|---|
-| curl (Linux, macOS) | `curl -fsSL https://github.com/orkestrate-dot-space/agent-webmcp/releases/latest/download/install.sh \| sh` |
+| curl (Linux, macOS) | `curl -fsSL https://web.orkestrate.space/webmcp/install \| bash` |
 | npm (any OS) | `npm i -g @orkestrate/agent-webmcp` |
 
 Then run first-run setup:
