@@ -1,6 +1,7 @@
 //! User config, project config, env vars, then flag overrides, merged in
-//! that order. Files are JSONC; project files cannot pick executables or
-//! browser launch flags, so a cloned repo never decides what program runs.
+//! that order. Files are JSONC; project files take only an allowlist
+//! (call.timeout, drivers.agent-browser.headed, permissions.ask and
+//! permissions.deny), so a cloned repo never loosens what runs.
 
 use std::path::{Path, PathBuf};
 
@@ -234,6 +235,7 @@ pub fn load_from(env: &dyn Fn(&str) -> Option<String>, cwd: &Path) -> Result<Loa
             .map(Path::to_path_buf)
             .unwrap_or_else(|| cwd.to_path_buf());
         substitute(&mut value, &dir, env, &home, None, &path, false)?;
+        check_file(&value, &path)?;
         merge_into(&mut merged, value);
         sources.push(Source {
             kind: SourceKind::User,
@@ -249,6 +251,7 @@ pub fn load_from(env: &dyn Fn(&str) -> Option<String>, cwd: &Path) -> Result<Loa
         if let Some(path) = found {
             let mut value = read_file(&path)?;
             substitute(&mut value, &dir, env, &home, None, &path, false)?;
+            check_file(&value, &path)?;
             merge_into(&mut merged, value);
             sources.push(Source {
                 kind: SourceKind::User,
@@ -259,7 +262,6 @@ pub fn load_from(env: &dyn Fn(&str) -> Option<String>, cwd: &Path) -> Result<Loa
         warnings.extend(project_warnings);
         if let Some(path) = project {
             let mut value = read_file(&path)?;
-            check_project_keys(&value, &path, &user_expected)?;
             let file_dir = path
                 .parent()
                 .map(Path::to_path_buf)
@@ -273,6 +275,8 @@ pub fn load_from(env: &dyn Fn(&str) -> Option<String>, cwd: &Path) -> Result<Loa
                 &path,
                 true,
             )?;
+            check_file(&value, &path)?;
+            check_project_keys(&value, &path, &user_expected)?;
             merge_into(&mut merged, value);
             sources.push(Source {
                 kind: SourceKind::Project,
@@ -413,21 +417,65 @@ fn read_file(path: &Path) -> Result<serde_json::Value> {
         .map_err(|e| anyhow::anyhow!("invalid JSON in {}: {e}", path.display()))
 }
 
-/// Project files must not choose programs or browser launch flags.
+/// Type-check one file on its own so typos name the file they came from.
+fn check_file(value: &serde_json::Value, path: &Path) -> Result<()> {
+    serde_json::from_value::<Config>(value.clone())
+        .map(|_| ())
+        .map_err(|e| anyhow::anyhow!("invalid config in {}: {e}", path.display()))
+}
+
+/// Project files take an allowlist: a repo may share stricter rules and
+/// timeouts, never looser ones or anything that runs.
 fn check_project_keys(value: &serde_json::Value, path: &Path, user_path: &Path) -> Result<()> {
-    for key in ["command", "profile", "cdp"] {
-        if value
-            .pointer(&format!("/drivers/agent-browser/{key}"))
-            .is_some()
-        {
-            bail!(
-                "{} sets drivers.agent-browser.{key}; that is only allowed in your user config ({})",
-                path.display(),
-                user_path.display()
-            );
-        }
+    if let Some(key) = first_disallowed(value, "") {
+        bail!(
+            "{} sets {key}; project config can only set call.timeout, drivers.agent-browser.headed, permissions.ask and permissions.deny. Put it in your user config ({})",
+            path.display(),
+            user_path.display()
+        );
     }
     Ok(())
+}
+
+/// First key outside the project allowlist in document order, dotted.
+fn first_disallowed(value: &serde_json::Value, parent: &str) -> Option<String> {
+    for (key, child) in value.as_object()? {
+        let dotted = if parent.is_empty() {
+            key.clone()
+        } else {
+            format!("{parent}.{key}")
+        };
+        if !allowed_key(parent, key) {
+            return Some(dotted);
+        }
+        if child.is_object()
+            && is_container(&dotted)
+            && let Some(deep) = first_disallowed(child, &dotted)
+        {
+            return Some(deep);
+        }
+    }
+    None
+}
+
+/// Whether `key` may appear inside the project object at `parent`.
+fn allowed_key(parent: &str, key: &str) -> bool {
+    match parent {
+        "" => matches!(key, "$schema" | "call" | "drivers" | "permissions"),
+        "call" => key == "timeout",
+        "drivers" => key == "agent-browser",
+        "drivers.agent-browser" => key == "headed",
+        "permissions" => matches!(key, "ask" | "deny"),
+        _ => false,
+    }
+}
+
+/// Project objects whose children the allowlist names individually.
+fn is_container(dotted: &str) -> bool {
+    matches!(
+        dotted,
+        "call" | "drivers" | "drivers.agent-browser" | "permissions"
+    )
 }
 
 /// Expand `{env:NAME}` and `{file:PATH}` in every string value.

@@ -85,18 +85,18 @@ fn permissions_lists_append_and_dedupe() {
     let (home, _) = workdir(&tmp, "work");
     write(
         &home.join(".config/agent-webmcp/agent-webmcp.json"),
-        r#"{"permissions": {"allow": ["a", "b"], "ask": ["x"]}}"#,
+        r#"{"permissions": {"allow": ["a"], "ask": ["x"], "deny": ["ud"]}}"#,
     );
     let repo = tmp.path().join("repo");
     std::fs::create_dir_all(repo.join(".git")).unwrap();
     write(
         &repo.join("agent-webmcp.json"),
-        r#"{"permissions": {"allow": ["b", "c"], "deny": ["d"]}}"#,
+        r#"{"permissions": {"ask": ["x", "y"], "deny": ["pd"]}}"#,
     );
     let loaded = load_with(base_env(&home), &repo).unwrap();
-    assert_eq!(loaded.config.permissions.allow, vec!["a", "b", "c"]);
-    assert_eq!(loaded.config.permissions.ask, vec!["x"]);
-    assert_eq!(loaded.config.permissions.deny, vec!["d"]);
+    assert_eq!(loaded.config.permissions.allow, vec!["a"]);
+    assert_eq!(loaded.config.permissions.ask, vec!["x", "y"]);
+    assert_eq!(loaded.config.permissions.deny, vec!["ud", "pd"]);
 }
 
 #[test]
@@ -240,6 +240,7 @@ fn project_file_setting_command_is_rejected() {
     );
     let err = load_with(base_env(&home), &repo).unwrap_err().to_string();
     assert!(err.contains("drivers.agent-browser.command"), "{err}");
+    assert!(err.contains("project config can only set"), "{err}");
 }
 
 #[test]
@@ -254,6 +255,7 @@ fn project_file_setting_profile_is_rejected() {
     );
     let err = load_with(base_env(&home), &repo).unwrap_err().to_string();
     assert!(err.contains("drivers.agent-browser.profile"), "{err}");
+    assert!(err.contains("project config can only set"), "{err}");
 }
 
 #[test]
@@ -268,6 +270,7 @@ fn project_file_setting_cdp_is_rejected() {
     );
     let err = load_with(base_env(&home), &repo).unwrap_err().to_string();
     assert!(err.contains("drivers.agent-browser.cdp"), "{err}");
+    assert!(err.contains("project config can only set"), "{err}");
 }
 
 #[test]
@@ -280,6 +283,15 @@ fn unknown_key_is_rejected() {
     );
     let err = load_with(base_env(&home), &cwd).unwrap_err().to_string();
     assert!(err.contains("bogus"), "{err}");
+    assert!(
+        err.contains(
+            &home
+                .join(".config/agent-webmcp/agent-webmcp.json")
+                .display()
+                .to_string()
+        ),
+        "{err}"
+    );
 }
 
 #[test]
@@ -414,4 +426,104 @@ fn apply_overrides_beats_env() {
         loaded.config.drivers.agent_browser.command,
         "/bin/from-flag"
     );
+}
+
+#[test]
+fn project_file_with_allow_is_rejected() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (home, _) = workdir(&tmp, "work");
+    let repo = tmp.path().join("repo");
+    std::fs::create_dir_all(repo.join(".git")).unwrap();
+    write(
+        &repo.join("agent-webmcp.json"),
+        r#"{"permissions": {"allow": ["cal.com/*"]}}"#,
+    );
+    let err = load_with(base_env(&home), &repo).unwrap_err().to_string();
+    assert!(err.contains("permissions.allow"), "{err}");
+    assert!(err.contains("project config can only set"), "{err}");
+}
+
+#[test]
+fn project_file_with_driver_is_rejected() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (home, _) = workdir(&tmp, "work");
+    let repo = tmp.path().join("repo");
+    std::fs::create_dir_all(repo.join(".git")).unwrap();
+    write(&repo.join("agent-webmcp.json"), r#"{"driver": "none"}"#);
+    let err = load_with(base_env(&home), &repo).unwrap_err().to_string();
+    assert!(err.contains("sets driver;"), "{err}");
+}
+
+#[test]
+fn project_file_with_session_is_rejected() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (home, _) = workdir(&tmp, "work");
+    let repo = tmp.path().join("repo");
+    std::fs::create_dir_all(repo.join(".git")).unwrap();
+    write(
+        &repo.join("agent-webmcp.json"),
+        r#"{"drivers": {"agent-browser": {"session": "shared"}}}"#,
+    );
+    let err = load_with(base_env(&home), &repo).unwrap_err().to_string();
+    assert!(err.contains("drivers.agent-browser.session"), "{err}");
+}
+
+#[test]
+fn project_file_with_only_allowed_keys_loads() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (home, _) = workdir(&tmp, "work");
+    write(
+        &home.join(".config/agent-webmcp/agent-webmcp.json"),
+        r#"{"call": {"timeout": 5000}, "drivers": {"agent-browser": {"headed": false}}, "permissions": {"ask": ["u"], "deny": ["ud"]}}"#,
+    );
+    let repo = tmp.path().join("repo");
+    std::fs::create_dir_all(repo.join(".git")).unwrap();
+    write(
+        &repo.join("agent-webmcp.json"),
+        r#"{"$schema": "https://web.orkestrate.space/webmcp/config.json", "call": {"timeout": 7000}, "drivers": {"agent-browser": {"headed": true}}, "permissions": {"ask": ["p"], "deny": ["pd"]}}"#,
+    );
+    let loaded = load_with(base_env(&home), &repo).unwrap();
+    assert_eq!(loaded.config.call.timeout, 7000);
+    assert!(loaded.config.drivers.agent_browser.headed);
+    assert_eq!(loaded.config.permissions.ask, vec!["u", "p"]);
+    assert_eq!(loaded.config.permissions.deny, vec!["ud", "pd"]);
+}
+
+#[test]
+fn project_file_with_wrong_type_names_the_file() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (home, _) = workdir(&tmp, "work");
+    let repo = tmp.path().join("repo");
+    std::fs::create_dir_all(repo.join(".git")).unwrap();
+    let path = repo.join("agent-webmcp.json");
+    write(&path, r#"{"call": {"timeout": "fast"}}"#);
+    let err = load_with(base_env(&home), &repo).unwrap_err().to_string();
+    assert!(err.contains(&path.display().to_string()), "{err}");
+}
+
+#[test]
+fn explicit_config_may_set_everything() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (home, _) = workdir(&tmp, "work");
+    let custom = tmp.path().join("custom.json");
+    write(
+        &custom,
+        r#"{"driver": "agent-browser", "drivers": {"agent-browser": {"command": "/bin/ab", "session": "s", "profile": "/tmp/p", "cdp": "http://x"}}, "permissions": {"allow": ["*"]}}"#,
+    );
+    let repo = tmp.path().join("repo");
+    std::fs::create_dir_all(repo.join(".git")).unwrap();
+    write(
+        &repo.join("agent-webmcp.json"),
+        r#"{"call": {"timeout": 1}}"#,
+    );
+    let mut env = base_env(&home);
+    env.insert(
+        "AGENT_WEBMCP_CONFIG".to_string(),
+        custom.display().to_string(),
+    );
+    let loaded = load_with(env, &repo).unwrap();
+    assert_eq!(loaded.config.driver, config::DriverChoice::AgentBrowser);
+    assert_eq!(loaded.config.drivers.agent_browser.command, "/bin/ab");
+    assert_eq!(loaded.config.drivers.agent_browser.session, "s");
+    assert_eq!(loaded.config.permissions.allow, vec!["*"]);
 }

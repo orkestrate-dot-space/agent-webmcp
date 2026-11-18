@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://web.orkestrate.space/webmcp/config.json",
   "title": "agent-webmcp configuration",
+  "description": "The user config may set everything; a project agent-webmcp.json(c) may only set call.timeout, drivers.agent-browser.headed, permissions.ask and permissions.deny.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
