@@ -1,4 +1,4 @@
-//! MCP server exposing one tool, `find`.
+//! MCP server exposing `find` and `call`.
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -19,8 +19,9 @@ const LIMIT_MAX: usize = 20;
 
 pub const INSTRUCTIONS: &str = "Check whether a website offers WebMCP tools before opening it, \
 or search tools by task. `find` returns the page to open and the tool to call there. \
-Open the page with your browser driver; the tool is registered on the page and appears in \
-your driver's WebMCP tools. Call it with your driver.";
+Then `call` runs the tool when agent-webmcp can drive a browser, or returns exact \
+steps for your own browser driver. Open the page with your browser driver; the tool \
+is registered on the page and appears in your driver's WebMCP tools.";
 
 pub struct Server {
     search: Arc<Mutex<Search>>,
@@ -65,6 +66,54 @@ impl Server {
                 tokio::time::sleep(Duration::from_secs(60 * 60)).await;
             }
         });
+    }
+
+    async fn call(&self, args: &serde_json::Map<String, Value>) -> CallToolResult {
+        let Some(target) = args.get("target").and_then(Value::as_str) else {
+            return CallToolResult::error(vec![ContentBlock::text(
+                "`target` is required: site/tool from find, or https://page#tool",
+            )]);
+        };
+        let target = target.to_string();
+        let input = args.get("input").cloned().unwrap_or(json!(null));
+        let input = if input.is_null() { json!({}) } else { input };
+        let confirm = args
+            .get("confirm")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let shared = self.shared();
+        // The pipeline blocks on child processes; keep it off the executor.
+        // rmcp carries text and structured content side by side, so failures
+        // use error() with the envelope as text AND as structured content.
+        let joined = tokio::task::spawn_blocking(move || {
+            let search = shared.lock().expect("search lock");
+            let cfg = match crate::config::load() {
+                Ok(loaded) => loaded.config,
+                Err(e) => {
+                    let envelope = crate::call::CallError {
+                        code: "driver_error",
+                        message: format!("could not load config: {e:#}"),
+                        data: None,
+                    }
+                    .envelope();
+                    return (envelope, true);
+                }
+            };
+            crate::call::run_mcp(&target, input, confirm, &cfg, &search)
+        })
+        .await;
+        match joined {
+            Ok((envelope, is_error)) => {
+                let text = serde_json::to_string_pretty(&envelope).unwrap_or_default();
+                let mut result = CallToolResult::success(vec![ContentBlock::text(text)]);
+                result.structured_content = Some(envelope);
+                result.is_error = Some(is_error);
+                result
+            }
+            Err(e) => {
+                CallToolResult::error(vec![ContentBlock::text(format!("call task failed: {e}"))])
+            }
+        }
     }
 
     fn find(&self, args: &serde_json::Map<String, Value>) -> CallToolResult {
@@ -130,7 +179,10 @@ impl ServerHandler for Server {
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, McpError> {
-        Ok(ListToolsResult::with_all_items(vec![find_tool()]))
+        Ok(ListToolsResult::with_all_items(vec![
+            find_tool(),
+            call_tool(),
+        ]))
     }
 
     async fn call_tool(
@@ -140,10 +192,43 @@ impl ServerHandler for Server {
     ) -> Result<CallToolResponse, McpError> {
         match request.name.as_ref() {
             "find" => Ok(self.find(&request.arguments.unwrap_or_default()).into()),
+            "call" => Ok(self
+                .call(&request.arguments.unwrap_or_default())
+                .await
+                .into()),
             other => Err(McpError::invalid_params(
                 format!("unknown tool {other:?}"),
                 None,
             )),
         }
     }
+}
+
+/// The `call` tool definition, as `list_tools` advertises it.
+pub fn call_tool() -> Tool {
+    let schema = json!({
+        "type": "object",
+        "properties": {
+            "target": { "type": "string", "description": "site/tool from find, or https://page#tool" },
+            "input": { "type": "object", "description": "Tool input, matching the input_schema from find" },
+            "confirm": { "type": "boolean", "description": "Set true to approve a tool that needs confirmation" }
+        },
+        "required": ["target"],
+        "additionalProperties": false
+    });
+    let Value::Object(schema) = schema else {
+        unreachable!()
+    };
+    Tool::new(
+        "call",
+        "Call a WebMCP tool: if agent-webmcp can drive a browser (agent-browser) it returns \
+         the tool's output, otherwise it returns exact steps for your own browser driver.",
+        Arc::new(schema),
+    )
+    .annotate(
+        ToolAnnotations::new()
+            .read_only(false)
+            .destructive(true)
+            .open_world(true),
+    )
 }

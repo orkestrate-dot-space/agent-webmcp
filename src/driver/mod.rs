@@ -10,7 +10,9 @@ pub mod generic;
 pub mod playwright_mcp;
 
 use serde::Serialize;
+use serde_json::Value;
 
+use crate::call::CallError;
 use crate::config::{Config, DriverChoice};
 
 /// Whether agent-webmcp drives the browser itself or hands back steps.
@@ -76,6 +78,33 @@ pub trait Driver {
     fn note(&self) -> Option<&'static str> {
         None
     }
+    /// Run the tool; plan-only drivers keep this default.
+    fn run(&self, req: &CallRequest, opts: &RunOptions) -> Result<RunOutcome, CallError> {
+        let _ = (req, opts);
+        Err(CallError {
+            code: "driver_error",
+            message: format!("{} only plans; it cannot run tools", self.id()),
+            data: None,
+        })
+    }
+}
+
+/// How to run: budgets and which browser surface.
+#[derive(Debug, Clone)]
+pub struct RunOptions {
+    pub timeout_ms: u64,
+    pub headed: bool,
+    pub fresh: bool,
+    pub profile: Option<String>,
+    pub cdp: Option<String>,
+}
+
+/// What a run returned.
+#[derive(Debug, Clone)]
+pub struct RunOutcome {
+    pub output: Value,
+    pub duration_ms: u64,
+    pub reused: bool,
 }
 
 /// Every driver, agent-browser first; sessions come from config.

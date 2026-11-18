@@ -1,11 +1,14 @@
 use std::path::PathBuf;
 
+use agent_webmcp::call;
 use agent_webmcp::config;
+use agent_webmcp::config::DriverChoice;
 use agent_webmcp::driver;
 use agent_webmcp::index::Search;
 use agent_webmcp::mcp::Server;
 use agent_webmcp::setup;
 use agent_webmcp::store;
+use agent_webmcp::text;
 use agent_webmcp::upgrade;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -32,6 +35,40 @@ enum Command {
         #[arg(long, default_value_t = 5)]
         limit: usize,
         /// Print JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Call a WebMCP tool, or print the steps for your driver
+    Call {
+        /// site/tool from find, or https://page#tool
+        target: String,
+        /// Tool input as JSON (or use --params)
+        input: Option<String>,
+        /// Tool input as JSON or @file (@- reads stdin)
+        #[arg(long)]
+        params: Option<String>,
+        /// Driver to use (default from config)
+        #[arg(long)]
+        driver: Option<String>,
+        /// Browser session for agent-browser (default from config)
+        #[arg(long)]
+        session: Option<String>,
+        /// Use a throwaway session, closed after the call
+        #[arg(long)]
+        fresh: bool,
+        /// Show the browser window
+        #[arg(long)]
+        headed: bool,
+        /// Approve a tool that needs confirmation
+        #[arg(long)]
+        confirm: bool,
+        /// Print the steps instead of running
+        #[arg(long)]
+        plan: bool,
+        /// Timeout in milliseconds (default from config)
+        #[arg(long)]
+        timeout: Option<u64>,
+        /// Print machine-readable JSON instead of text
         #[arg(long)]
         json: bool,
     },
@@ -72,6 +109,31 @@ enum ConfigAction {
 async fn main() -> Result<()> {
     match Cli::parse().command {
         Command::Find { query, limit, json } => find(&query.join(" "), limit, json),
+        Command::Call {
+            target,
+            input,
+            params,
+            driver,
+            session,
+            fresh,
+            headed,
+            confirm,
+            plan,
+            timeout,
+            json,
+        } => call_command(
+            &target,
+            input.as_deref(),
+            params.as_deref(),
+            driver.as_deref(),
+            session,
+            fresh,
+            headed,
+            confirm,
+            plan,
+            timeout,
+            json,
+        ),
         Command::Update => {
             let (index, changed) = tokio::task::spawn_blocking(store::refresh_changed).await??;
             let search = Search::build(index)?;
@@ -262,7 +324,7 @@ fn find(query: &str, limit: usize, json: bool) -> Result<()> {
         let shared = h
             .platform
             .as_ref()
-            .map(|p| format!("  (shared by {} {} sites)", p.sites, clean(&p.name)))
+            .map(|p| format!("  (shared by {} {} sites)", p.sites, text::clean(&p.name)))
             .unwrap_or_default();
         let flags = if h.flags.is_empty() {
             String::new()
@@ -271,20 +333,107 @@ fn find(query: &str, limit: usize, json: bool) -> Result<()> {
                 "  [flagged: {}]",
                 h.flags
                     .iter()
-                    .map(|f| clean(f))
+                    .map(|f| text::clean(f))
                     .collect::<Vec<_>>()
                     .join(", "),
             )
         };
+        let example =
+            serde_json::to_string(&call::example_input(&h.input_schema)).unwrap_or_default();
         println!(
-            "{}  [{}]{shared}{flags}\n    {}\n    open {}\n",
-            clean(&h.id),
+            "{}  [{}]{shared}{flags}\n    {}\n    open {}\n    call agent-webmcp call {} '{}'\n",
+            text::clean(&h.id),
             h.kind,
-            clean(&h.description),
-            clean(&h.open)
+            text::clean(&h.description),
+            text::clean(&h.open),
+            text::clean(&h.id),
+            example
         );
     }
     Ok(())
+}
+
+/// Run one `call`: config, index, then the shared pipeline.
+#[allow(clippy::too_many_arguments)]
+fn call_command(
+    target: &str,
+    input: Option<&str>,
+    params: Option<&str>,
+    driver: Option<&str>,
+    session: Option<String>,
+    fresh: bool,
+    headed: bool,
+    confirm: bool,
+    plan_only: bool,
+    timeout: Option<u64>,
+    json: bool,
+) -> Result<()> {
+    let mut cfg = match config::load() {
+        Ok(loaded) => {
+            for warning in &loaded.warnings {
+                eprintln!("warning: {warning}");
+            }
+            loaded.config
+        }
+        Err(e) => {
+            eprintln!("error: {e:#}");
+            std::process::exit(1);
+        }
+    };
+    let choice = match driver.map(parse_driver_choice) {
+        None => None,
+        Some(Ok(choice)) => Some(choice),
+        Some(Err(e)) => {
+            call::print_failure(&e);
+            std::process::exit(call::exit_code(&e));
+        }
+    };
+    cfg.apply_overrides(&config::Overrides {
+        driver: choice,
+        session,
+        headed: headed.then_some(true),
+        timeout,
+        command: None,
+    });
+    let search = Search::build(store::load()?)?;
+    let opts = call::CallOptions {
+        confirm,
+        plan_only,
+        fresh,
+        retry_hint: call::RETRY_CLI,
+    };
+    match call::run_call(target, input, params, &opts, &cfg, &search) {
+        Ok(done) => {
+            if json {
+                println!("{}", serde_json::to_string_pretty(&done.envelope())?);
+            } else {
+                call::print_human(&done);
+            }
+            Ok(())
+        }
+        Err(e) => {
+            if json {
+                println!("{}", serde_json::to_string_pretty(&e.envelope())?);
+            }
+            call::print_failure(&e);
+            std::process::exit(call::exit_code(&e));
+        }
+    }
+}
+
+/// A `--driver` name, or a usage error naming the valid ids.
+fn parse_driver_choice(name: &str) -> Result<DriverChoice, call::CallError> {
+    match name {
+        "auto" => Ok(DriverChoice::Auto),
+        "agent-browser" => Ok(DriverChoice::AgentBrowser),
+        "playwright-mcp" => Ok(DriverChoice::PlaywrightMcp),
+        "chrome-devtools-mcp" => Ok(DriverChoice::ChromeDevtoolsMcp),
+        "browse" => Ok(DriverChoice::Browse),
+        "none" => Ok(DriverChoice::None),
+        _ => Err(call::CallError::usage(format!(
+            "unknown driver {name:?}; expected one of auto, agent-browser, playwright-mcp, chrome-devtools-mcp, browse, none"
+        ))),
+    }
 }
 
 /// The no-match line echoes the query; keep it to one short line.
@@ -298,52 +447,9 @@ fn short_query(query: &str) -> String {
     format!("{:?}", format!("{cut}…"))
 }
 
-/// Strip control characters (including ANSI escapes) from site-provided text
-/// before printing. JSON output stays as-is.
-fn clean(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut chars = s.chars();
-    while let Some(c) = chars.next() {
-        if c == '\x1b' {
-            // Skip an ANSI escape sequence: CSI (ESC [ … final byte) or OSC
-            // (ESC ] … BEL); anything else drops just the ESC and its
-            // introducer.
-            match chars.next() {
-                Some('[') => {
-                    for e in chars.by_ref() {
-                        if ('@'..='~').contains(&e) {
-                            break;
-                        }
-                    }
-                }
-                Some(']') => {
-                    for e in chars.by_ref() {
-                        if e == '\x07' {
-                            break;
-                        }
-                    }
-                }
-                _ => {}
-            }
-        } else if !c.is_control() {
-            out.push(c);
-        }
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn clean_strips_ansi_escapes_and_controls() {
-        assert_eq!(clean("a\x1b[31mred\x1b[0mb"), "aredb");
-        assert_eq!(clean("a\x07b\tc\nd"), "abcd");
-        assert_eq!(clean("plain text"), "plain text");
-        // Unicode is untouched.
-        assert_eq!(clean("héllo→world"), "héllo→world");
-    }
 
     #[test]
     fn short_query_keeps_short_queries_whole() {
