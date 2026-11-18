@@ -416,9 +416,11 @@ fn apply_overrides_beats_env() {
         session: Some("flag-s".to_string()),
         headed: Some(true),
         timeout: Some(3000),
+        settle: Some(1500),
         command: Some("/bin/from-flag".to_string()),
     });
     assert_eq!(loaded.config.call.timeout, 3000);
+    assert_eq!(loaded.config.call.settle_ms, 1500);
     assert_eq!(loaded.config.driver, config::DriverChoice::None);
     assert_eq!(loaded.config.drivers.agent_browser.session, "flag-s");
     assert!(loaded.config.drivers.agent_browser.headed);
@@ -526,4 +528,42 @@ fn explicit_config_may_set_everything() {
     assert_eq!(loaded.config.drivers.agent_browser.command, "/bin/ab");
     assert_eq!(loaded.config.drivers.agent_browser.session, "s");
     assert_eq!(loaded.config.permissions.allow, vec!["*"]);
+}
+
+#[test]
+fn call_settle_ms_parses_and_env_overrides() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("home");
+    let cwd = tmp.path().join("work");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(&cwd).unwrap();
+    let mut base = HashMap::from([("HOME".to_string(), home.display().to_string())]);
+    std::fs::create_dir_all(home.join(".config/agent-webmcp")).unwrap();
+    std::fs::write(
+        home.join(".config/agent-webmcp/agent-webmcp.json"),
+        r#"{"call": {"settleMs": 9000}}"#,
+    )
+    .unwrap();
+    let loaded = load_with(base.clone(), &cwd).unwrap();
+    assert_eq!(loaded.config.call.settle_ms, 9000);
+    base.insert("AGENT_WEBMCP_SETTLE".to_string(), "2500".to_string());
+    let loaded = load_with(base, &cwd).unwrap();
+    assert_eq!(loaded.config.call.settle_ms, 2500);
+    assert!(
+        loaded
+            .sources
+            .iter()
+            .any(|s| s.kind == config::SourceKind::Env)
+    );
+}
+
+#[test]
+fn bad_settle_errors_naming_the_var() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    let mut env = HashMap::from([("HOME".to_string(), home.display().to_string())]);
+    env.insert("AGENT_WEBMCP_SETTLE".to_string(), "soon".to_string());
+    let err = load_with(env, tmp.path()).unwrap_err().to_string();
+    assert!(err.contains("AGENT_WEBMCP_SETTLE"), "{err}");
 }

@@ -93,6 +93,8 @@ pub trait Driver {
 #[derive(Debug, Clone)]
 pub struct RunOptions {
     pub timeout_ms: u64,
+    /// How long to wait for a late tool registration, in milliseconds.
+    pub settle_ms: u64,
     pub headed: bool,
     pub fresh: bool,
     pub profile: Option<String>,

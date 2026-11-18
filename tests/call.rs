@@ -595,8 +595,66 @@ fn run_config(script: &std::path::Path) -> config::Config {
     cfg.drivers.agent_browser.command = script.display().to_string();
     cfg.drivers.agent_browser.session = "test-s".to_string();
     cfg.call.timeout = 1234;
+    // Legacy settle: existing run tests cover invoke/retry, not settling.
+    cfg.call.settle_ms = 0;
     cfg
 }
+
+/// Settle-aware fake: `webmcp list` answers from one JSON object per line.
+#[cfg(unix)]
+fn settle_script(
+    dir: &tempfile::TempDir,
+    name: &str,
+    open_json: &str,
+    list_lines: &[&str],
+    invoke_json: &str,
+    eval_json: &str,
+) -> std::path::PathBuf {
+    let log = dir.path().join(format!("{name}.argv"));
+    let count = dir.path().join(format!("{name}.count"));
+    let lists = dir.path().join(format!("{name}.lists"));
+    std::fs::write(&lists, list_lines.join("\n")).unwrap();
+    let path = dir.path().join(name);
+    let script = format!(
+        "#!/bin/sh\necho \"$@\" >> \"{log}\"\ncase \" $* \" in\n  *\" --version \"*) echo \"agent-browser 0.43.1\";;\n  *\" close \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" invoke \"*) echo '{invoke}';;\n  *\" open \"*) echo '{open}';;\n  *\" list \"*) n=$(cat \"{count}\" 2>/dev/null || echo 0); echo $((n + 1)) > \"{count}\"; sed -n \"$((n+1))p\" \"{lists}\";;\n  *\" reload \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" wait \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" eval \"*) echo '{eval}';;\nesac\n",
+        log = log.display(),
+        count = count.display(),
+        lists = lists.display(),
+        invoke = invoke_json,
+        open = open_json,
+        eval = eval_json,
+    );
+    std::fs::write(&path, script).unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    path
+}
+
+#[cfg(unix)]
+fn settle_cfg(script: &std::path::Path, settle_ms: u64) -> config::Config {
+    let mut cfg = run_config(script);
+    cfg.call.settle_ms = settle_ms;
+    cfg
+}
+
+#[cfg(unix)]
+fn run_opts() -> CallOptions {
+    CallOptions {
+        confirm: true,
+        plan_only: false,
+        fresh: false,
+        retry_hint: call::RETRY_CLI,
+    }
+}
+
+#[cfg(unix)]
+const LIST_EMPTY: &str = r#"{"success":true,"data":{"tools":[]}}"#;
+#[cfg(unix)]
+const LIST_WITH_TOOL: &str = r#"{"success":true,"data":{"tools":[{"name":"ask_cal_com"}]}}"#;
+#[cfg(unix)]
+const OPEN_WITH_TOOL: &str = r#"{"success":true,"data":{"url":"https://cal.com/","lifecycle":{"reused":true},"webmcp":{"tools":[{"name":"ask_cal_com"}]}}}"#;
+#[cfg(unix)]
+const EVAL_EMPTY: &str = r#"{"success":true,"data":[]}"#;
 
 #[cfg(unix)]
 #[test]
@@ -626,10 +684,9 @@ fn happy_path_returns_output_reused_and_removes_params() {
     }
     let lines = argv_log(&dir, "ab");
     let open = lines.iter().find(|l| l.contains(" open ")).unwrap();
-    assert!(
-        open.contains("--session test-s --json open https://cal.com/"),
-        "{open}"
-    );
+    assert!(open.contains("--session test-s --json"), "{open}");
+    assert!(open.contains("open https://cal.com/"), "{open}");
+    assert!(open.contains("--init-script @"), "{open}");
     assert!(!open.contains("--profile"), "{open}");
     let invoke = lines.iter().find(|l| l.contains(" invoke ")).unwrap();
     assert!(invoke.contains("--session test-s --json"), "{invoke}");
@@ -1042,4 +1099,216 @@ fn mcp_pipeline_needs_confirmation_without_confirm() {
         envelope["data"]["retry"],
         json!("call again with confirm: true")
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn announced_tool_skips_settle() {
+    let dir = tempfile::tempdir().unwrap();
+    let script = settle_script(&dir, "ab", OPEN_WITH_TOOL, &[], INVOKE_OK, EVAL_EMPTY);
+    let cfg = settle_cfg(&script, 3000);
+    let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
+    match execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg) {
+        Ok(Outcome::Ran { output, .. }) => assert_eq!(output, json!({"answer": 1})),
+        other => panic!("expected a run, got {other:?}"),
+    }
+    let lines = argv_log(&dir, "ab");
+    assert!(
+        !lines.iter().any(|l| l.contains(" list ")),
+        "no settle polls for an announced tool: {lines:?}"
+    );
+    assert!(lines.iter().any(|l| l.contains(" invoke ")), "{lines:?}");
+}
+
+#[cfg(unix)]
+#[test]
+fn late_tool_found_on_third_list() {
+    let dir = tempfile::tempdir().unwrap();
+    let script = settle_script(
+        &dir,
+        "ab",
+        OPEN_OK,
+        &[LIST_EMPTY, LIST_EMPTY, LIST_WITH_TOOL],
+        INVOKE_OK,
+        EVAL_EMPTY,
+    );
+    let cfg = settle_cfg(&script, 5000);
+    let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
+    match execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg) {
+        Ok(Outcome::Ran {
+            output,
+            duration_ms,
+            ..
+        }) => {
+            assert_eq!(output, json!({"answer": 1}));
+            assert!(duration_ms >= 1000, "settle waits count: {duration_ms}");
+        }
+        other => panic!("expected a run, got {other:?}"),
+    }
+    let lists = argv_log(&dir, "ab")
+        .iter()
+        .filter(|l| l.contains(" list "))
+        .count();
+    assert_eq!(lists, 3, "tool appears on the third poll");
+}
+
+#[cfg(unix)]
+#[test]
+fn missing_tool_reloads_once_then_not_found() {
+    let dir = tempfile::tempdir().unwrap();
+    let script = settle_script(&dir, "ab", OPEN_OK, &[LIST_EMPTY], INVOKE_OK, EVAL_EMPTY);
+    let cfg = settle_cfg(&script, 1000);
+    let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
+    let e = execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
+    assert_eq!(e.code, "tool_not_found");
+    assert!(e.message.contains("did not register"), "{}", e.message);
+    let lines = argv_log(&dir, "ab");
+    let opens = lines.iter().filter(|l| l.contains(" open ")).count();
+    assert_eq!(opens, 1, "no re-open; reload replaces it: {lines:?}");
+    assert_eq!(
+        lines
+            .iter()
+            .filter(|l| l.split_whitespace().last() == Some("reload"))
+            .count(),
+        1,
+        "{lines:?}"
+    );
+    assert!(
+        lines.iter().any(|l| l.contains(" wait ")),
+        "wait for load: {lines:?}"
+    );
+    assert!(
+        !lines.iter().any(|l| l.contains(" invoke ")),
+        "never invoke a missing tool: {lines:?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn settle_zero_skips_list() {
+    let dir = tempfile::tempdir().unwrap();
+    let script = settle_script(
+        &dir,
+        "ab",
+        OPEN_OK,
+        &[LIST_WITH_TOOL],
+        INVOKE_OK,
+        EVAL_EMPTY,
+    );
+    let mut cfg = run_config(&script);
+    cfg.call.settle_ms = 0;
+    let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
+    match execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg) {
+        Ok(Outcome::Ran { .. }) => {}
+        other => panic!("expected a run, got {other:?}"),
+    }
+    let lines = argv_log(&dir, "ab");
+    let invoke_at = lines.iter().position(|l| l.contains(" invoke "));
+    let list_at = lines.iter().position(|l| l.contains(" list "));
+    assert!(invoke_at.is_some(), "{lines:?}");
+    assert!(
+        list_at.is_none() || list_at > invoke_at,
+        "no list before first invoke: {lines:?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn blocked_title_stops_before_invoke() {
+    let dir = tempfile::tempdir().unwrap();
+    let open = r#"{"success":true,"data":{"url":"https://cal.com/","title":"Just a moment...","webmcp":{"tools":[]}}}"#;
+    let script = settle_script(&dir, "ab", open, &[LIST_EMPTY], INVOKE_OK, EVAL_EMPTY);
+    let cfg = settle_cfg(&script, 5000);
+    let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
+    let e = execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
+    assert_eq!(e.code, "page_unreachable");
+    assert!(e.message.contains("bot check"), "{}", e.message);
+    let lines = argv_log(&dir, "ab");
+    assert!(
+        !lines.iter().any(|l| l.contains(" invoke ")),
+        "blocked pages are never invoked: {lines:?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn recorder_names_removed_tool() {
+    let dir = tempfile::tempdir().unwrap();
+    let eval = r#"{"success":true,"data":["ask_cal_com"]}"#;
+    let script = settle_script(&dir, "ab", OPEN_OK, &[LIST_EMPTY], INVOKE_OK, eval);
+    let cfg = settle_cfg(&script, 1000);
+    let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
+    let e = execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
+    assert_eq!(e.code, "tool_not_found");
+    assert!(e.message.contains("then removed it"), "{}", e.message);
+}
+
+#[cfg(unix)]
+#[test]
+fn init_script_passed_on_open_and_removed() {
+    let dir = tempfile::tempdir().unwrap();
+    let script = settle_script(
+        &dir,
+        "ab",
+        OPEN_OK,
+        &[LIST_WITH_TOOL],
+        INVOKE_OK,
+        EVAL_EMPTY,
+    );
+    let mut cfg = run_config(&script);
+    cfg.call.settle_ms = 0;
+    let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
+    match execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg) {
+        Ok(Outcome::Ran { .. }) => {}
+        other => panic!("expected a run, got {other:?}"),
+    }
+    let lines = argv_log(&dir, "ab");
+    let open = lines.iter().find(|l| l.contains(" open ")).unwrap();
+    assert!(open.contains("--init-script @"), "{open}");
+    let path = open
+        .split_whitespace()
+        .find(|w| w.starts_with("--init-script"))
+        .and_then(|_| {
+            open.split_whitespace()
+                .skip_while(|w| *w != "--init-script")
+                .nth(1)
+        })
+        .unwrap()
+        .trim_start_matches('@');
+    assert!(
+        !std::path::Path::new(path).exists(),
+        "init script must be removed"
+    );
+}
+
+#[test]
+fn blocked_check_matches_scanner_signals() {
+    use agent_webmcp::driver::agent_browser::is_blocked_page;
+    for title in [
+        "Just a moment...",
+        "Attention Required! | Cloudflare",
+        "Access Denied",
+        "Verify you are human",
+        "Are you a robot?",
+    ] {
+        assert!(is_blocked_page(title, "https://x.example/", ""), "{title}");
+    }
+    assert!(is_blocked_page("", "https://x.example/cf-challenge", ""));
+    assert!(is_blocked_page(
+        "",
+        "https://x.example/",
+        "please solve the captcha"
+    ));
+    assert!(is_blocked_page(
+        "",
+        "https://x.example/",
+        "blocked by a Cloudflare bot challenge"
+    ));
+    for (title, url, body) in [
+        ("Cal.com", "https://cal.com/", ""),
+        ("", "https://cal.com/book", "book a meeting"),
+        ("A momentary thought", "https://blog.example/", "an essay"),
+    ] {
+        assert!(!is_blocked_page(title, url, body), "{title} {url}");
+    }
 }

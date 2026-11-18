@@ -72,11 +72,18 @@ impl Default for AgentBrowserSettings {
 pub struct CallSettings {
     /// How long one tool call may take, in milliseconds.
     pub timeout: u64,
+    /// How long to wait for a late tool registration, in milliseconds.
+    /// Clamped to 30 s where it is used; 0 waits not at all.
+    #[serde(alias = "settle_ms")]
+    pub settle_ms: u64,
 }
 
 impl Default for CallSettings {
     fn default() -> Self {
-        Self { timeout: 60_000 }
+        Self {
+            timeout: 60_000,
+            settle_ms: 8_000,
+        }
     }
 }
 
@@ -120,6 +127,8 @@ pub struct Overrides {
     pub headed: Option<bool>,
     /// Override `call.timeout`.
     pub timeout: Option<u64>,
+    /// Override `call.settle_ms`.
+    pub settle: Option<u64>,
     /// Override `drivers.agent-browser.command`.
     pub command: Option<String>,
 }
@@ -138,6 +147,9 @@ impl Config {
         }
         if let Some(timeout) = o.timeout {
             self.call.timeout = timeout;
+        }
+        if let Some(settle) = o.settle {
+            self.call.settle_ms = settle;
         }
         if let Some(command) = &o.command {
             self.drivers.agent_browser.command.clone_from(command);
@@ -679,6 +691,14 @@ fn apply_env(config: &mut Config, env: &dyn Fn(&str) -> Option<String>) -> Resul
                 "invalid AGENT_WEBMCP_HEADED value {value:?}; expected one of 1, true, 0, false"
             ),
         };
+        used = true;
+    }
+    if let Some(value) = set("AGENT_WEBMCP_SETTLE") {
+        config.call.settle_ms = value.parse::<u64>().map_err(|_| {
+            anyhow::anyhow!(
+                "invalid AGENT_WEBMCP_SETTLE value {value:?}; expected milliseconds as a number"
+            )
+        })?;
         used = true;
     }
     if let Some(value) = set("AGENT_WEBMCP_TIMEOUT") {

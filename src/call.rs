@@ -717,6 +717,7 @@ pub fn finish(prepared: Prepared, opts: &CallOptions, cfg: &Config) -> Result<Ou
                     &req,
                     &driver::RunOptions {
                         timeout_ms: cfg.call.timeout,
+                        settle_ms: cfg.call.settle_ms.min(30_000),
                         headed: cfg.drivers.agent_browser.headed,
                         fresh: opts.fresh,
                         profile: cfg.drivers.agent_browser.profile.clone(),

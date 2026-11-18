@@ -67,6 +67,13 @@
           "minimum": 0,
           "default": 60000,
           "description": "How long one tool call may take, in milliseconds."
+        },
+        "settleMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 30000,
+          "default": 8000,
+          "description": "How long to wait for a late tool registration, in milliseconds; 0 waits not at all."
         }
       }
     },

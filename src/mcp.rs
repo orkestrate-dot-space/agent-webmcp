@@ -26,12 +26,22 @@ is registered on the page and appears in your driver's WebMCP tools.";
 
 pub struct Server {
     search: Arc<Mutex<Search>>,
+    fixed_config: Option<crate::config::Config>,
 }
 
 impl Server {
     pub fn new(search: Search) -> Self {
         Self {
             search: Arc::new(Mutex::new(search)),
+            fixed_config: None,
+        }
+    }
+
+    /// Pinned config for tests; the handler uses it instead of loading per call.
+    pub fn with_config(search: Search, config: crate::config::Config) -> Self {
+        Self {
+            search: Arc::new(Mutex::new(search)),
+            fixed_config: Some(config),
         }
     }
 
@@ -89,9 +99,13 @@ impl Server {
             .unwrap_or(false);
         let shared = self.shared();
         // Config is cheap; the pipeline below may block on child processes.
-        let cfg = match crate::config::load() {
-            Ok(loaded) => loaded.config,
-            Err(e) => return complete_error(format!("could not load config: {e:#}")),
+        // Tests pin a config so they never depend on the machine's drivers.
+        let cfg = match self.fixed_config.clone() {
+            Some(cfg) => cfg,
+            None => match crate::config::load() {
+                Ok(loaded) => loaded.config,
+                Err(e) => return complete_error(format!("could not load config: {e:#}")),
+            },
         };
         let prepared = {
             let search = shared.lock().expect("search lock");

@@ -64,7 +64,10 @@ fn ask_index() -> Index {
 }
 
 fn server() -> Server {
-    Server::new(Search::build(ask_index()).unwrap())
+    // Pinned to driver:none: plans never touch the machine's browsers.
+    let mut cfg = agent_webmcp::config::Config::default();
+    cfg.driver = agent_webmcp::config::DriverChoice::None;
+    Server::with_config(Search::build(ask_index()).unwrap(), cfg)
 }
 
 fn args(target: &str, input: Value, confirm: bool) -> JsonObject {

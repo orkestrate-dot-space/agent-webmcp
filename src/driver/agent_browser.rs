@@ -205,18 +205,51 @@ impl AgentBrowser {
         open_argv.push("open".to_string());
         open_argv.push(req.page.clone());
 
+        let _recorder = write_init_script()?;
+        let mut open_argv = base.clone();
+        if let Some(profile) = &opts.profile {
+            open_argv.push("--profile".to_string());
+            open_argv.push(profile.clone());
+        }
+        if let Some(cdp) = &opts.cdp {
+            open_argv.push("--cdp".to_string());
+            open_argv.push(cdp.clone());
+        }
+        open_argv.push("--init-script".to_string());
+        open_argv.push(format!("@{}", _recorder.path.display()));
+        open_argv.push("open".to_string());
+        open_argv.push(req.page.clone());
+
         let started = std::time::Instant::now();
         let open_val = run_step(&self.command, &open_argv, deadline_ms)?;
         if !is_success(&open_val) {
             return Err(open_failure(&open_val));
         }
+        let page_url = open_val
+            .pointer("/data/url")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(&req.page);
+        let title = open_val
+            .pointer("/data/title")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("");
         let reused = open_val
             .pointer("/data/lifecycle/reused")
             .or_else(|| open_val.pointer("/lifecycle/reused"))
             .and_then(serde_json::Value::as_bool)
             .unwrap_or(false);
 
-        let result = self.invoke(req, opts, &base, &open_argv, deadline_ms);
+        let budget_ms = opts.settle_ms.min(30_000);
+        let announced = tool_names_at(&open_val, "/data/webmcp/tools");
+        let result = if announced.iter().any(|n| n == &req.tool) {
+            map_invoke(self.invoke_once(req, &base, deadline_ms, opts.timeout_ms)?)
+        } else if is_blocked_page(title, page_url, "") {
+            Err(blocked_page(page_url, title))
+        } else if budget_ms == 0 {
+            self.invoke_legacy(req, opts, &base, &open_argv, deadline_ms)
+        } else {
+            self.settle_invoke(req, opts, &base, deadline_ms, budget_ms, title, page_url)
+        };
         if opts.fresh {
             let _ = run_command(
                 &self.command,
@@ -235,14 +268,13 @@ impl AgentBrowser {
         })
     }
 
-    /// Invoke once, re-opening and retrying once on `webmcp_tool_not_found`.
-    fn invoke(
+    /// One invoke attempt: params file, invoke, parse. No retry here.
+    fn invoke_once(
         &self,
         req: &CallRequest,
-        opts: &RunOptions,
         base: &[String],
-        open_argv: &[String],
         deadline_ms: u64,
+        timeout_ms: u64,
     ) -> Result<serde_json::Value, CallError> {
         let input_json = serde_json::to_string(&req.input).unwrap_or_else(|_| "{}".to_string());
         let params = write_params_file(&input_json)?;
@@ -254,12 +286,22 @@ impl AgentBrowser {
             "--params".to_string(),
             format!("@{}", params.path.display()),
             "--timeout".to_string(),
-            opts.timeout_ms.to_string(),
+            timeout_ms.to_string(),
         ]);
-        let run_invoke = || -> Result<serde_json::Value, CallError> {
-            parse_envelope(&run_command(&self.command, &invoke_argv, deadline_ms)?)
-        };
-        let first = run_invoke()?;
+        parse_envelope(&run_command(&self.command, &invoke_argv, deadline_ms)?)
+    }
+
+    /// Today's shape for settle_ms 0: invoke, re-open once on
+    /// `webmcp_tool_not_found`, retry once.
+    fn invoke_legacy(
+        &self,
+        req: &CallRequest,
+        opts: &RunOptions,
+        base: &[String],
+        open_argv: &[String],
+        deadline_ms: u64,
+    ) -> Result<serde_json::Value, CallError> {
+        let first = self.invoke_once(req, base, deadline_ms, opts.timeout_ms)?;
         if is_success(&first) || invoke_code(&first) != "webmcp_tool_not_found" {
             return map_invoke(first);
         }
@@ -267,18 +309,98 @@ impl AgentBrowser {
         if !is_success(&reopened) {
             return Err(open_failure(&reopened));
         }
-        let second = run_invoke()?;
+        let second = self.invoke_once(req, base, deadline_ms, opts.timeout_ms)?;
         if !is_success(&second) && invoke_code(&second) == "webmcp_tool_not_found" {
-            return Err(CallError {
-                code: "tool_not_found",
-                message: format!(
-                    "the page did not register {}; it may need a login or WebMCP may be off",
-                    req.tool
-                ),
-                data: None,
-            });
+            return Err(tool_not_found(&req.tool));
         }
         map_invoke(second)
+    }
+
+    /// Settle for a late tool: poll, reload once, settle again, look once.
+    /// The two settle phases share one budget, not one each.
+    #[allow(clippy::too_many_arguments)]
+    fn settle_invoke(
+        &self,
+        req: &CallRequest,
+        opts: &RunOptions,
+        base: &[String],
+        deadline_ms: u64,
+        budget_ms: u64,
+        title: &str,
+        page_url: &str,
+    ) -> Result<serde_json::Value, CallError> {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(budget_ms);
+        if self.poll_until_present(base, &req.tool, deadline) {
+            return map_invoke(self.invoke_once(req, base, deadline_ms, opts.timeout_ms)?);
+        }
+        self.reload_and_wait(base, deadline_ms);
+        if self.poll_until_present(base, &req.tool, deadline) {
+            return map_invoke(self.invoke_once(req, base, deadline_ms, opts.timeout_ms)?);
+        }
+        if self.poll_once(base, &req.tool) {
+            return map_invoke(self.invoke_once(req, base, deadline_ms, opts.timeout_ms)?);
+        }
+        if is_blocked_page(title, page_url, "") {
+            return Err(blocked_page(page_url, title));
+        }
+        if read_recorder(&self.command, base).contains(&req.tool) {
+            return Err(tool_removed(&req.tool));
+        }
+        Err(tool_not_found(&req.tool))
+    }
+
+    /// Poll `webmcp list <tool>` until it appears or the deadline passes.
+    /// Failed polls count as absent; the budget bounds the waiting.
+    fn poll_until_present(
+        &self,
+        base: &[String],
+        tool: &str,
+        deadline: std::time::Instant,
+    ) -> bool {
+        loop {
+            if std::time::Instant::now() >= deadline {
+                return false;
+            }
+            if self.poll_once(base, tool) {
+                return true;
+            }
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            std::thread::sleep(remaining.min(std::time::Duration::from_millis(500)));
+        }
+    }
+
+    /// One settle poll: lenient, so a busy page costs budget, not errors.
+    fn poll_once(&self, base: &[String], tool: &str) -> bool {
+        let mut argv = base.to_vec();
+        argv.extend(["webmcp".to_string(), "list".to_string(), tool.to_string()]);
+        let out = match run_command(&self.command, &argv, 15_000) {
+            Ok(out) => out,
+            Err(_) => return false,
+        };
+        let val = match parse_envelope(&out) {
+            Ok(val) => val,
+            Err(_) => return false,
+        };
+        is_success(&val) && tool_listed(&val, tool)
+    }
+
+    /// Reload once and wait for load, like the weekly scanner. A failed
+    /// reload still gets its second look; transport errors propagate.
+    fn reload_and_wait(&self, base: &[String], deadline_ms: u64) {
+        let mut reload_argv = base.to_vec();
+        reload_argv.push("reload".to_string());
+        if run_step(&self.command, &reload_argv, deadline_ms).is_err() {
+            return;
+        }
+        let mut wait_argv = base.to_vec();
+        wait_argv.extend([
+            "wait".to_string(),
+            "--load".to_string(),
+            "load".to_string(),
+            "--timeout".to_string(),
+            "15000".to_string(),
+        ]);
+        let _ = run_command(&self.command, &wait_argv, 20_000);
     }
 }
 
@@ -289,6 +411,111 @@ fn run_step(
     deadline_ms: u64,
 ) -> Result<serde_json::Value, CallError> {
     parse_envelope(&run_command(command, argv, deadline_ms)?)
+}
+
+/// Tool names at a JSON pointer to a `[{name, ...}]` array, if any.
+fn tool_names_at(value: &serde_json::Value, pointer: &str) -> Vec<String> {
+    value
+        .pointer(pointer)
+        .and_then(serde_json::Value::as_array)
+        .map(|tools| {
+            tools
+                .iter()
+                .filter_map(|t| t.get("name"))
+                .filter_map(serde_json::Value::as_str)
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Whether a `webmcp list` response registers the tool.
+fn tool_listed(list: &serde_json::Value, tool: &str) -> bool {
+    tool_names_at(list, "/data/tools")
+        .iter()
+        .any(|name| name == tool)
+}
+
+/// Whether title+url+body text look like an unsolved bot check, mirroring
+/// the scanner's `isBlockedPage`: bot-check text and challenge pages.
+/// The caller only consults this when no tools registered.
+pub fn is_blocked_page(title: &str, url: &str, body: &str) -> bool {
+    let haystack = format!("{url} {title} {body}").to_lowercase();
+    if haystack
+        .split_once("blocked by a ")
+        .is_some_and(|(_, rest)| rest.contains("bot challenge"))
+    {
+        return true;
+    }
+    [
+        "just a moment",
+        "attention required",
+        "access denied",
+        "verify you are human",
+        "are you a robot",
+        "cf-challenge",
+        "bot challenge",
+        "captcha",
+    ]
+    .iter()
+    .any(|signal| haystack.contains(signal))
+}
+
+/// A blocked page stops the call instead of reporting no tools.
+fn blocked_page(url: &str, title: &str) -> CallError {
+    CallError {
+        code: "page_unreachable",
+        message: "the page shows a bot check; it was not solved".to_string(),
+        data: Some(serde_json::json!({ "url": url, "title": title })),
+    }
+}
+
+/// The page never registered the tool.
+fn tool_not_found(tool: &str) -> CallError {
+    CallError {
+        code: "tool_not_found",
+        message: format!(
+            "the page did not register {tool}; it may need a login or WebMCP may be off"
+        ),
+        data: None,
+    }
+}
+
+/// The page registered the tool, then removed it before the call.
+fn tool_removed(tool: &str) -> CallError {
+    CallError {
+        code: "tool_not_found",
+        message: format!(
+            "the page registered {tool} then removed it; it may need interaction first"
+        ),
+        data: None,
+    }
+}
+
+/// Names the recorder saw, via one `eval`. Lenient: failure means none.
+fn read_recorder(command: &str, base: &[String]) -> Vec<String> {
+    const READ: &str = r#"(()=>{try{return (window.__wmcSeen||[]).filter(function(n){return typeof n==="string";});}catch(e){return [];}})();"#;
+    let mut argv = base.to_vec();
+    argv.extend(["eval".to_string(), READ.to_string()]);
+    let Ok(out) = run_command(command, &argv, 15_000) else {
+        return Vec::new();
+    };
+    let Ok(val) = parse_envelope(&out) else {
+        return Vec::new();
+    };
+    if !is_success(&val) {
+        return Vec::new();
+    }
+    val.get("data")
+        .and_then(serde_json::Value::as_array)
+        .map(|names| {
+            names
+                .iter()
+                .filter_map(serde_json::Value::as_str)
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// A temp file holding the invoke input; removed on drop, come what may.
@@ -304,12 +531,39 @@ impl Drop for TempFile {
 
 /// Write the input JSON to a 0600 temp file with a unique name.
 fn write_params_file(input_json: &str) -> Result<TempFile, CallError> {
+    write_temp("params", input_json)
+}
+
+/// Write the recorder init script next to it; both are removed after.
+fn write_init_script() -> Result<TempFile, CallError> {
+    write_temp("recorder", RECORDER_SRC).map_err(|e| CallError {
+        code: e.code,
+        message: e.message.replace("params file", "recorder script"),
+        data: e.data,
+    })
+}
+
+/// Init script logging tool registrations from the very first call.
+/// Never throws; no-ops without document.modelContext; under 20 lines.
+const RECORDER_SRC: &str = r#"(()=>{try{
+if(window.__wmcSeen)return;
+window.__wmcSeen=[];
+var mc=(document&&document.modelContext)||null;
+if(!mc||typeof mc.addEventListener!=="function")return;
+mc.addEventListener("toolchange",function(ev){
+try{var n=ev&&(ev.toolName||ev.name);if(n)window.__wmcSeen.push(String(n));}catch(e){}
+});
+}catch(e){}})();
+"#;
+
+/// Write text to a 0600 temp file with a unique name.
+fn write_temp(name: &str, contents: &str) -> Result<TempFile, CallError> {
     use std::sync::atomic::{AtomicU64, Ordering};
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     for _ in 0..100 {
         let n = COUNTER.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
-            ".agent-webmcp-params-{}-{n}.json",
+            ".agent-webmcp-{name}-{}-{n}.json",
             std::process::id()
         ));
         let mut options = std::fs::OpenOptions::new();
@@ -322,12 +576,11 @@ fn write_params_file(input_json: &str) -> Result<TempFile, CallError> {
         match options.open(&path) {
             Ok(mut file) => {
                 use std::io::Write;
-                file.write_all(input_json.as_bytes())
-                    .map_err(|e| CallError {
-                        code: "driver_error",
-                        message: format!("could not write params file: {e}"),
-                        data: None,
-                    })?;
+                file.write_all(contents.as_bytes()).map_err(|e| CallError {
+                    code: "driver_error",
+                    message: format!("could not write params file: {e}"),
+                    data: None,
+                })?;
                 return Ok(TempFile { path });
             }
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,

@@ -68,6 +68,9 @@ enum Command {
         /// Timeout in milliseconds (default from config)
         #[arg(long)]
         timeout: Option<u64>,
+        /// Settle budget in milliseconds for late tool registration
+        #[arg(long)]
+        settle: Option<u64>,
         /// Print machine-readable JSON instead of text
         #[arg(long)]
         json: bool,
@@ -120,6 +123,7 @@ async fn main() -> Result<()> {
             confirm,
             plan,
             timeout,
+            settle,
             json,
         } => call_command(
             &target,
@@ -132,6 +136,7 @@ async fn main() -> Result<()> {
             confirm,
             plan,
             timeout,
+            settle,
             json,
         ),
         Command::Update => {
@@ -370,6 +375,7 @@ fn call_command(
     confirm: bool,
     plan_only: bool,
     timeout: Option<u64>,
+    settle: Option<u64>,
     json: bool,
 ) -> Result<()> {
     let mut cfg = match config::load() {
@@ -397,6 +403,7 @@ fn call_command(
         session,
         headed: headed.then_some(true),
         timeout,
+        settle,
         command: None,
     });
     let search = Search::build(store::load()?)?;
