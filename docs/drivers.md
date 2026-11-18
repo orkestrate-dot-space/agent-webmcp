@@ -7,7 +7,7 @@ This guide shows how to set up each supported driver.
 Run first-run setup once:
 
 ```bash
-cargo build --release
+npm i -g @orkestrate/agent-webmcp
 agent-webmcp setup
 ```
 

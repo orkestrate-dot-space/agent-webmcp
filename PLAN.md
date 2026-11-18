@@ -34,8 +34,8 @@ for the agent.
 
 **Registry.** Deferred past 0.2.0: static item JSON,
 `add`/`remove`/`list`/`outdated`/`update`, a lockfile with hashes, the
-generated extension folder, `setup`, and the first `@orkestrate` items.
-Reviewed `@orkestrate` only at first.
+generated extension folder, and the first `@orkestrate` items. Reviewed
+`@orkestrate` only at first. The minimal `setup` ships in 0.2.0.
 
 ## Rollback
 
