@@ -245,18 +245,90 @@ pub fn browser_report() -> Vec<String> {
     ]
 }
 
-/// True when `latest` names a newer release than `installed` ("x.y.z", numeric).
+/// True when `latest` names a newer release than `installed`, by SemVer
+/// precedence: `0.3.0` is newer than `0.3.0-rc.1`, which is newer than
+/// `0.2.9`. Anything unparsable means "no".
 pub fn newer_available(installed: &str, latest: &str) -> bool {
-    match (parse_version(installed), parse_version(latest)) {
+    match (Version::parse(installed), Version::parse(latest)) {
         (Some(a), Some(b)) => b > a,
         _ => false,
     }
 }
 
-fn parse_version(v: &str) -> Option<(u64, u64, u64)> {
-    let mut parts = v.split('.');
-    let major = parts.next()?.parse().ok()?;
-    let minor = parts.next()?.parse().ok()?;
-    let patch = parts.next()?.parse().ok()?;
-    Some((major, minor, patch))
+/// An exact `x.y.z` version, optionally with a prerelease and build suffix.
+pub fn is_exact_version(v: &str) -> bool {
+    Version::parse(v).is_some()
+}
+
+#[derive(PartialEq, Eq)]
+struct Version<'a> {
+    core: (u64, u64, u64),
+    pre: Vec<&'a str>,
+}
+
+impl<'a> Version<'a> {
+    fn parse(v: &'a str) -> Option<Self> {
+        let (v, build) = v.split_once('+').map_or((v, None), |(a, b)| (a, Some(b)));
+        if build.is_some_and(|b| !ident_ok(b)) {
+            return None;
+        }
+        let (core, pre) = v.split_once('-').map_or((v, None), |(a, b)| (a, Some(b)));
+        let mut parts = core.split('.');
+        let mut num = || -> Option<u64> {
+            let p = parts.next()?;
+            if p.is_empty() || !p.bytes().all(|b| b.is_ascii_digit()) {
+                return None;
+            }
+            p.parse().ok()
+        };
+        let core = (num()?, num()?, num()?);
+        if parts.next().is_some() {
+            return None;
+        }
+        let pre = match pre {
+            Some(p) if ident_ok(p) => p.split('.').collect(),
+            Some(_) => return None,
+            None => Vec::new(),
+        };
+        Some(Self { core, pre })
+    }
+}
+
+fn ident_ok(s: &str) -> bool {
+    !s.is_empty()
+        && s.split('.')
+            .all(|id| !id.is_empty() && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'))
+}
+
+impl PartialOrd for Version<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Version<'_> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        use std::cmp::Ordering::*;
+        self.core
+            .cmp(&other.core)
+            .then_with(|| match (self.pre.is_empty(), other.pre.is_empty()) {
+                (true, true) => Equal,
+                (true, false) => Greater,
+                (false, true) => Less,
+                (false, false) => {
+                    for (a, b) in self.pre.iter().zip(&other.pre) {
+                        let ord = match (a.parse::<u64>(), b.parse::<u64>()) {
+                            (Ok(x), Ok(y)) => x.cmp(&y),
+                            (Ok(_), Err(_)) => Less,
+                            (Err(_), Ok(_)) => Greater,
+                            (Err(_), Err(_)) => a.cmp(b),
+                        };
+                        if ord != Equal {
+                            return ord;
+                        }
+                    }
+                    self.pre.len().cmp(&other.pre.len())
+                }
+            })
+    }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@orkestrate/agent-webmcp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Check whether a site offers WebMCP tools before you open it, then use them with the browser driver you already use.",
   "license": "MIT",
   "homepage": "https://github.com/orkestrate-dot-space/agent-webmcp#readme",
@@ -12,13 +12,13 @@
   "bin": {
     "agent-webmcp": "bin/agent-webmcp.js"
   },
-  "files": ["bin"],
+  "files": ["bin", "README.md"],
   "optionalDependencies": {
-    "@orkestrate/agent-webmcp-linux-x64": "0.2.0",
-    "@orkestrate/agent-webmcp-linux-arm64": "0.2.0",
-    "@orkestrate/agent-webmcp-darwin-arm64": "0.2.0",
-    "@orkestrate/agent-webmcp-darwin-x64": "0.2.0",
-    "@orkestrate/agent-webmcp-win32-x64": "0.2.0"
+    "@orkestrate/agent-webmcp-linux-x64": "0.2.1",
+    "@orkestrate/agent-webmcp-linux-arm64": "0.2.1",
+    "@orkestrate/agent-webmcp-darwin-arm64": "0.2.1",
+    "@orkestrate/agent-webmcp-darwin-x64": "0.2.1",
+    "@orkestrate/agent-webmcp-win32-x64": "0.2.1"
   },
   "scripts": {
     "postinstall": "node bin/check.js"

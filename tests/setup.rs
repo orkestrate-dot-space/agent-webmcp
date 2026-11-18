@@ -42,6 +42,18 @@ fn versions_compare_numerically() {
 }
 
 #[test]
+fn versions_follow_semver_prerelease_order() {
+    assert!(newer_available("0.3.0-rc.1", "0.3.0"));
+    assert!(!newer_available("0.3.0", "0.3.0-rc.1"));
+    assert!(newer_available("0.2.9", "0.3.0-rc.1"));
+    assert!(newer_available("0.3.0-rc.1", "0.3.0-rc.2"));
+    assert!(newer_available("0.3.0-rc.9", "0.3.0-rc.10"));
+    assert!(newer_available("0.3.0-alpha", "0.3.0-beta"));
+    assert!(!newer_available("0.2.0", "0.2"));
+    assert!(!newer_available("0.2.0", "0.2.1.4"));
+}
+
+#[test]
 fn skill_dirs_cover_the_three_clients() {
     let dirs = skill_dirs(&PathBuf::from("/home/test"));
     assert_eq!(dirs.len(), 3);

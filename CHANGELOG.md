@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.1 — 2026-11-18
+
+- New `upgrade [version]` command: upgrades agent-webmcp itself through npm
+  (latest by default; `next` or a version like `0.2.1` also work). Installs
+  that did not come from `npm i -g` get the command to run instead. On
+  Windows it prints the command, because a running `.exe` cannot be replaced.
+- The newer-version note from `update` and `status` now says
+  `run: agent-webmcp upgrade`.
+- The npm package page shows the README.
+
 ## 0.2.0 — 2026-11-18
 
 The CLI is now a single Rust binary shipped through npm as
