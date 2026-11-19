@@ -533,9 +533,8 @@ fn fake_script(
     let log = dir.path().join(format!("{name}.argv"));
     let path = dir.path().join(name);
     let script = format!(
-        "#!/bin/sh\necho \"$@\" >> \"{log}\"\ncase \" $* \" in\n  *\" --version \"*) echo \"agent-browser 0.43.1\";;\n  *\" close \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" invoke \"*) echo '{pending}';;\n  *\" result \"*) echo '{invoke}';;\n  *\" cancel \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" open \"*) echo '{open}';;\nesac\n",
+        "#!/bin/sh\necho \"$@\" >> \"{log}\"\ncase \" $* \" in\n  *\" --version \"*) echo \"agent-browser 0.43.1\";;\n  *\" close \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" invoke \"*) echo '{invoke}';;\n  *\" open \"*) echo '{open}';;\nesac\n",
         log = log.display(),
-        pending = PENDING,
         invoke = invoke,
         open = open,
     );
@@ -557,10 +556,9 @@ fn counting_script(
     let count = dir.path().join(format!("{name}.count"));
     let path = dir.path().join(name);
     let script = format!(
-        "#!/bin/sh\necho \"$@\" >> \"{log}\"\ncase \" $* \" in\n  *\" --version \"*) echo \"agent-browser 0.43.1\";;\n  *\" close \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" invoke \"*) echo '{pending}';;\n  *\" result \"*)\n    n=$(cat \"{count}\" 2>/dev/null || echo 0)\n    echo $((n + 1)) > \"{count}\"\n    if [ \"$n\" = \"0\" ]; then echo '{first}'; else echo '{second}'; fi;;\n  *\" cancel \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" open \"*) echo '{open}';;\nesac\n",
+        "#!/bin/sh\necho \"$@\" >> \"{log}\"\ncase \" $* \" in\n  *\" --version \"*) echo \"agent-browser 0.43.1\";;\n  *\" close \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" invoke \"*)\n    n=$(cat \"{count}\" 2>/dev/null || echo 0)\n    echo $((n + 1)) > \"{count}\"\n    if [ \"$n\" = \"0\" ]; then echo '{first}'; else echo '{second}'; fi;;\n  *\" open \"*) echo '{open}';;\nesac\n",
         log = log.display(),
         count = count.display(),
-        pending = PENDING,
         first = first,
         second = second,
         open = open,
@@ -621,13 +619,12 @@ fn settle_script(
     std::fs::write(&evals_file, evals.join("\n")).unwrap();
     let path = dir.path().join(name);
     let script = format!(
-        "#!/bin/sh\necho \"$@\" >> \"{log}\"\ncase \" $* \" in\n  *\" --version \"*) echo \"agent-browser 0.43.1\";;\n  *\" close \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" invoke \"*) echo '{pending}';;\n  *\" result \"*) echo '{invoke}';;\n  *\" cancel \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" open \"*) echo '{open}';;\n  *\" list \"*) n=$(cat \"{count}\" 2>/dev/null || echo 0); echo $((n + 1)) > \"{count}\"; sed -n \"$((n+1))p\" \"{lists}\";;\n  *\" reload \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" wait \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" eval \"*) n=$(cat \"{ecount}\" 2>/dev/null || echo 0); echo $((n + 1)) > \"{ecount}\"; sed -n \"$((n+1))p\" \"{evals}\";;\nesac\n",
+        "#!/bin/sh\necho \"$@\" >> \"{log}\"\ncase \" $* \" in\n  *\" --version \"*) echo \"agent-browser 0.43.1\";;\n  *\" close \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" invoke \"*) echo '{invoke}';;\n  *\" open \"*) echo '{open}';;\n  *\" list \"*) n=$(cat \"{count}\" 2>/dev/null || echo 0); echo $((n + 1)) > \"{count}\"; sed -n \"$((n+1))p\" \"{lists}\";;\n  *\" reload \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" wait \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" eval \"*) n=$(cat \"{ecount}\" 2>/dev/null || echo 0); echo $((n + 1)) > \"{ecount}\"; sed -n \"$((n+1))p\" \"{evals}\";;\nesac\n",
         log = log.display(),
         count = count.display(),
         lists = lists.display(),
         ecount = ecount.display(),
         evals = evals_file.display(),
-        pending = PENDING,
         invoke = invoke_json,
         open = open_json,
     );
@@ -661,13 +658,11 @@ const LIST_WITH_TOOL: &str = r#"{"success":true,"data":{"tools":[{"name":"ask_ca
 #[cfg(unix)]
 const OPEN_WITH_TOOL: &str = r#"{"success":true,"data":{"url":"https://cal.com/","lifecycle":{"reused":true},"webmcp":{"tools":[{"name":"ask_cal_com"}]}}}"#;
 #[cfg(unix)]
-const PENDING: &str = r#"{"success":true,"data":{"invocationId":"inv-1","status":"pending"}}"#;
-#[cfg(unix)]
 const EVAL_EMPTY: &str = r#"{"success":true,"data":[]}"#;
 #[cfg(unix)]
-const EVAL_OBJECT: &str = r#"{"success":true,"data":"object"}"#;
+const EVAL_OBJECT: &str = r#"{"success":true,"data":{"result":"object"}}"#;
 #[cfg(unix)]
-const EVAL_UNDEFINED: &str = r#"{"success":true,"data":"undefined"}"#;
+const EVAL_UNDEFINED: &str = r#"{"success":true,"data":{"result":"undefined"}}"#;
 #[cfg(unix)]
 const OPEN_WITH_OTHER: &str = r#"{"success":true,"data":{"url":"https://cal.com/","webmcp":{"tools":[{"name":"other_tool"}]}}}"#;
 
@@ -701,13 +696,16 @@ fn happy_path_returns_output_reused_and_removes_params() {
     let open = lines.iter().find(|l| l.contains(" open ")).unwrap();
     assert!(open.contains("--session test-s-"), "{open}");
     assert!(open.contains("open https://cal.com/"), "{open}");
-    assert!(open.contains("--init-script /"), "{open}");
-    assert!(!open.contains("--init-script @"), "{open}");
+    assert!(
+        open.contains("--args --enable-features=WebMCP"),
+        "open launches with the WebMCP feature: {open}"
+    );
+    assert!(!open.contains("--init-script"), "{open}");
     assert!(!open.contains("--profile"), "{open}");
     let invoke = lines.iter().find(|l| l.contains(" invoke ")).unwrap();
     assert!(invoke.contains("--session test-s-"), "{invoke}");
     assert!(invoke.contains("--timeout 1234"), "{invoke}");
-    assert!(invoke.contains("--detach"), "{invoke}");
+    assert!(!invoke.contains("--detach"), "{invoke}");
     assert!(!invoke.contains("--profile"), "{invoke}");
     let at = invoke
         .split_whitespace()
@@ -740,33 +738,10 @@ fn tool_is_error_is_tool_error() {
 
 #[cfg(unix)]
 #[test]
-fn tool_not_found_retries_open_once_then_succeeds() {
+fn tool_not_found_invokes_once_without_retry() {
     let dir = tempfile::tempdir().unwrap();
+    // The second queued answer would succeed: a retry would use it.
     let script = counting_script(&dir, "ab", INVOKE_NOTFOUND, INVOKE_OK, OPEN_OK);
-    let cfg = run_config(&script);
-    let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
-    let opts = CallOptions {
-        confirm: true,
-        plan_only: false,
-        fresh: false,
-        retry_hint: call::RETRY_CLI,
-    };
-    match execute(&resolved, json!({"question": "hi"}), &opts, &cfg) {
-        Ok(Outcome::Ran { output, .. }) => assert_eq!(output, json!({"answer": 1})),
-        other => panic!("expected a run after retry, got {other:?}"),
-    }
-    let opens = argv_log(&dir, "ab")
-        .iter()
-        .filter(|l| l.contains(" open "))
-        .count();
-    assert_eq!(opens, 2, "open must run twice");
-}
-
-#[cfg(unix)]
-#[test]
-fn tool_not_found_twice_is_tool_not_found() {
-    let dir = tempfile::tempdir().unwrap();
-    let script = counting_script(&dir, "ab", INVOKE_NOTFOUND, INVOKE_NOTFOUND, OPEN_OK);
     let cfg = run_config(&script);
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
     let opts = CallOptions {
@@ -778,11 +753,17 @@ fn tool_not_found_twice_is_tool_not_found() {
     let e = execute(&resolved, json!({"question": "hi"}), &opts, &cfg).unwrap_err();
     assert_eq!(e.code, "tool_not_found");
     assert!(e.message.contains("may need a login"), "{}", e.message);
-    let opens = argv_log(&dir, "ab")
-        .iter()
-        .filter(|l| l.contains(" open "))
-        .count();
-    assert_eq!(opens, 2, "open must run twice");
+    let lines = argv_log(&dir, "ab");
+    assert_eq!(
+        lines.iter().filter(|l| l.contains(" open ")).count(),
+        1,
+        "no re-open: {lines:?}"
+    );
+    assert_eq!(
+        lines.iter().filter(|l| l.contains(" invoke ")).count(),
+        1,
+        "no retry: {lines:?}"
+    );
 }
 
 #[cfg(unix)]
@@ -1248,62 +1229,6 @@ fn blocked_title_stops_before_invoke() {
     );
 }
 
-#[cfg(unix)]
-#[test]
-fn recorder_names_removed_tool() {
-    let dir = tempfile::tempdir().unwrap();
-    let seen = r#"{"success":true,"data":{"result":["ask_cal_com"]}}"#;
-    let script = settle_script(
-        &dir,
-        "ab",
-        OPEN_OK,
-        &[LIST_EMPTY],
-        INVOKE_OK,
-        &[EVAL_OBJECT, seen],
-    );
-    let cfg = settle_cfg(&script, 1000);
-    let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
-    let e = execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
-    assert_eq!(e.code, "tool_not_found");
-    assert!(e.message.contains("then removed it"), "{}", e.message);
-}
-
-#[cfg(unix)]
-#[test]
-fn init_script_passed_on_open_and_removed() {
-    let dir = tempfile::tempdir().unwrap();
-    let script = settle_script(
-        &dir,
-        "ab",
-        OPEN_OK,
-        &[LIST_WITH_TOOL],
-        INVOKE_OK,
-        &[EVAL_EMPTY],
-    );
-    let mut cfg = run_config(&script);
-    cfg.call.settle_ms = 0;
-    let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
-    match execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg) {
-        Ok(Outcome::Ran { .. }) => {}
-        other => panic!("expected a run, got {other:?}"),
-    }
-    let lines = argv_log(&dir, "ab");
-    let open = lines.iter().find(|l| l.contains(" open ")).unwrap();
-    assert!(
-        !open.contains("--init-script @"),
-        "bare path, never @file: {open}"
-    );
-    let path = open
-        .split_whitespace()
-        .skip_while(|w| *w != "--init-script")
-        .nth(1)
-        .unwrap();
-    assert!(
-        !std::path::Path::new(path).exists(),
-        "init script must be removed"
-    );
-}
-
 #[test]
 fn blocked_check_matches_scanner_signals() {
     use agent_webmcp::driver::agent_browser::is_blocked_page;
@@ -1596,64 +1521,59 @@ fn cli_huge_timeout_is_usage() {
     assert!(stderr.contains("timeout must be 1..3600000 ms"), "{stderr}");
 }
 
-// --- detach + poll (unix) ---
-
-#[cfg(unix)]
-const RESULT_TIMED_OUT: &str =
-    r#"{"success":true,"data":{"invocationId":"inv-1","status":"timed_out"}}"#;
+// --- invoke record statuses (unix) ---
 
 #[cfg(unix)]
 #[test]
-fn daemon_timeout_is_flagged_timeout_without_cancel() {
-    let dir = tempfile::tempdir().unwrap();
-    let script = settle_script(
-        &dir,
-        "ab",
-        OPEN_WITH_TOOL,
-        &[],
-        RESULT_TIMED_OUT,
-        &[EVAL_EMPTY],
-    );
-    let cfg = run_config(&script);
-    let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
-    let e = execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
-    assert_eq!(e.code, "timeout");
-    assert!(e.message.contains("invoke"), "{}", e.message);
-    assert_eq!(e.data.as_ref().unwrap()["daemonTimedOut"], json!(true));
-    let lines = argv_log(&dir, "ab");
-    assert!(
-        lines.iter().any(|l| l.contains(" result inv-1 ")),
-        "{lines:?}"
-    );
-    assert!(!lines.iter().any(|l| l.contains(" cancel ")), "{lines:?}");
+fn invoke_record_statuses_map_to_errors() {
+    for (name, record, code, message) in [
+        (
+            "failed",
+            r#"{"success":true,"data":{"invocationId":"inv-1","toolName":"ask_cal_com","frameId":"f","origin":"https://cal.com","status":"failed","durationMs":5,"error":"the tool blew up"}}"#,
+            "tool_error",
+            "the tool blew up",
+        ),
+        (
+            "context",
+            r#"{"success":true,"data":{"invocationId":"inv-1","toolName":"ask_cal_com","frameId":"f","origin":"https://cal.com","status":"failed","durationMs":5,"error":"webmcp_context_changed: the page context changed before the invocation completed"}}"#,
+            "driver_error",
+            "webmcp_context_changed",
+        ),
+        (
+            "timed_out",
+            r#"{"success":true,"data":{"invocationId":"inv-1","toolName":"ask_cal_com","frameId":"f","origin":"https://cal.com","status":"timed_out","durationMs":5,"error":"WebMCP invocation timed out"}}"#,
+            "timeout",
+            "invoke",
+        ),
+        (
+            "canceled",
+            r#"{"success":true,"data":{"invocationId":"inv-1","toolName":"ask_cal_com","frameId":"f","origin":"https://cal.com","status":"canceled","durationMs":5}}"#,
+            "driver_error",
+            "canceled",
+        ),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let script = settle_script(&dir, "ab", OPEN_WITH_TOOL, &[], record, &[EVAL_EMPTY]);
+        let cfg = run_config(&script);
+        let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
+        let e = execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
+        assert_eq!(e.code, code, "{name}");
+        assert!(e.message.contains(message), "{name}: {}", e.message);
+    }
 }
 
 #[cfg(unix)]
 #[test]
-fn our_timeout_cancels_the_invocation() {
+fn failed_record_carries_the_record_as_data() {
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("ab");
-    let log = dir.path().join("ab.argv");
-    std::fs::write(
-        &path,
-        format!(
-            "#!/bin/sh\necho \"$@\" >> \"{log}\"\ncase \" $* \" in\n  *\" --version \"*) echo \"agent-browser 0.43.1\";;\n  *\" close \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" open \"*) echo '{OPEN_WITH_TOOL}';;\n  *\" invoke \"*) echo '{PENDING}';;\n  *\" result \"*) sleep 30;;\n  *\" cancel \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\nesac\n",
-            log = log.display(),
-        ),
-    )
-    .unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let mut cfg = run_config(&path);
-    cfg.call.timeout = 200;
+    let record = r#"{"success":true,"data":{"invocationId":"inv-1","toolName":"ask_cal_com","frameId":"f","origin":"https://cal.com","status":"failed","durationMs":5,"error":"bad input"}}"#;
+    let script = settle_script(&dir, "ab", OPEN_WITH_TOOL, &[], record, &[EVAL_EMPTY]);
+    let cfg = run_config(&script);
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
     let e = execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
-    assert_eq!(e.code, "timeout");
-    assert!(e.message.contains("invoke"), "{}", e.message);
-    assert!(e.data.is_none(), "{:?}", e.data);
-    let lines = argv_log(&dir, "ab");
-    let cancel = lines.iter().find(|l| l.contains(" cancel ")).unwrap();
-    assert!(cancel.contains("inv-1"), "{cancel}");
+    assert_eq!(e.code, "tool_error");
+    assert_eq!(e.data.as_ref().unwrap()["status"], json!("failed"));
+    assert_eq!(e.data.as_ref().unwrap()["error"], json!("bad input"));
 }
 
 #[cfg(unix)]

@@ -121,11 +121,6 @@ pub enum Outcome {
         duration_ms: u64,
         reused: bool,
         budget_ms: u64,
-        agent_browser: Option<String>,
-        session: String,
-        launch_hash: Option<String>,
-        session_age_ms: u64,
-        recovered: Option<String>,
     },
     Planned {
         id: String,
@@ -148,13 +143,8 @@ impl Outcome {
                 duration_ms,
                 reused,
                 budget_ms,
-                agent_browser,
-                session,
-                launch_hash,
-                session_age_ms,
-                recovered,
             } => {
-                let mut data = serde_json::json!({
+                let data = serde_json::json!({
                     "id": id,
                     "tool": tool,
                     "page": page,
@@ -163,17 +153,7 @@ impl Outcome {
                     "durationMs": duration_ms,
                     "reused": reused,
                     "budgetMs": budget_ms,
-                    "driverInfo": {
-                        "agentBrowser": agent_browser,
-                        "session": session,
-                        "reused": reused,
-                        "sessionAgeMs": session_age_ms,
-                        "launchHash": launch_hash,
-                    },
                 });
-                if let Some(flag) = recovered {
-                    data["recovered"] = Value::String(flag.clone());
-                }
                 serde_json::json!({ "success": true, "data": data })
             }
             Outcome::Planned {
@@ -753,11 +733,6 @@ pub fn finish(prepared: Prepared, opts: &CallOptions, cfg: &Config) -> Result<Ou
                     duration_ms,
                     reused,
                     budget_ms,
-                    agent_browser,
-                    session,
-                    launch_hash,
-                    session_age_ms,
-                    recovered,
                 } = outcome;
                 Ok(Outcome::Ran {
                     id,
@@ -768,11 +743,6 @@ pub fn finish(prepared: Prepared, opts: &CallOptions, cfg: &Config) -> Result<Ou
                     duration_ms,
                     reused,
                     budget_ms,
-                    agent_browser,
-                    session,
-                    launch_hash,
-                    session_age_ms,
-                    recovered,
                 })
             }
         }

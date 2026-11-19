@@ -112,16 +112,6 @@ pub struct RunOutcome {
     pub reused: bool,
     /// timeout + settle + 30 s grace, the budget the run lived under.
     pub budget_ms: u64,
-    /// agent-browser version at open time, for the envelope.
-    pub agent_browser: Option<String>,
-    /// Session the call ran in.
-    pub session: String,
-    /// Daemon launch hash at open time, if reported.
-    pub launch_hash: Option<String>,
-    /// now minus the pin's first sighting, 0 without a pin.
-    pub session_age_ms: u64,
-    /// Set when the call recovered from build drift.
-    pub recovered: Option<String>,
 }
 
 /// Every driver, agent-browser first; sessions come from config.

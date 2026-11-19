@@ -1,22 +1,24 @@
 //! One process per agent-browser session: a lock file in the data dir.
 //!
-//! Windows is best-effort: without /proc every holder counts as alive, so
-//! only the 30 s stale rule frees the lock.
+//! A live holder always wins, whatever the lock age: on unix a lock is only
+//! taken over when its holder pid is dead (`/proc/<pid>` missing). Without
+//! `/proc` every holder counts as live, so a 10-minute age rule frees old
+//! locks there instead.
 
 use std::path::{Path, PathBuf};
 
 use crate::call::CallError;
 
-/// A lock older than this is stale: take it over, noting `stole_stale`.
-const STALE_MS: u64 = 30_000;
+/// How long a lock may live on platforms without `/proc`, where every
+/// holder counts as live and only age can free the lock.
+#[cfg(not(unix))]
+const STALE_MS: u64 = 10 * 60 * 1000;
 
 /// A held session lock; dropping it releases the file when still ours.
 #[derive(Debug)]
 pub struct SessionLock {
     path: PathBuf,
     payload: String,
-    /// True when this acquire replaced a lock older than 30 s.
-    pub stole_stale: bool,
 }
 
 impl Drop for SessionLock {
@@ -30,8 +32,8 @@ impl Drop for SessionLock {
 }
 
 /// Acquire `<dir>/<name>.lock`, atomic on first create. A live holder
-/// within the stale window fails as `concurrent_call` naming holder pid
-/// and age; anything else takes the lock over. Bad names fail as `usage`.
+/// fails as `concurrent_call` naming holder pid and age; a dead holder
+/// (unix: no `/proc/<pid>`) loses the lock. Bad names fail as `usage`.
 pub fn acquire(dir: &Path, name: &str) -> Result<SessionLock, CallError> {
     check_name(name)?;
     std::fs::create_dir_all(dir).map_err(|e| CallError {
@@ -52,16 +54,18 @@ pub fn acquire(dir: &Path, name: &str) -> Result<SessionLock, CallError> {
                 message: format!("could not write session lock: {e}"),
                 data: None,
             })?;
-            Ok(SessionLock {
-                path,
-                payload,
-                stole_stale: false,
-            })
+            Ok(SessionLock { path, payload })
         }
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
             let (pid, ts) = read_holder(&path);
             let age = now_ms().saturating_sub(ts);
-            if holder_live(pid) && age <= STALE_MS {
+            // Unix: a live holder always wins, whatever the age; only a
+            // dead pid frees the lock. Without /proc only the age frees it.
+            #[cfg(unix)]
+            let contend = holder_live(pid);
+            #[cfg(not(unix))]
+            let contend = holder_live(pid) && age <= STALE_MS;
+            if contend {
                 return Err(CallError {
                     code: "concurrent_call",
                     message: format!(
@@ -80,11 +84,7 @@ pub fn acquire(dir: &Path, name: &str) -> Result<SessionLock, CallError> {
                 message: format!("could not take over session lock: {e}"),
                 data: None,
             })?;
-            Ok(SessionLock {
-                path,
-                payload,
-                stole_stale: age > STALE_MS,
-            })
+            Ok(SessionLock { path, payload })
         }
         Err(e) => Err(CallError {
             code: "driver_error",

@@ -148,7 +148,7 @@ fn agent_browser_plan_argv_comes_from_config() {
     }
     assert_eq!(
         plan.steps[0].args,
-        serde_json::json!({"command": ["agent-browser", "--session", "work", "--json", "open", "https://cal.com/"]})
+        serde_json::json!({"command": ["agent-browser", "--session", "work", "--json", "--args", "--enable-features=WebMCP", "open", "https://cal.com/"]})
     );
     assert_eq!(
         plan.steps[1].args,

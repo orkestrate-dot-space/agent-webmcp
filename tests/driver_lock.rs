@@ -16,11 +16,9 @@ fn acquire_and_release_allows_reacquire() {
     let dir = sessions();
     let sessions = dir.path().join("sessions");
     let held = lock::acquire(&sessions, "test-s").unwrap();
-    assert!(!held.stole_stale);
     drop(held);
-    let again = lock::acquire(&sessions, "test-s").unwrap();
-    assert!(!again.stole_stale);
-    drop(again);
+    let _again = lock::acquire(&sessions, "test-s").unwrap();
+    drop(_again);
     assert!(!sessions.join("test-s.lock").exists());
 }
 
@@ -41,34 +39,39 @@ fn live_holder_contends_with_pid_and_age() {
 }
 
 #[test]
-fn stale_live_holder_is_taken_over() {
+fn live_holder_contends_whatever_the_age() {
     let dir = sessions();
     let sessions = dir.path().join("sessions");
     std::fs::create_dir_all(&sessions).unwrap();
-    // Our own pid is live, but the stamp is 60 s old: stale wins.
+    // Our own pid is live and the stamp is 60 s old: still contention.
     let old = lock_now_ms().saturating_sub(60_000);
     std::fs::write(
         sessions.join("test-s.lock"),
         payload(std::process::id(), old),
     )
     .unwrap();
-    let held = lock::acquire(&sessions, "test-s").unwrap();
-    assert!(held.stole_stale);
+    let held = lock::acquire(&sessions, "test-s");
+    let e = held.unwrap_err();
+    assert_eq!(e.code, "concurrent_call");
+    assert!(
+        e.message.contains(&std::process::id().to_string()),
+        "{}",
+        e.message
+    );
 }
 
 #[test]
-fn dead_holder_is_taken_over_without_stale_flag() {
+fn dead_holder_is_taken_over() {
     let dir = sessions();
     let sessions = dir.path().join("sessions");
     std::fs::create_dir_all(&sessions).unwrap();
-    // Pid 2^31 - 1 cannot exist here; the stamp is fresh, so not stale.
+    // Pid 2^31 - 1 cannot exist here, so the lock is taken over.
     std::fs::write(
         sessions.join("test-s.lock"),
         payload(i32::MAX as u32, lock_now_ms()),
     )
     .unwrap();
-    let held = lock::acquire(&sessions, "test-s").unwrap();
-    assert!(!held.stole_stale);
+    let _held = lock::acquire(&sessions, "test-s").unwrap();
 }
 
 #[test]
@@ -186,16 +189,10 @@ fn run_opts() -> CallOptions {
 }
 
 #[cfg(unix)]
-const PENDING: &str = r#"{"success":true,"data":{"invocationId":"inv-1","status":"pending"}}"#;
-#[cfg(unix)]
 const OPEN_OK: &str =
     r#"{"success":true,"data":{"url":"https://cal.com/","lifecycle":{"reused":true}}}"#;
 #[cfg(unix)]
 const INVOKE_OK: &str = r#"{"success":true,"data":{"output":{"answer":1},"durationMs":5}}"#;
-#[cfg(unix)]
-const OPEN_LAUNCH_B: &str = r#"{"success":true,"data":{"url":"https://cal.com/","lifecycle":{"reused":true,"effectiveLaunch":{"launchHash":"B"}},"webmcp":{"tools":[{"name":"ask_cal_com"}]}}}"#;
-#[cfg(unix)]
-const OPEN_LAUNCH_C: &str = r#"{"success":true,"data":{"url":"https://cal.com/","lifecycle":{"reused":true,"effectiveLaunch":{"launchHash":"C"}},"webmcp":{"tools":[{"name":"ask_cal_com"}]}}}"#;
 
 #[cfg(unix)]
 fn run_config(script: &std::path::Path) -> agent_webmcp::config::Config {
@@ -210,15 +207,6 @@ fn run_config(script: &std::path::Path) -> agent_webmcp::config::Config {
 }
 
 #[cfg(unix)]
-fn argv_log(dir: &tempfile::TempDir, name: &str) -> Vec<String> {
-    std::fs::read_to_string(dir.path().join(format!("{name}.argv")))
-        .unwrap_or_default()
-        .lines()
-        .map(str::to_string)
-        .collect()
-}
-
-#[cfg(unix)]
 fn fake_script(
     dir: &tempfile::TempDir,
     name: &str,
@@ -228,32 +216,8 @@ fn fake_script(
     let log = dir.path().join(format!("{name}.argv"));
     let path = dir.path().join(name);
     let script = format!(
-        "#!/bin/sh\necho \"$@\" >> \"{log}\"\ncase \" $* \" in\n  *\" --version \"*) echo \"agent-browser 0.43.1\";;\n  *\" close \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" invoke \"*) echo '{PENDING}';;\n  *\" result \"*) echo '{invoke}';;\n  *\" cancel \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" open \"*) echo '{open}';;\nesac\n",
+        "#!/bin/sh\necho \"$@\" >> \"{log}\"\ncase \" $* \" in\n  *\" --version \"*) echo \"agent-browser 0.43.1\";;\n  *\" close \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" invoke \"*) echo '{invoke}';;\n  *\" open \"*) echo '{open}';;\nesac\n",
         log = log.display(),
-    );
-    std::fs::write(&path, script).unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
-    path
-}
-
-#[cfg(unix)]
-fn drift_script(
-    dir: &tempfile::TempDir,
-    name: &str,
-    opens: &[&str],
-    invoke_json: &str,
-) -> std::path::PathBuf {
-    let log = dir.path().join(format!("{name}.argv"));
-    let count = dir.path().join(format!("{name}.count"));
-    let opens_file = dir.path().join(format!("{name}.opens"));
-    std::fs::write(&opens_file, opens.join("\n")).unwrap();
-    let path = dir.path().join(name);
-    let script = format!(
-        "#!/bin/sh\necho \"$@\" >> \"{log}\"\ncase \" $* \" in\n  *\" --version \"*) echo \"agent-browser 0.43.1\";;\n  *\" close \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" open \"*) n=$(cat \"{count}\" 2>/dev/null || echo 0); echo $((n + 1)) > \"{count}\"; sed -n \"$((n+1))p\" \"{opens}\";;\n  *\" invoke \"*) echo '{PENDING}';;\n  *\" result \"*) echo '{invoke_json}';;\n  *\" cancel \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\nesac\n",
-        log = log.display(),
-        count = count.display(),
-        opens = opens_file.display(),
     );
     std::fs::write(&path, script).unwrap();
     use std::os::unix::fs::PermissionsExt;
@@ -323,84 +287,4 @@ fn fresh_skips_the_session_lock() {
         Ok(Outcome::Ran { .. }) => {}
         other => panic!("fresh should skip the lock, got {other:?}"),
     }
-}
-
-#[cfg(unix)]
-#[test]
-fn build_drift_recovers_and_repins() {
-    let _guard = ENV_LOCK.lock().unwrap();
-    let dir = tempfile::tempdir().unwrap();
-    let (scriptdir, _env, home) = with_home(&dir, false);
-    let script = drift_script(&scriptdir, "ab", &[OPEN_LAUNCH_B, OPEN_LAUNCH_B], INVOKE_OK);
-    let cfg = run_config(&script);
-    let session = cfg.drivers.agent_browser.session.clone();
-    std::fs::write(
-        home.join("sessions").join(format!("{session}.json")),
-        format!(
-            "{{\"agentBrowser\":\"0.43.1\",\"launchHash\":\"A\",\"firstSeen\":{}}}",
-            lock_now_ms().saturating_sub(5_000)
-        ),
-    )
-    .unwrap();
-    let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
-    match call::execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg) {
-        Ok(outcome @ Outcome::Ran { .. }) => {
-            let envelope = outcome.envelope();
-            assert_eq!(envelope["data"]["recovered"], json!("build-drift"));
-            assert_eq!(envelope["data"]["driverInfo"]["launchHash"], json!("B"));
-            assert_eq!(
-                envelope["data"]["driverInfo"]["agentBrowser"],
-                json!("0.43.1")
-            );
-            assert_eq!(envelope["data"]["driverInfo"]["session"], json!(session));
-            assert!(
-                envelope["data"]["driverInfo"]["sessionAgeMs"]
-                    .as_u64()
-                    .unwrap_or(0)
-                    >= 4000
-            );
-        }
-        other => panic!("drift should recover, got {other:?}"),
-    }
-    let lines = argv_log(&scriptdir, "ab");
-    assert_eq!(
-        lines.iter().filter(|l| l.contains(" open ")).count(),
-        2,
-        "{lines:?}"
-    );
-    assert_eq!(
-        lines
-            .iter()
-            .filter(|l| l.split_whitespace().last() == Some("close"))
-            .count(),
-        1,
-        "{lines:?}"
-    );
-    let pin =
-        std::fs::read_to_string(home.join("sessions").join(format!("{session}.json"))).unwrap();
-    assert!(pin.contains("\"launchHash\":\"B\""), "{pin}");
-}
-
-#[cfg(unix)]
-#[test]
-fn build_drift_twice_is_driver_error() {
-    let _guard = ENV_LOCK.lock().unwrap();
-    let dir = tempfile::tempdir().unwrap();
-    let (scriptdir, _env, home) = with_home(&dir, false);
-    let script = drift_script(&scriptdir, "ab", &[OPEN_LAUNCH_B, OPEN_LAUNCH_C], INVOKE_OK);
-    let cfg = run_config(&script);
-    let session = cfg.drivers.agent_browser.session.clone();
-    std::fs::write(
-        home.join("sessions").join(format!("{session}.json")),
-        format!(
-            "{{\"agentBrowser\":\"0.43.1\",\"launchHash\":\"A\",\"firstSeen\":{}}}",
-            lock_now_ms().saturating_sub(5_000)
-        ),
-    )
-    .unwrap();
-    let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
-    let e = call::execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
-    assert_eq!(e.code, "driver_error");
-    assert_eq!(e.data.as_ref().unwrap()["launchHash"], json!("C"));
-    assert_eq!(e.data.as_ref().unwrap()["expectedLaunchHash"], json!("B"));
 }
