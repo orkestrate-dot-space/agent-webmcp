@@ -67,7 +67,9 @@ impl Server {
                 match fresh {
                     Ok(Ok(index)) => match Search::build(index) {
                         Ok(search) => {
-                            *shared.lock().expect("search lock") = search;
+                            *shared
+                                .lock()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner) = search;
                         }
                         Err(e) => eprintln!("agent-webmcp: could not build the new index: {e:#}"),
                     },
@@ -108,7 +110,9 @@ impl Server {
             },
         };
         let prepared = {
-            let search = shared.lock().expect("search lock");
+            let search = shared
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             match crate::call::prepare(&target, input.clone(), &cfg, &search) {
                 Ok(prepared) => prepared,
                 Err(e) => return complete_envelope(e.envelope()),
@@ -301,7 +305,11 @@ impl Server {
             .and_then(Value::as_u64)
             .map(|n| (n as usize).clamp(1, LIMIT_MAX))
             .unwrap_or(LIMIT_DEFAULT);
-        let result = self.search.lock().expect("search lock").find(query, limit);
+        let result = self
+            .search
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .find(query, limit);
         match result {
             Ok(hits) if hits.is_empty() => CallToolResult::structured(json!({
                 "matches": [],
@@ -528,4 +536,29 @@ fn note_no_elicitation(envelope: &mut Value) {
     envelope["data"]["note"] = json!(
         "this client cannot ask you directly; set the agent-webmcp call tool to ask in your agent's permission settings"
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn poisoned_lock_still_answers_find() {
+        let index = crate::model::Index {
+            schema_version: 1,
+            generated_at: String::new(),
+            sites: vec![],
+        };
+        let search = Search::build(index).unwrap();
+        let server = Server::new(search);
+        let shared = server.shared();
+        let _ = std::thread::spawn(move || {
+            let _guard = shared.lock().unwrap();
+            panic!("poison the search lock");
+        })
+        .join();
+        let mut args = serde_json::Map::new();
+        args.insert("query".to_string(), json!("cal.com"));
+        let _ = server.find(&args);
+    }
 }

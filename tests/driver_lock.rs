@@ -10,6 +10,7 @@ fn sessions() -> tempfile::TempDir {
     tempfile::tempdir().unwrap()
 }
 
+#[cfg(unix)]
 fn payload(pid: u32, ts: u64) -> String {
     format!("{{\"pid\":{pid},\"ts\":{ts}}}")
 }
@@ -118,6 +119,7 @@ fn unreadable_lock_is_live_until_stale() {
     let _held = lock::acquire(&sessions, "test-s").unwrap();
 }
 
+#[cfg(unix)]
 fn lock_now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

@@ -10,9 +10,10 @@ use agent_webmcp::call::{
 use agent_webmcp::config;
 use agent_webmcp::index::Search;
 use agent_webmcp::model::{Annotations, Index, Site, Tool};
+#[cfg(unix)]
+use common::{HomeGuard, run_config, run_config_settle};
 use common::{
-    HomeGuard, allow_all, ask_schema, ask_tool, plan_opts, read_tool, run_config,
-    run_config_settle, run_opts, sample_search, sample_site,
+    allow_all, ask_schema, ask_tool, plan_opts, read_tool, run_opts, sample_search, sample_site,
 };
 use serde_json::{Value, json};
 
@@ -97,6 +98,48 @@ fn resolve_garbage_is_usage() {
     }
 }
 
+#[test]
+fn resolve_uppercase_host_matches_index() {
+    let r = resolve("https://CAL.COM/book#ask_cal_com", &search()).unwrap();
+    assert_eq!(r.site, "cal.com");
+    assert_eq!(r.schema, Some(ask_schema()));
+}
+
+#[test]
+fn resolve_userinfo_and_port_are_stripped() {
+    let r = resolve("https://user:pw@cal.com:8080/book#ask_cal_com", &search()).unwrap();
+    assert_eq!(r.site, "cal.com");
+    assert_eq!(r.page, "https://user:pw@cal.com:8080/book");
+}
+
+#[test]
+fn resolve_ipv6_host_strips_brackets_and_port() {
+    for (url, page) in [
+        (
+            "https://[::1]:8080/page#some_tool",
+            "https://[::1]:8080/page",
+        ),
+        ("https://[::1]/page#some_tool", "https://[::1]/page"),
+    ] {
+        let r = resolve(url, &search()).unwrap();
+        assert_eq!(r.site, "::1", "{url}");
+        assert_eq!(r.tool, "some_tool", "{url}");
+        assert_eq!(r.page, page, "{url}");
+    }
+}
+
+#[test]
+fn resolve_double_fragment_is_usage() {
+    for target in [
+        "https://cal.com/#frag#ask_cal_com",
+        "https://cal.com/book#frag#ask_cal_com",
+    ] {
+        let e = resolve(target, &search()).unwrap_err();
+        assert_eq!(e.code, "usage", "{target}");
+        assert!(e.message.contains("https://page#tool"), "{target}");
+    }
+}
+
 // --- input ---
 
 #[test]
@@ -119,6 +162,17 @@ fn missing_params_file_is_invalid_input() {
     let e = parse_input(None, Some("@/no/such/file.json")).unwrap_err();
     assert_eq!(e.code, "invalid_input");
     assert!(e.message.contains("/no/such/file.json"), "{}", e.message);
+}
+
+#[test]
+fn oversize_params_file_is_invalid_input() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("big.json");
+    let big = "x".repeat(1024 * 1024 + 1);
+    std::fs::write(&path, format!("{{\"question\":\"{big}\"}}")).unwrap();
+    let e = parse_input(None, Some(&format!("@{}", path.display()))).unwrap_err();
+    assert_eq!(e.code, "invalid_input");
+    assert!(e.message.contains("1 MiB"), "{}", e.message);
 }
 
 #[test]
@@ -677,6 +731,28 @@ fn unreachable_page_is_page_unreachable() {
     let opts = run_opts();
     let e = execute(&resolved, json!({"question": "hi"}), &opts, &cfg).unwrap_err();
     assert_eq!(e.code, "page_unreachable");
+}
+
+#[cfg(unix)]
+#[test]
+fn dns_failure_is_page_unreachable() {
+    for name in [
+        "ERR_NAME_NOT_RESOLVED",
+        "ERR_CONNECTION_REFUSED",
+        "ERR_ADDRESS_UNREACHABLE",
+        "ERR_INTERNET_DISCONNECTED",
+    ] {
+        let _home = HomeGuard::isolate();
+        let dir = tempfile::tempdir().unwrap();
+        let open =
+            format!("{{\"success\":false,\"code\":\"open_failed\",\"error\":\"net::{name}\"}}");
+        let script = common::Fake::new().open(&open).install(&dir, "ab");
+        let cfg = run_config(&script);
+        let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
+        let e = execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
+        assert_eq!(e.code, "page_unreachable", "{name}");
+        assert!(e.message.contains(name), "{name}: {}", e.message);
+    }
 }
 
 #[cfg(unix)]

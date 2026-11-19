@@ -922,11 +922,20 @@ fn envelope_error(envelope: &serde_json::Value) -> &str {
         .unwrap_or("")
 }
 
-/// Map a failed `open`: navigation/timeout means unreachable, else driver.
+/// Map a failed `open`: navigation/timeout/DNS means unreachable, else driver.
 fn open_failure(open: &serde_json::Value) -> CallError {
     let code = envelope_code(open);
     let lowered = code.to_lowercase();
-    if lowered.contains("navigation") || lowered.contains("timeout") {
+    let error = envelope_error(open).to_lowercase();
+    let net = [
+        "err_name_not_resolved",
+        "err_connection_refused",
+        "err_address_unreachable",
+        "err_internet_disconnected",
+    ]
+    .iter()
+    .any(|n| lowered.contains(n) || error.contains(n));
+    if lowered.contains("navigation") || lowered.contains("timeout") || net {
         CallError {
             code: "page_unreachable",
             message: if envelope_error(open).is_empty() {

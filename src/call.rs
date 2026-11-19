@@ -320,7 +320,7 @@ pub fn resolve(target: &str, search: &Search) -> Result<Resolved, CallError> {
         let (url, tool) = target.rsplit_once('#').ok_or_else(|| {
             CallError::usage("target must be site/tool (from find) or https://page#tool")
         })?;
-        if url.is_empty() || tool.is_empty() {
+        if url.is_empty() || tool.is_empty() || url.contains('#') {
             return Err(CallError::usage(
                 "target must be site/tool (from find) or https://page#tool",
             ));
@@ -372,7 +372,7 @@ pub fn resolve(target: &str, search: &Search) -> Result<Resolved, CallError> {
     }
 }
 
-/// Host of an http(s) URL, without port or userinfo.
+/// Host of an http(s) URL, lowercase, without port or userinfo.
 fn url_host(url: &str) -> Option<String> {
     let after_scheme = url.split_once("://")?.1;
     let authority = after_scheme
@@ -380,6 +380,14 @@ fn url_host(url: &str) -> Option<String> {
         .next()
         .unwrap_or_default();
     let authority = authority.rsplit('@').next().unwrap_or_default();
+    if let Some(rest) = authority.strip_prefix('[') {
+        let end = rest.find(']')?;
+        let host = &rest[..end];
+        if host.is_empty() {
+            return None;
+        }
+        return Some(host.to_lowercase());
+    }
     let host = match authority.rsplit_once(':') {
         Some((h, port)) if port.chars().all(|c| c.is_ascii_digit()) && !port.is_empty() => h,
         _ => authority,
@@ -387,7 +395,7 @@ fn url_host(url: &str) -> Option<String> {
     if host.is_empty() {
         return None;
     }
-    Some(host.to_string())
+    Some(host.to_lowercase())
 }
 
 /// Parse call input from positional JSON or `--params <json|@file>`; both or
@@ -402,17 +410,19 @@ pub fn parse_input(positional: Option<&str>, params: Option<&str>) -> Result<Val
         (None, Some(raw)) => {
             if let Some(path) = raw.strip_prefix('@') {
                 let text = if path == "-" {
-                    std::io::read_to_string(std::io::stdin()).map_err(|e| CallError {
-                        code: "invalid_input",
-                        message: format!("could not read stdin: {e}"),
-                        data: None,
-                    })?
+                    if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+                        return Err(CallError::usage(
+                            "--params @- reads JSON from a pipe; stdin is a terminal",
+                        ));
+                    }
+                    read_capped(std::io::stdin(), "stdin")?
                 } else {
-                    std::fs::read_to_string(path).map_err(|e| CallError {
+                    let file = std::fs::File::open(path).map_err(|e| CallError {
                         code: "invalid_input",
                         message: format!("could not read {path}: {e}"),
                         data: None,
-                    })?
+                    })?;
+                    read_capped(file, path)?
                 };
                 parse_object(&text, if path == "-" { "stdin" } else { path })
             } else {
@@ -420,6 +430,29 @@ pub fn parse_input(positional: Option<&str>, params: Option<&str>) -> Result<Val
             }
         }
     }
+}
+
+/// Read a whole input source, capped at 1 MiB (agent-browser rejects more).
+fn read_capped(source: impl std::io::Read, what: &str) -> Result<String, CallError> {
+    use std::io::Read as _;
+    const MAX_INPUT_BYTES: u64 = 1024 * 1024;
+    let mut text = String::new();
+    source
+        .take(MAX_INPUT_BYTES + 1)
+        .read_to_string(&mut text)
+        .map_err(|e| CallError {
+            code: "invalid_input",
+            message: format!("could not read {what}: {e}"),
+            data: None,
+        })?;
+    if text.len() as u64 > MAX_INPUT_BYTES {
+        return Err(CallError {
+            code: "invalid_input",
+            message: "input is larger than 1 MiB".to_string(),
+            data: None,
+        });
+    }
+    Ok(text)
 }
 
 fn parse_object(text: &str, what: &str) -> Result<Value, CallError> {
