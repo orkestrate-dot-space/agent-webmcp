@@ -139,9 +139,11 @@ fn render_script(req: &CallRequest, timeout_ms: u64, settle_ms: u64) -> String {
         "  const __mc = await page.evaluate(\"typeof navigator.modelContext\");".to_string(),
         "  if (__mc === \"undefined\") return JSON.stringify({ok: false, code: \"unsupported\"});"
             .to_string(),
-        "  const __joined = await page.evaluate(\"navigator.modelContext.getTools().then(function(ts){return ts.map(function(t){return t.name}).join('\\n')})\");"
+        // evaluate hands arrays back JSON-encoded, so parse instead of
+        // joining: a "\n" here would land as a raw newline in page code.
+        "  const __list = await page.evaluate(\"navigator.modelContext.getTools().then(function(ts){return ts.map(function(t){return t.name})})\");"
             .to_string(),
-        "  __names = __joined ? __joined.split(\"\\n\") : [];".to_string(),
+        "  __names = JSON.parse(__list || \"[]\");".to_string(),
         format!("  if (__names.indexOf({tool}) !== -1) break;"),
         format!("  if (Date.now() - __t0 >= {settle_ms}) break;"),
         "  await page.evaluate(\"new Promise(function(__r){setTimeout(__r, 300)})\");".to_string(),
