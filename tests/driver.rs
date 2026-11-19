@@ -4,6 +4,7 @@ mod common;
 
 use agent_webmcp::config;
 use agent_webmcp::driver::{self, CallRequest, Choice, Detection};
+#[cfg(unix)]
 use std::path::PathBuf;
 
 fn sample() -> CallRequest {
