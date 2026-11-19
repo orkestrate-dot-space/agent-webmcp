@@ -83,7 +83,14 @@ enum Command {
         target: Option<String>,
     },
     /// First-run setup: fetch the index, install the skill, wire up OpenCode
-    Setup,
+    Setup {
+        /// Install this driver without asking (for scripts and non-interactive use)
+        #[arg(long = "install-driver", value_parser = ["lightpanda"])]
+        install_driver: Option<String>,
+        /// Never ask, never install (CI)
+        #[arg(long = "no-install")]
+        no_install: bool,
+    },
     /// Show the index in use
     Status,
     /// Show or check the effective configuration
@@ -159,7 +166,19 @@ async fn main() -> Result<()> {
             Ok(())
         }
         Command::Upgrade { target } => upgrade::run(target),
-        Command::Setup => setup::run(),
+        Command::Setup {
+            install_driver,
+            no_install,
+        } => {
+            let flag = if no_install {
+                setup::InstallFlag::NoInstall
+            } else if install_driver.as_deref() == Some("lightpanda") {
+                setup::InstallFlag::InstallLightpanda
+            } else {
+                setup::InstallFlag::None
+            };
+            setup::run(flag)
+        }
         Command::Status => {
             let search = Search::build(tokio::task::spawn_blocking(store::load).await??)?;
             let file = std::env::var_os("AGENT_WEBMCP_INDEX")

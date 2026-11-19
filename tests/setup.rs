@@ -1,5 +1,8 @@
+mod common;
+
 use agent_webmcp::setup::{
-    Configured, browser_report, configure_opencode, merge_opencode_mcp, newer_available, skill_dirs,
+    Configured, InstallFlag, Offer, configure_opencode, driver_report, merge_opencode_mcp,
+    newer_available, should_offer, skill_dirs,
 };
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -60,13 +63,71 @@ fn skill_dirs_cover_the_three_clients() {
     assert!(dirs.iter().all(|d| d.starts_with("/home/test")));
 }
 
+#[cfg(unix)]
 #[test]
-fn browser_report_covers_drivers() {
-    let report = browser_report().join("\n");
-    assert!(report.contains("agent-browser"));
-    assert!(report.contains("Playwright"));
-    assert!(report.contains("DevTools"));
-    assert!(report.contains("Browse"));
+fn driver_report_comes_from_detection() {
+    let dir = tempfile::tempdir().unwrap();
+    let script = common::Fake::new().install(&dir, "ab");
+    let mut cfg = common::run_config(&script);
+    cfg.drivers.lightpanda.command = dir.path().join("no-such-lightpanda").display().to_string();
+    let report = driver_report(&cfg).join("\n");
+    assert!(report.contains("agent-browser (run): ready"), "{report}");
+    assert!(
+        report.contains("lightpanda (run, experimental): missing; install:"),
+        "{report}"
+    );
+    assert!(report.contains("playwright-mcp (plan): needs"), "{report}");
+    assert!(
+        report.contains("chrome-devtools-mcp (plan): needs"),
+        "{report}"
+    );
+    assert!(report.contains("browse (plan)"), "{report}");
+    assert!(report.contains("call will use: agent-browser"), "{report}");
+}
+
+#[cfg(unix)]
+#[test]
+fn driver_report_without_run_driver() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut cfg = common::allow_all();
+    cfg.drivers.agent_browser.command = dir
+        .path()
+        .join("no-such-agent-browser")
+        .display()
+        .to_string();
+    cfg.drivers.lightpanda.command = dir.path().join("no-such-lightpanda").display().to_string();
+    let report = driver_report(&cfg).join("\n");
+    assert!(
+        report.contains("agent-browser (run): missing; install:"),
+        "{report}"
+    );
+    assert!(
+        report.contains("lightpanda (run, experimental): missing; install:"),
+        "{report}"
+    );
+    assert!(
+        report.contains("call will use: nothing yet (no run driver installed)"),
+        "{report}"
+    );
+}
+
+#[test]
+fn offer_logic() {
+    use InstallFlag::{InstallLightpanda, NoInstall};
+    use Offer::{Ask, Install, Never};
+    // A ready run driver never offers, whatever the flags say.
+    assert_eq!(should_offer(true, true, InstallFlag::None), Never);
+    assert_eq!(should_offer(true, true, InstallLightpanda), Never);
+    assert_eq!(should_offer(true, false, InstallLightpanda), Never);
+    // No terminal: never ask, `--install-driver` still installs.
+    assert_eq!(should_offer(false, false, InstallFlag::None), Never);
+    assert_eq!(should_offer(false, false, NoInstall), Never);
+    assert_eq!(should_offer(false, false, InstallLightpanda), Install);
+    // `--no-install` never asks, even on a terminal.
+    assert_eq!(should_offer(false, true, NoInstall), Never);
+    // Interactive with no flag asks; the flag installs without asking.
+    assert_eq!(should_offer(false, true, InstallFlag::None), Ask);
+    assert_eq!(should_offer(false, true, InstallLightpanda), Install);
 }
 
 /// A config with comments (JSONC) is not valid strict JSON: setup must leave

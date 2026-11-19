@@ -5,14 +5,68 @@
 //! Everything here is additive: files are only created or extended, never
 //! overwritten, and `setup` reports each change it made.
 
+use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
+use crate::config::{self, Config};
+use crate::driver::{self, Choice, Detection, Driver, Kind};
+
 const SKILL: &str = include_str!("../skills/agent-webmcp/SKILL.md");
 
+/// How `--install-driver` / `--no-install` decide the Lightpanda offer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InstallFlag {
+    /// No flag: ask on an interactive terminal, else print the manual lines.
+    None,
+    /// `--install-driver lightpanda`: install without asking.
+    InstallLightpanda,
+    /// `--no-install`: never ask, never install.
+    NoInstall,
+}
+
+/// What setup should do about the missing run driver.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Offer {
+    /// Install Lightpanda without asking.
+    Install,
+    /// Ask once on the terminal.
+    Ask,
+    /// Never ask, never install.
+    Never,
+}
+
+/// The offer logic, kept pure so tests cover it without a terminal:
+/// a ready run driver wins over everything; `--no-install` wins over
+/// `--install-driver`; otherwise the flag decides, and without a flag only
+/// an interactive terminal gets asked.
+pub fn should_offer(any_run_ready: bool, interactive: bool, flag: InstallFlag) -> Offer {
+    if any_run_ready {
+        return Offer::Never;
+    }
+    match flag {
+        InstallFlag::NoInstall => Offer::Never,
+        InstallFlag::InstallLightpanda => Offer::Install,
+        InstallFlag::None => {
+            if interactive {
+                Offer::Ask
+            } else {
+                Offer::Never
+            }
+        }
+    }
+}
+
+/// True when agent-browser or lightpanda detects as Ready.
+fn any_run_ready(cfg: &Config) -> bool {
+    driver::all(cfg)
+        .iter()
+        .any(|d| d.kind() == Kind::Run && matches!(d.detect(cfg), Detection::Ready { .. }))
+}
+
 /// Run the whole setup and report what changed.
-pub fn run() -> Result<()> {
+pub fn run(flag: InstallFlag) -> Result<()> {
     let index = crate::store::refresh()?;
     let (sites, tools) = crate::model::count_index(&index.sites);
     println!(
@@ -63,8 +117,38 @@ pub fn run() -> Result<()> {
         }
     }
 
-    for line in browser_report() {
+    // A bad config must not kill setup; report it and carry on.
+    let cfg = match config::load() {
+        Ok(loaded) => {
+            for warning in &loaded.warnings {
+                eprintln!("warning: {warning}");
+            }
+            loaded.config
+        }
+        Err(e) => {
+            println!("config: {e:#}");
+            Config::default()
+        }
+    };
+    for line in driver_report(&cfg) {
         println!("{line}");
+    }
+    let ready = any_run_ready(&cfg);
+    let interactive = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
+    match should_offer(ready, interactive, flag) {
+        Offer::Never => {
+            if !ready {
+                print_manual_lines(&cfg);
+            }
+        }
+        Offer::Install => install_lightpanda(&cfg),
+        Offer::Ask => {
+            if prompt_install() {
+                install_lightpanda(&cfg);
+            } else {
+                print_manual_lines(&cfg);
+            }
+        }
     }
     println!("other clients (not configured automatically):");
     println!(
@@ -227,16 +311,132 @@ fn mcp_snippet(exe: &str) -> String {
     .unwrap_or_default()
 }
 
-/// Human-readable notes about each driver's WebMCP setup, verified against
-/// the drivers on 18 Nov 2026. agent-browser turns WebMCP on itself; the
-/// others need a flag the user adds to their own config.
-pub fn browser_report() -> Vec<String> {
-    vec![
-        "browser: agent-browser 0.43+ enables WebMCP itself; no flags needed.".to_string(),
-        "browser: Playwright MCP needs --enable-features=WebMCP in browser.launchOptions.args; tools appear after a snapshot.".to_string(),
-        "browser: Chrome DevTools MCP needs --categoryExperimentalWebmcp.".to_string(),
-        "browser: OpenCode Browse drives your own Chrome and takes no flags.".to_string(),
-    ]
+/// The driver report, built from real detection: one line per driver plus
+/// what `call` will use. Skips the generic fallback, which is not a driver.
+pub fn driver_report(cfg: &Config) -> Vec<String> {
+    let mut lines = vec!["drivers:".to_string()];
+    for driver in driver::all(cfg) {
+        if driver.id() == "generic" {
+            continue;
+        }
+        match driver.kind() {
+            Kind::Run => {
+                let experimental = driver
+                    .note()
+                    .is_some_and(|note| note.contains("experimental"));
+                let kind = if experimental {
+                    "run, experimental"
+                } else {
+                    "run"
+                };
+                let state = match driver.detect(cfg) {
+                    Detection::Ready { version } => format!("ready {version}"),
+                    Detection::Missing { install, .. } => {
+                        format!("missing; install: {install}")
+                    }
+                    Detection::TooOld {
+                        version,
+                        min,
+                        install,
+                    } => {
+                        format!("too old {version} (need {min}); install: {install}")
+                    }
+                    Detection::Unknown => "unknown".to_string(),
+                };
+                lines.push(format!("  {} ({kind}): {state}", driver.id()));
+            }
+            Kind::Plan => match driver.note() {
+                Some(note) => lines.push(format!("  {} (plan): {note}", driver.id())),
+                None => lines.push(format!("  {} (plan)", driver.id())),
+            },
+        }
+    }
+    match driver::choose(cfg) {
+        Choice::Run(driver, _) => lines.push(format!("call will use: {}", driver.id())),
+        Choice::Plan(driver) => lines.push(format!("call will use: {}", driver.id())),
+        Choice::Unusable { .. } => {
+            lines.push("call will use: nothing yet (no run driver installed)".to_string());
+        }
+    }
+    lines
+}
+
+/// The manual install lines for the run drivers plus the plan-driver notes,
+/// the same data `call`'s setup help carries.
+fn print_manual_lines(cfg: &Config) {
+    for driver in driver::all(cfg) {
+        if driver.id() == "generic" {
+            continue;
+        }
+        match driver.kind() {
+            Kind::Run => {
+                if let Some(install) = driver.install() {
+                    println!("  {}: install with `{install}`", driver.id());
+                }
+            }
+            Kind::Plan => match driver.note() {
+                Some(note) => println!("  {} (plan): {note}", driver.id()),
+                None => println!("  {} (plan)", driver.id()),
+            },
+        }
+    }
+    println!(
+        "set \"driver\" in {} to pick one",
+        user_config_path().display()
+    );
+}
+
+/// The user config path for messages, without failing setup.
+fn user_config_path() -> PathBuf {
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    config::user_path(&|key: &str| std::env::var(key).ok(), &cwd)
+}
+
+/// Ask once whether to install Lightpanda; the default is no.
+fn prompt_install() -> bool {
+    use std::io::Write;
+    print!(
+        "No browser driver can run WebMCP tools here. Install Lightpanda now (74 MB, one download from pkg.lightpanda.io)? [y/N] "
+    );
+    let _ = std::io::stdout().flush();
+    let mut line = String::new();
+    if std::io::stdin().read_line(&mut line).is_err() {
+        return false;
+    }
+    matches!(line.trim().to_lowercase().as_str(), "y" | "yes")
+}
+
+/// Run the documented Lightpanda installer, then re-detect. A failure
+/// prints its exit code and the manual commands; it never fails setup.
+fn install_lightpanda(cfg: &Config) {
+    let status = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(crate::driver::lightpanda::INSTALL)
+        .status();
+    match status {
+        Ok(status) if status.success() => {
+            let driver = crate::driver::lightpanda::Lightpanda::from_config(cfg);
+            match driver.detect(cfg) {
+                Detection::Ready { version } => {
+                    println!("lightpanda: ready {version}");
+                }
+                _ => {
+                    println!(
+                        "lightpanda is still missing; if ~/.local/bin is not on your PATH, add it or set drivers.lightpanda.command to the full path in {}",
+                        user_config_path().display()
+                    );
+                }
+            }
+        }
+        Ok(status) => {
+            println!("the lightpanda installer failed with {status}; install it manually:");
+            print_manual_lines(cfg);
+        }
+        Err(e) => {
+            println!("could not run the lightpanda installer ({e}); install it manually:");
+            print_manual_lines(cfg);
+        }
+    }
 }
 
 /// True when `latest` names a newer release than `installed`, by SemVer

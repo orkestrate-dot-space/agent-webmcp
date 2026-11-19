@@ -15,7 +15,8 @@ use crate::call::CallError;
 use crate::config::Config;
 
 /// Install line when the binary is missing, from the one-liner docs.
-const INSTALL: &str = "curl -fsSL https://pkg.lightpanda.io/install.sh | bash -s \"1.0.4\"";
+pub(crate) const INSTALL: &str =
+    "curl -fsSL https://pkg.lightpanda.io/install.sh | bash -s \"1.0.4\"";
 
 /// Run driver: opens the page and invokes the tool with one PandaScript.
 pub struct Lightpanda {
