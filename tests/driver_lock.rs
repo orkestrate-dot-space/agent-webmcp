@@ -41,6 +41,8 @@ fn live_holder_contends_with_pid_and_age() {
     assert!(e.data.as_ref().unwrap().get("ageMs").is_some());
 }
 
+// Liveness comes from /proc, which only Linux has.
+#[cfg(target_os = "linux")]
 #[test]
 fn live_holder_contends_whatever_the_age() {
     let dir = sessions();
@@ -63,6 +65,8 @@ fn live_holder_contends_whatever_the_age() {
     );
 }
 
+// Liveness comes from /proc, which only Linux has.
+#[cfg(target_os = "linux")]
 #[test]
 fn dead_holder_is_taken_over() {
     let dir = sessions();

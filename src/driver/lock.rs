@@ -1,6 +1,6 @@
 //! One process per agent-browser session: a lock file in the data dir.
 //!
-//! A live holder always wins, whatever the lock age: on unix a lock is only
+//! A live holder always wins, whatever the lock age: on Linux a lock is only
 //! taken over when its holder pid is dead (`/proc/<pid>` missing). Without
 //! `/proc` every holder counts as live, so a 10-minute age rule frees old
 //! locks there instead.
@@ -33,7 +33,7 @@ impl Drop for SessionLock {
 
 /// Acquire `<dir>/<name>.lock`, atomic on first create. A live holder
 /// fails as `concurrent_call` naming holder pid and age; a dead holder
-/// (unix: no `/proc/<pid>`) loses the lock. Bad names fail as `usage`.
+/// (Linux: no `/proc/<pid>`) loses the lock. Bad names fail as `usage`.
 pub fn acquire(dir: &Path, name: &str) -> Result<SessionLock, CallError> {
     check_name(name)?;
     std::fs::create_dir_all(dir).map_err(|e| CallError {
@@ -69,13 +69,13 @@ pub fn acquire(dir: &Path, name: &str) -> Result<SessionLock, CallError> {
             // unreadable holder (empty or corrupt file) counts as live too
             // unless its mtime shows it was abandoned. Without /proc only
             // the age frees a readable lock.
-            #[cfg(unix)]
+            #[cfg(target_os = "linux")]
             let contend = if readable {
                 holder_live(pid)
             } else {
                 !holder_stale(&path)
             };
-            #[cfg(not(unix))]
+            #[cfg(not(target_os = "linux"))]
             let contend = if readable {
                 holder_live(pid) && age <= STALE_MS
             } else {
@@ -167,14 +167,14 @@ fn holder_stale(path: &Path) -> bool {
     now_ms().saturating_sub(mtime_ms) > UNREADABLE_STALE_MS
 }
 
-/// Liveness of the holder: /proc on unix; elsewhere every holder counts
+/// Liveness of the holder: /proc on Linux; elsewhere (macOS, Windows) every holder counts
 /// as alive (best-effort — the stale rule still frees old locks).
 fn holder_live(pid: u32) -> bool {
-    #[cfg(unix)]
+    #[cfg(target_os = "linux")]
     {
         Path::new(&format!("/proc/{pid}")).exists()
     }
-    #[cfg(not(unix))]
+    #[cfg(not(target_os = "linux"))]
     {
         let _ = pid;
         true
@@ -183,7 +183,7 @@ fn holder_live(pid: u32) -> bool {
 
 /// How long a lock may live on platforms without `/proc`, where every
 /// holder counts as live and only age can free the lock.
-#[cfg(not(unix))]
+#[cfg(not(target_os = "linux"))]
 const STALE_MS: u64 = 10 * 60 * 1000;
 
 /// Millis since the epoch, saturating.
