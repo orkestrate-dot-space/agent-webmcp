@@ -201,7 +201,8 @@ pub fn print_human(outcome: &Outcome) {
     }
 }
 
-/// Print a failure for humans: one line plus the retry/install hint.
+/// Print a failure for humans: one line plus the retry/install hints. A
+/// missing driver lists every driver with how to get it.
 pub fn print_failure(err: &CallError) {
     eprintln!("{err}");
     let data = err.data.as_ref();
@@ -210,9 +211,24 @@ pub fn print_failure(err: &CallError) {
     {
         eprintln!("retry: {retry}");
     } else if err.code == "no_driver"
-        && let Some(install) = data.and_then(|d| d.get("install").and_then(Value::as_str))
+        && let Some(drivers) = data
+            .and_then(|d| d.get("drivers"))
+            .and_then(Value::as_array)
     {
-        eprintln!("install: {install}");
+        for driver in drivers {
+            let id = driver.get("id").and_then(Value::as_str).unwrap_or("?");
+            let kind = driver.get("kind").and_then(Value::as_str).unwrap_or("?");
+            let how = driver
+                .get("install")
+                .or_else(|| driver.get("setup"))
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            if how.is_empty() {
+                eprintln!("  {id} ({kind})");
+            } else {
+                eprintln!("  {id} ({kind}): {how}");
+            }
+        }
     }
 }
 
@@ -764,7 +780,7 @@ pub fn finish(prepared: Prepared, opts: &CallOptions, cfg: &Config) -> Result<Ou
                     plan: unusable_plan(&req, &detection),
                 })
             } else {
-                Err(no_driver(&detection))
+                Err(no_driver(cfg))
             }
         }
     }
@@ -811,23 +827,20 @@ fn unusable_plan(req: &CallRequest, detection: &Detection) -> Plan {
     plan
 }
 
-fn no_driver(detection: &Detection) -> CallError {
-    let (install, detail) = match detection {
-        Detection::Missing { install, detail } => (install.clone(), detail.clone()),
-        Detection::TooOld { install, .. } => (install.clone(), None),
-        Detection::Ready { .. } | Detection::Unknown => {
-            return CallError::new("no_driver", "no browser driver is available".to_string());
-        }
-    };
-    let mut data = serde_json::json!({ "install": install });
-    if let Some(detail) = detail {
-        data["detail"] = Value::String(detail);
-    }
+fn no_driver(cfg: &Config) -> CallError {
     CallError {
         code: "no_driver",
-        message: format!("no browser driver is available; {install}"),
-        data: Some(data),
+        message: "no browser driver is available".to_string(),
+        data: Some(driver::setup_help(cfg, &user_config_path())),
     }
+}
+
+/// The user config path for the setup help, without failing the call.
+fn user_config_path() -> String {
+    let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    crate::config::user_path(&|key: &str| std::env::var(key).ok(), &cwd)
+        .display()
+        .to_string()
 }
 
 /// The MCP entry point: same pipeline, MCP retry hint, envelope + error flag.

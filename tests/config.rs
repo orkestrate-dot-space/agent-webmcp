@@ -37,6 +37,7 @@ fn no_files_returns_defaults() {
     assert_eq!(loaded.config.drivers.agent_browser.command, "agent-browser");
     assert_eq!(loaded.config.drivers.agent_browser.session, "agent-webmcp");
     assert!(!loaded.config.drivers.agent_browser.headed);
+    assert_eq!(loaded.config.drivers.lightpanda.command, "lightpanda");
     assert!(loaded.config.permissions.allow.is_empty());
     assert!(loaded.sources.is_empty());
     assert!(loaded.warnings.is_empty());
@@ -226,6 +227,49 @@ fn empty_env_value_counts_as_unset() {
             .iter()
             .all(|s| s.kind != config::SourceKind::Env)
     );
+}
+
+#[test]
+fn project_file_setting_lightpanda_command_is_rejected() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (home, _) = workdir(&tmp, "work");
+    let repo = tmp.path().join("repo");
+    std::fs::create_dir_all(repo.join(".git")).unwrap();
+    write(
+        &repo.join("agent-webmcp.json"),
+        r#"{"drivers": {"lightpanda": {"command": "/bin/evil"}}}"#,
+    );
+    let err = load_with(base_env(&home), &repo).unwrap_err().to_string();
+    assert!(err.contains("drivers.lightpanda.command"), "{err}");
+    assert!(err.contains("project config can only set"), "{err}");
+}
+
+#[test]
+fn lightpanda_command_from_file_and_env() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (home, cwd) = workdir(&tmp, "work");
+    write(
+        &home.join(".config/agent-webmcp/agent-webmcp.json"),
+        r#"{"driver": "lightpanda", "drivers": {"lightpanda": {"command": "/bin/lp"}}}"#,
+    );
+    let mut env = base_env(&home);
+    env.insert(
+        "AGENT_WEBMCP_LIGHTPANDA".to_string(),
+        "/usr/bin/lp".to_string(),
+    );
+    let loaded = load_with(env, &cwd).unwrap();
+    assert_eq!(loaded.config.driver, config::DriverChoice::Lightpanda);
+    assert_eq!(loaded.config.drivers.lightpanda.command, "/usr/bin/lp");
+}
+
+#[test]
+fn invalid_driver_value_names_lightpanda() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (home, cwd) = workdir(&tmp, "work");
+    let mut env = base_env(&home);
+    env.insert("AGENT_WEBMCP_DRIVER".to_string(), "nope".to_string());
+    let err = load_with(env, &cwd).unwrap_err().to_string();
+    assert!(err.contains("lightpanda"), "{err}");
 }
 
 #[test]

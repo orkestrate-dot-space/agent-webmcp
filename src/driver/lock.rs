@@ -186,6 +186,18 @@ fn holder_live(pid: u32) -> bool {
 #[cfg(not(target_os = "linux"))]
 const STALE_MS: u64 = 10 * 60 * 1000;
 
+/// (pid, lock age in ms) of the current holder, when the file parses.
+pub fn holder(dir: &Path, name: &str) -> Option<(u32, u64)> {
+    let text = std::fs::read_to_string(dir.join(format!("{name}.lock"))).ok()?;
+    let val: serde_json::Value = serde_json::from_str(&text).ok()?;
+    let pid = val.get("pid")?.as_u64()?;
+    let ts = val.get("ts")?.as_u64()?;
+    if pid == 0 || pid > u64::from(u32::MAX) {
+        return None;
+    }
+    Some((pid as u32, now_ms().saturating_sub(ts)))
+}
+
 /// Millis since the epoch, saturating.
 pub(crate) fn now_ms() -> u64 {
     std::time::SystemTime::now()

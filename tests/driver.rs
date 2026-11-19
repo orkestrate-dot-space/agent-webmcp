@@ -4,6 +4,7 @@ mod common;
 
 use agent_webmcp::config;
 use agent_webmcp::driver::{self, CallRequest, Choice, Detection};
+use std::path::PathBuf;
 
 fn sample() -> CallRequest {
     CallRequest {
@@ -56,7 +57,7 @@ fn devtools_plan_uses_its_own_tool_names() {
 }
 
 #[test]
-fn playwright_plan_prefixes_the_tool_name() {
+fn playwright_plan_has_two_steps_no_snapshot() {
     let cfg = config_with(config::DriverChoice::PlaywrightMcp, "agent-browser");
     let driver = driver::by_choice(config::DriverChoice::PlaywrightMcp, &cfg).unwrap();
     assert_eq!(driver.id(), "playwright-mcp");
@@ -65,24 +66,25 @@ fn playwright_plan_prefixes_the_tool_name() {
         plan.note
             .as_deref()
             .unwrap()
-            .contains("--enable-features=WebMCP"),
+            .contains("browser.launchOptions.args in the Playwright MCP config file"),
         "{:?}",
         plan.note
     );
-    assert_eq!(plan.steps.len(), 3);
+    assert_eq!(plan.steps.len(), 2);
     assert_eq!(plan.steps[0].tool, "browser_navigate");
     assert_eq!(
         plan.steps[0].args,
         serde_json::json!({"url": "https://cal.com/"})
     );
-    assert_eq!(plan.steps[1].tool, "browser_snapshot");
+    assert!(plan.steps.iter().all(|s| s.tool != "browser_snapshot"));
+    assert_eq!(plan.steps[1].tool, "webmcp_ask_cal_com");
+    assert_eq!(plan.steps[1].args, serde_json::json!({"question": "hi"}));
     assert!(
-        plan.steps[1].why.contains("snapshot"),
+        plan.steps[1].why.contains("A-Za-z0-9_-"),
         "{}",
         plan.steps[1].why
     );
-    assert_eq!(plan.steps[2].tool, "webmcp_ask_cal_com");
-    assert_eq!(plan.steps[2].args, serde_json::json!({"question": "hi"}));
+    assert!(plan.steps[1].why.contains("64"), "{}", plan.steps[1].why);
 }
 
 #[test]
@@ -263,14 +265,15 @@ fn choose_named_missing_is_unusable() {
 }
 
 #[test]
-fn choose_auto_missing_plans_generic() {
-    let cfg = config_with(
+fn choose_auto_missing_both_is_unusable() {
+    let mut cfg = config_with(
         config::DriverChoice::Auto,
         "agent-webmcp-definitely-missing-binary",
     );
+    cfg.drivers.lightpanda.command = "lightpanda-definitely-missing-binary".to_string();
     match driver::choose(&cfg) {
-        Choice::Plan(driver) => assert_eq!(driver.id(), "generic"),
-        _ => panic!("auto with nothing installed should plan generic"),
+        Choice::Unusable { driver, .. } => assert_eq!(driver, "agent-browser"),
+        _ => panic!("auto with nothing installed must not run or plan"),
     }
 }
 
@@ -348,5 +351,383 @@ fn choose_auto_ready_runs() {
         Choice::Unusable { driver, detection } => {
             panic!("auto with a ready driver should run, got unusable {driver}: {detection:?}")
         }
+    }
+}
+
+// --- lightpanda ---
+
+/// Fake lightpanda: answers `version`, and `run` prints one canned file.
+/// The invoked script file is saved for injection assertions.
+#[cfg(unix)]
+struct LpFake {
+    version: String,
+    stdout: String,
+    stderr: String,
+    stall_secs: u64,
+}
+
+#[cfg(unix)]
+impl LpFake {
+    fn new(stdout: &str) -> Self {
+        Self {
+            version: "1.1.0-nightly.11745+1b60dcc7a".to_string(),
+            stdout: stdout.to_string(),
+            stderr: String::new(),
+            stall_secs: 0,
+        }
+    }
+
+    fn stderr(mut self, text: &str) -> Self {
+        self.stderr = text.to_string();
+        self
+    }
+
+    fn stall(mut self, secs: u64) -> Self {
+        self.stall_secs = secs;
+        self
+    }
+
+    fn install(&self, dir: &tempfile::TempDir, name: &str) -> PathBuf {
+        let base = dir.path().join(name);
+        let response = dir.path().join(format!("{name}.response"));
+        std::fs::write(&response, &self.stdout).unwrap();
+        let err = dir.path().join(format!("{name}.stderr"));
+        std::fs::write(&err, &self.stderr).unwrap();
+        let log = dir.path().join(format!("{name}.argv"));
+        let mut script = String::from("#!/bin/sh\n");
+        script.push_str(&format!("echo \"$@\" >> \"{}\"\n", log.display()));
+        script.push_str(&format!(
+            "if [ \"$1\" = \"version\" ]; then echo \"{}\"; exit 0; fi\n",
+            self.version
+        ));
+        if self.stall_secs > 0 {
+            script.push_str(&format!("sleep {}\n", self.stall_secs));
+        }
+        script.push_str(&format!("cp \"$2\" \"{}.script\"\n", base.display()));
+        script.push_str(&format!("cat \"{}\"\n", response.display()));
+        script.push_str(&format!("cat \"{}\" >&2\n", err.display()));
+        std::fs::write(&base, script).unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&base, std::fs::Permissions::from_mode(0o755)).unwrap();
+        for _ in 0..100 {
+            match std::process::Command::new(&base).arg("version").output() {
+                Ok(_) => break,
+                Err(_) => std::thread::sleep(std::time::Duration::from_millis(2)),
+            }
+        }
+        base
+    }
+}
+
+#[cfg(unix)]
+fn lp_config(script: &std::path::Path) -> config::Config {
+    let mut cfg = config_with(config::DriverChoice::Lightpanda, "agent-browser");
+    cfg.drivers.lightpanda.command = script.display().to_string();
+    cfg
+}
+
+#[cfg(unix)]
+fn lp_run_opts() -> driver::RunOptions {
+    driver::RunOptions {
+        timeout_ms: 1234,
+        settle_ms: 300,
+        extra_args: Vec::new(),
+        headed: false,
+        fresh: false,
+        profile: None,
+        cdp: None,
+    }
+}
+
+#[cfg(unix)]
+fn lp_run(
+    response: &str,
+    tool: &str,
+) -> Result<agent_webmcp::driver::RunOutcome, agent_webmcp::call::CallError> {
+    let dir = tempfile::tempdir().unwrap();
+    let script = LpFake::new(response).install(&dir, "lp");
+    let cfg = lp_config(&script);
+    let driver = driver::by_choice(config::DriverChoice::Lightpanda, &cfg).unwrap();
+    let req = CallRequest {
+        page: "https://cal.com/".to_string(),
+        tool: tool.to_string(),
+        input: serde_json::json!({"question": "hi"}),
+    };
+    driver.run(&req, &lp_run_opts())
+}
+
+#[cfg(unix)]
+#[test]
+fn lightpanda_detect_parses_nightly_version() {
+    use agent_webmcp::driver::lightpanda::detect_with;
+    let seen = std::cell::RefCell::new(Vec::new());
+    let run = |cmd: &str, arg: &str| -> std::io::Result<std::process::Output> {
+        seen.borrow_mut().push(arg.to_string());
+        assert_eq!(cmd, "lightpanda");
+        Ok(ok_output("1.1.0-nightly.11745+1b60dcc7a"))
+    };
+    match detect_with("lightpanda", &run) {
+        // `parse_version` keeps `-pre` but not `+build`: still parseable.
+        Detection::Ready { version } => assert_eq!(version, "1.1.0-nightly.11745"),
+        other => panic!("gave {other:?}"),
+    }
+    // Bare `version`, never `--version` (which is a fatal error there).
+    assert_eq!(seen.borrow().clone(), vec!["version".to_string()]);
+}
+
+#[cfg(unix)]
+#[test]
+fn lightpanda_detect_missing_names_the_installer() {
+    use agent_webmcp::driver::lightpanda::detect_with;
+    let run = |_: &str, _: &str| -> std::io::Result<std::process::Output> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "no such file",
+        ))
+    };
+    match detect_with("lightpanda", &run) {
+        Detection::Missing { install, detail } => {
+            assert!(install.contains("pkg.lightpanda.io"), "{install}");
+            assert_eq!(detail, None);
+        }
+        other => panic!("gave {other:?}"),
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn lightpanda_detect_garbage_is_missing_with_detail() {
+    use agent_webmcp::driver::lightpanda::detect_with;
+    match detect_with("lightpanda", &|_, _| Ok(ok_output("garbage"))) {
+        Detection::Missing { detail, .. } => assert!(detail.is_some()),
+        other => panic!("gave {other:?}"),
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn lightpanda_run_ok_content_passes_through() {
+    match lp_run(
+        r#"{"ok":true,"output":{"content":[{"type":"text","text":"hi"}]}}"#,
+        "ask_cal_com",
+    ) {
+        Ok(outcome) => {
+            assert_eq!(
+                outcome.output,
+                serde_json::json!({"content":[{"type":"text","text":"hi"}]})
+            );
+            assert!(!outcome.reused);
+            assert_eq!(outcome.budget_ms, 1234 + 300 + 30_000);
+        }
+        Err(e) => panic!("expected a run, got {e:?}"),
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn lightpanda_run_plain_string_is_wrapped() {
+    match lp_run(r#"{"ok":true,"output":"hello"}"#, "ask_cal_com") {
+        Ok(outcome) => assert_eq!(
+            outcome.output,
+            serde_json::json!({"content":[{"type":"text","text":"hello"}]})
+        ),
+        Err(e) => panic!("expected a run, got {e:?}"),
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn lightpanda_run_not_found_is_tool_not_found() {
+    for response in [
+        r#"{"ok":false,"code":"not_found"}"#,
+        r#"{"ok":false,"error":"Error: No WebMCP tool named \"x\" on this page; pageTools lists them."}"#,
+    ] {
+        match lp_run(response, "ask_cal_com") {
+            Err(e) => {
+                assert_eq!(e.code, "tool_not_found", "{response}");
+                assert!(e.message.contains("ask_cal_com"), "{}", e.message);
+            }
+            Ok(outcome) => panic!("expected tool_not_found, got {outcome:?}"),
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn lightpanda_run_unsupported_api_is_webmcp_unsupported() {
+    match lp_run(r#"{"ok":false,"code":"unsupported"}"#, "ask_cal_com") {
+        Err(e) => {
+            assert_eq!(e.code, "webmcp_unsupported");
+            assert!(
+                e.message.contains("--enable-features=WebMCP"),
+                "{}",
+                e.message
+            );
+        }
+        Ok(outcome) => panic!("expected webmcp_unsupported, got {outcome:?}"),
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn lightpanda_run_thrown_tool_is_tool_error() {
+    match lp_run(
+        r#"{"ok":false,"error":"Error: the tool blew up"}"#,
+        "ask_cal_com",
+    ) {
+        Err(e) => {
+            assert_eq!(e.code, "tool_error");
+            assert!(e.message.contains("blew up"), "{}", e.message);
+        }
+        Ok(outcome) => panic!("expected tool_error, got {outcome:?}"),
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn lightpanda_run_navigation_failed_is_page_unreachable() {
+    let dir = tempfile::tempdir().unwrap();
+    let script = LpFake::new("")
+        .stderr("Error: navigation failed")
+        .install(&dir, "lp");
+    let cfg = lp_config(&script);
+    let driver = driver::by_choice(config::DriverChoice::Lightpanda, &cfg).unwrap();
+    let req = CallRequest {
+        page: "https://cal.com/".to_string(),
+        tool: "ask_cal_com".to_string(),
+        input: serde_json::json!({}),
+    };
+    match driver.run(&req, &lp_run_opts()) {
+        Err(e) => assert_eq!(e.code, "page_unreachable"),
+        Ok(outcome) => panic!("expected page_unreachable, got {outcome:?}"),
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn lightpanda_run_stalled_child_times_out() {
+    let dir = tempfile::tempdir().unwrap();
+    let script = LpFake::new(r#"{"ok":true,"output":"late"}"#)
+        .stall(60)
+        .install(&dir, "lp");
+    let cfg = lp_config(&script);
+    let driver = driver::by_choice(config::DriverChoice::Lightpanda, &cfg).unwrap();
+    let req = CallRequest {
+        page: "https://cal.com/".to_string(),
+        tool: "ask_cal_com".to_string(),
+        input: serde_json::json!({}),
+    };
+    let mut opts = lp_run_opts();
+    opts.timeout_ms = 200;
+    opts.settle_ms = 0;
+    match driver.run(&req, &opts) {
+        Err(e) => assert_eq!(e.code, "timeout"),
+        Ok(outcome) => panic!("expected timeout, got {outcome:?}"),
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn lightpanda_script_embeds_the_tool_as_json() {
+    let dir = tempfile::tempdir().unwrap();
+    let script = LpFake::new(r#"{"ok":true,"output":"x"}"#).install(&dir, "lp");
+    let cfg = lp_config(&script);
+    let driver = driver::by_choice(config::DriverChoice::Lightpanda, &cfg).unwrap();
+    let tool = "evil\"tool\nname";
+    let req = CallRequest {
+        page: "https://cal.com/".to_string(),
+        tool: tool.to_string(),
+        input: serde_json::json!({"q": "hi\"there"}),
+    };
+    let _ = driver.run(&req, &lp_run_opts());
+    let saved = std::fs::read_to_string(dir.path().join("lp.script")).unwrap();
+    assert!(
+        saved.contains(&serde_json::to_string(tool).unwrap()),
+        "tool name must be JSON-encoded: {saved}"
+    );
+    assert!(
+        saved.contains(&serde_json::to_string("hi\"there").unwrap()),
+        "input must be JSON-encoded: {saved}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn lightpanda_plan_uses_its_own_tool_names() {
+    let dir = tempfile::tempdir().unwrap();
+    let script = LpFake::new("").install(&dir, "lp");
+    let cfg = lp_config(&script);
+    let driver = driver::by_choice(config::DriverChoice::Lightpanda, &cfg).unwrap();
+    assert_eq!(driver.id(), "lightpanda");
+    let plan = driver.plan(&sample());
+    assert_eq!(plan.steps.len(), 2);
+    assert_eq!(plan.steps[0].tool, "goto");
+    assert_eq!(
+        plan.steps[0].args,
+        serde_json::json!({"url": "https://cal.com/"})
+    );
+    assert_eq!(plan.steps[1].tool, "callPageTool");
+    assert_eq!(
+        plan.steps[1].args,
+        serde_json::json!({"name": "ask_cal_com", "arguments": {"question": "hi"}})
+    );
+    assert!(
+        plan.note.as_deref().unwrap().contains("pageTools"),
+        "{:?}",
+        plan.note
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn lightpanda_status_marks_experimental() {
+    let dir = tempfile::tempdir().unwrap();
+    let script = LpFake::new("").install(&dir, "lp");
+    let cfg = lp_config(&script);
+    let driver = driver::by_choice(config::DriverChoice::Lightpanda, &cfg).unwrap();
+    assert!(
+        driver::status_line(driver.as_ref(), &cfg).contains("(run, experimental)"),
+        "{}",
+        driver::status_line(driver.as_ref(), &cfg)
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn choose_auto_prefers_agent_browser_when_both_ready() {
+    let dir = tempfile::tempdir().unwrap();
+    let ab = common::Fake::new().install(&dir, "agent-browser");
+    let lp = LpFake::new("").install(&dir, "lightpanda");
+    let mut cfg = config_with(config::DriverChoice::Auto, &ab.display().to_string());
+    cfg.drivers.lightpanda.command = lp.display().to_string();
+    match driver::choose(&cfg) {
+        Choice::Run(driver, _) => assert_eq!(driver.id(), "agent-browser"),
+        _ => panic!("both ready should run agent-browser"),
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn choose_auto_falls_back_to_lightpanda() {
+    let dir = tempfile::tempdir().unwrap();
+    let lp = LpFake::new("").install(&dir, "lightpanda");
+    let mut cfg = config_with(
+        config::DriverChoice::Auto,
+        "agent-webmcp-definitely-missing-binary",
+    );
+    cfg.drivers.lightpanda.command = lp.display().to_string();
+    match driver::choose(&cfg) {
+        Choice::Run(driver, _) => assert_eq!(driver.id(), "lightpanda"),
+        _ => panic!("only lightpanda ready should run lightpanda"),
+    }
+}
+
+#[test]
+fn choose_named_lightpanda_missing_is_unusable() {
+    let mut cfg = config_with(config::DriverChoice::Lightpanda, "agent-browser");
+    cfg.drivers.lightpanda.command = "lightpanda-definitely-missing-binary".to_string();
+    match driver::choose(&cfg) {
+        Choice::Unusable { driver, .. } => assert_eq!(driver, "lightpanda"),
+        _ => panic!("a missing named driver must not fall back"),
     }
 }

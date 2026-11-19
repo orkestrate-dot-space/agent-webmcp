@@ -192,6 +192,16 @@ async fn main() -> Result<()> {
             for driver in driver::all(&cfg) {
                 println!("{}", driver::status_line(driver.as_ref(), &cfg));
             }
+            println!("data dir {}", store::data_dir().display());
+            let sessions = store::data_dir().join("sessions");
+            if let Some((pid, _)) =
+                driver::lock::holder(&sessions, &cfg.drivers.agent_browser.session)
+            {
+                println!(
+                    "session {}: in use by pid {pid}",
+                    cfg.drivers.agent_browser.session
+                );
+            }
             match driver::choose(&cfg) {
                 driver::Choice::Run(driver, _) => {
                     println!("selected: {} (run)", driver.id());
@@ -469,12 +479,13 @@ fn parse_driver_choice(name: &str) -> Result<DriverChoice, call::CallError> {
     match name {
         "auto" => Ok(DriverChoice::Auto),
         "agent-browser" => Ok(DriverChoice::AgentBrowser),
+        "lightpanda" => Ok(DriverChoice::Lightpanda),
         "playwright-mcp" => Ok(DriverChoice::PlaywrightMcp),
         "chrome-devtools-mcp" => Ok(DriverChoice::ChromeDevtoolsMcp),
         "browse" => Ok(DriverChoice::Browse),
         "none" => Ok(DriverChoice::None),
         _ => Err(call::CallError::usage(format!(
-            "unknown driver {name:?}; expected one of auto, agent-browser, playwright-mcp, chrome-devtools-mcp, browse, none"
+            "unknown driver {name:?}; expected one of auto, agent-browser, lightpanda, playwright-mcp, chrome-devtools-mcp, browse, none"
         ))),
     }
 }

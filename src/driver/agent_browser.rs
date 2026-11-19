@@ -39,6 +39,10 @@ impl Driver for AgentBrowser {
         Kind::Run
     }
 
+    fn install(&self) -> Option<&'static str> {
+        Some(INSTALL)
+    }
+
     fn detect(&self, _cfg: &Config) -> Detection {
         detect_with(&self.command, &run_version)
     }
@@ -110,9 +114,16 @@ pub fn detect_with(
 
 /// Run `<command> --version`, giving up after five seconds.
 fn run_version(command: &str) -> std::io::Result<std::process::Output> {
+    run_version_arg(command, "--version")
+}
+
+/// Run `<command> <arg>`, giving up after five seconds. Lightpanda detects
+/// with `version` (bare `--version` is a fatal error there), so the arg
+/// varies by driver but the bounded spawn stays in one place.
+pub(super) fn run_version_arg(command: &str, arg: &str) -> std::io::Result<std::process::Output> {
     use std::time::Duration;
     let mut child = std::process::Command::new(command)
-        .arg("--version")
+        .arg(arg)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
         .spawn()?;
@@ -140,7 +151,7 @@ fn run_version(command: &str) -> std::io::Result<std::process::Output> {
 }
 
 /// First `x.y.z` (plus an optional `-pre`) in `text`, if any.
-fn parse_version(text: &str) -> Option<String> {
+pub(super) fn parse_version(text: &str) -> Option<String> {
     let bytes = text.as_bytes();
     let mut i = 0;
     while i < bytes.len() {
@@ -241,9 +252,9 @@ impl CallBudget {
 }
 
 /// Piped output collected while waiting; memory is capped, not the child.
-struct ChildOutput {
-    stdout: String,
-    stderr: String,
+pub(super) struct ChildOutput {
+    pub(super) stdout: String,
+    pub(super) stderr: String,
     truncated: bool,
 }
 
@@ -253,7 +264,7 @@ const DRAIN_CAP: usize = 8 * 1024 * 1024;
 /// Drain one pipe into memory, keeping at most the shared budget allows.
 /// Always reads to EOF so the child can never block on a full pipe; bytes
 /// past the budget are counted but dropped, and flagged as truncated.
-fn drain_stream<R: std::io::Read + Send + 'static>(
+pub(super) fn drain_stream<R: std::io::Read + Send + 'static>(
     pipe: Option<R>,
     budget: Arc<AtomicUsize>,
 ) -> std::sync::mpsc::Receiver<(Vec<u8>, bool)> {
@@ -707,7 +718,7 @@ fn blocked_page(url: &str, title: &str) -> CallError {
 }
 
 /// The browser cannot run WebMCP at all: diagnose, do not settle.
-fn webmcp_unsupported(api: &str) -> CallError {
+pub(super) fn webmcp_unsupported(api: &str) -> CallError {
     CallError {
         code: "webmcp_unsupported",
         message: "this browser does not expose document.modelContext (needs Chrome 149+ with --enable-features=WebMCP); agent-webmcp passes it automatically — upgrade agent-browser/Chrome"
@@ -717,7 +728,7 @@ fn webmcp_unsupported(api: &str) -> CallError {
 }
 
 /// The page never registered the tool.
-fn tool_not_found(tool: &str) -> CallError {
+pub(super) fn tool_not_found(tool: &str) -> CallError {
     CallError {
         code: "tool_not_found",
         message: format!(
@@ -728,8 +739,8 @@ fn tool_not_found(tool: &str) -> CallError {
 }
 
 /// A temp file holding the invoke input; removed on drop, come what may.
-struct TempFile {
-    path: std::path::PathBuf,
+pub(super) struct TempFile {
+    pub(super) path: std::path::PathBuf,
 }
 
 impl Drop for TempFile {
@@ -744,7 +755,7 @@ fn write_params_file(input_json: &str) -> Result<TempFile, CallError> {
 }
 
 /// Write text to a 0600 temp file with a unique name.
-fn write_temp(name: &str, contents: &str) -> Result<TempFile, CallError> {
+pub(super) fn write_temp(name: &str, contents: &str) -> Result<TempFile, CallError> {
     use std::sync::atomic::{AtomicU64, Ordering};
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     for _ in 0..100 {
@@ -818,7 +829,7 @@ fn run_command(
 }
 
 /// Spawn, drain, and wait; timeouts kill without closing anything.
-fn run_command_raw(
+pub(super) fn run_command_raw(
     command: &str,
     args: &[String],
     deadline_ms: u64,
@@ -866,7 +877,7 @@ fn run_command_raw(
 
 /// Wait for a child until the deadline; kill it past the deadline.
 /// `Ok(None)` means it timed out (and was killed).
-fn wait_deadline(
+pub(super) fn wait_deadline(
     mut child: std::process::Child,
     deadline: std::time::Instant,
 ) -> std::io::Result<Option<std::process::Output>> {
