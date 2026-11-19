@@ -9,10 +9,10 @@ use std::path::{Path, PathBuf};
 
 use crate::call::CallError;
 
-/// How long a lock may live on platforms without `/proc`, where every
-/// holder counts as live and only age can free the lock.
-#[cfg(not(unix))]
-const STALE_MS: u64 = 10 * 60 * 1000;
+/// A lock file whose holder cannot be read is racing, not dead: treat it
+/// as live unless its mtime is older than this, so a contender never
+/// steals a lock that is still being written.
+const UNREADABLE_STALE_MS: u64 = 5_000;
 
 /// A held session lock; dropping it releases the file when still ours.
 #[derive(Debug)]
@@ -48,23 +48,39 @@ pub fn acquire(dir: &Path, name: &str) -> Result<SessionLock, CallError> {
         .create_new(true)
         .open(&path)
     {
-        Ok(_) => {
-            std::fs::write(&path, &payload).map_err(|e| CallError {
-                code: "driver_error",
-                message: format!("could not write session lock: {e}"),
-                data: None,
-            })?;
+        Ok(handle) => {
+            // Write through the handle we created: a contender must never
+            // see an empty file and mistake our fresh lock for pid 0.
+            use std::io::Write;
+            let mut handle = handle;
+            handle
+                .write_all(payload.as_bytes())
+                .map_err(|e| CallError {
+                    code: "driver_error",
+                    message: format!("could not write session lock: {e}"),
+                    data: None,
+                })?;
             Ok(SessionLock { path, payload })
         }
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            let (pid, ts) = read_holder(&path);
+            let (pid, ts, readable) = read_holder(&path);
             let age = now_ms().saturating_sub(ts);
-            // Unix: a live holder always wins, whatever the age; only a
-            // dead pid frees the lock. Without /proc only the age frees it.
+            // A live holder always wins, whatever the lock age; an
+            // unreadable holder (empty or corrupt file) counts as live too
+            // unless its mtime shows it was abandoned. Without /proc only
+            // the age frees a readable lock.
             #[cfg(unix)]
-            let contend = holder_live(pid);
+            let contend = if readable {
+                holder_live(pid)
+            } else {
+                !holder_stale(&path)
+            };
             #[cfg(not(unix))]
-            let contend = holder_live(pid) && age <= STALE_MS;
+            let contend = if readable {
+                holder_live(pid) && age <= STALE_MS
+            } else {
+                !holder_stale(&path)
+            };
             if contend {
                 return Err(CallError {
                     code: "concurrent_call",
@@ -111,15 +127,17 @@ fn check_name(name: &str) -> Result<(), CallError> {
     }
 }
 
-/// (pid, timestamp) of the current holder; corrupt files read as pid 0
-/// with the file mtime, so they are taken over, never stuck forever.
-fn read_holder(path: &Path) -> (u32, u64) {
+/// (pid, timestamp, readable) of the current holder. A file without a
+/// parsable pid is unreadable: empty from a racing writer, or corrupt.
+/// Its timestamp still falls back to the file mtime, so it is taken over
+/// once stale, never stuck forever.
+fn read_holder(path: &Path) -> (u32, u64, bool) {
     let text = std::fs::read_to_string(path).unwrap_or_default();
     let val: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
     let pid = val
         .get("pid")
         .and_then(serde_json::Value::as_u64)
-        .unwrap_or(0) as u32;
+        .map(|p| p.min(u64::from(u32::MAX)) as u32);
     let ts = val
         .get("ts")
         .and_then(serde_json::Value::as_u64)
@@ -131,7 +149,22 @@ fn read_holder(path: &Path) -> (u32, u64) {
                 .map(|d| d.as_millis().min(u128::from(u64::MAX)) as u64)
         })
         .unwrap_or(0);
-    (pid, ts)
+    match pid {
+        Some(pid) => (pid, ts, true),
+        None => (0, ts, false),
+    }
+}
+
+/// Whether an unreadable lock file was abandoned: only its mtime can tell
+/// a stale file from one that is still being written.
+fn holder_stale(path: &Path) -> bool {
+    let mtime_ms = std::fs::metadata(path)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis().min(u128::from(u64::MAX)) as u64)
+        .unwrap_or(0);
+    now_ms().saturating_sub(mtime_ms) > UNREADABLE_STALE_MS
 }
 
 /// Liveness of the holder: /proc on unix; elsewhere every holder counts
@@ -147,6 +180,11 @@ fn holder_live(pid: u32) -> bool {
         true
     }
 }
+
+/// How long a lock may live on platforms without `/proc`, where every
+/// holder counts as live and only age can free the lock.
+#[cfg(not(unix))]
+const STALE_MS: u64 = 10 * 60 * 1000;
 
 /// Millis since the epoch, saturating.
 pub(crate) fn now_ms() -> u64 {

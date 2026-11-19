@@ -1,5 +1,7 @@
 //! Driver adapters: exact plan steps, agent-browser detection, choose().
 
+mod common;
+
 use agent_webmcp::config;
 use agent_webmcp::driver::{self, CallRequest, Choice, Detection};
 
@@ -291,19 +293,10 @@ fn choose_none_plans_generic() {
 }
 
 #[cfg(unix)]
-fn fake_agent_browser(dir: &tempfile::TempDir, text: &str) -> std::path::PathBuf {
-    let path = dir.path().join("agent-browser");
-    std::fs::write(&path, format!("#!/bin/sh\necho \"{text}\"\n")).unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
-    path
-}
-
-#[cfg(unix)]
 #[test]
 fn fake_script_ready_detects_and_runs() {
     let dir = tempfile::tempdir().unwrap();
-    let script = fake_agent_browser(&dir, "agent-browser 0.43.1");
+    let script = common::Fake::new().install(&dir, "agent-browser");
     let cfg = config_with(
         config::DriverChoice::AgentBrowser,
         &script.display().to_string(),
@@ -313,7 +306,10 @@ fn fake_script_ready_detects_and_runs() {
             assert_eq!(driver.id(), "agent-browser");
             assert_eq!(version, "0.43.1");
         }
-        _ => panic!("the fake script should be ready"),
+        Choice::Plan(_) => panic!("the fake script should be ready, got a plan"),
+        Choice::Unusable { driver, detection } => {
+            panic!("the fake script should be ready, got unusable {driver}: {detection:?}")
+        }
     }
 }
 
@@ -321,7 +317,9 @@ fn fake_script_ready_detects_and_runs() {
 #[test]
 fn fake_script_old_detects_too_old() {
     let dir = tempfile::tempdir().unwrap();
-    let script = fake_agent_browser(&dir, "0.40.0");
+    let script = common::Fake::new()
+        .version("0.40.0")
+        .install(&dir, "agent-browser");
     let cfg = config_with(
         config::DriverChoice::AgentBrowser,
         &script.display().to_string(),
@@ -342,10 +340,13 @@ fn fake_script_old_detects_too_old() {
 #[test]
 fn choose_auto_ready_runs() {
     let dir = tempfile::tempdir().unwrap();
-    let script = fake_agent_browser(&dir, "agent-browser 0.43.1");
+    let script = common::Fake::new().install(&dir, "agent-browser");
     let cfg = config_with(config::DriverChoice::Auto, &script.display().to_string());
     match driver::choose(&cfg) {
         Choice::Run(driver, _) => assert_eq!(driver.id(), "agent-browser"),
-        _ => panic!("auto with a ready driver should run"),
+        Choice::Plan(_) => panic!("auto with a ready driver should run, got a plan"),
+        Choice::Unusable { driver, detection } => {
+            panic!("auto with a ready driver should run, got unusable {driver}: {detection:?}")
+        }
     }
 }

@@ -1,68 +1,27 @@
 //! `call`: resolve, input, permissions, fake-driver runs, CLI, MCP, find.
 //! Real network/browser is never used: agent-browser is a fake script.
 
+mod common;
+
 use agent_webmcp::call::{
     self, CallError, CallOptions, Decision, Outcome, ToolKind, decide, example_input, execute,
     glob_matches, parse_input, resolve, run_mcp, validate_input,
 };
 use agent_webmcp::config;
 use agent_webmcp::index::Search;
-use agent_webmcp::model::{Annotations, Index, Site, Status, Tool};
+use agent_webmcp::model::{Annotations, Index, Site, Tool};
+use common::{
+    HomeGuard, allow_all, ask_schema, ask_tool, plan_opts, read_tool, run_config,
+    run_config_settle, run_opts, sample_search, sample_site,
+};
 use serde_json::{Value, json};
 
 fn consequential() -> Annotations {
-    Annotations {
-        consequential: true,
-        ..Default::default()
-    }
-}
-
-fn ask_schema() -> Value {
-    json!({
-        "type": "object",
-        "required": ["question"],
-        "properties": {"question": {"type": "string"}}
-    })
-}
-
-fn ask_tool() -> Tool {
-    Tool {
-        name: "ask_cal_com".into(),
-        description: "Ask about Cal.".into(),
-        input_schema: ask_schema(),
-        page: "https://cal.com/".into(),
-        origin: "https://cal.com".into(),
-        annotations: consequential(),
-        flags: vec![],
-    }
-}
-
-fn read_tool() -> Tool {
-    Tool {
-        name: "list_slots".into(),
-        description: "List open slots.".into(),
-        input_schema: json!({"type": "object"}),
-        page: "https://cal.com/slots".into(),
-        origin: "https://cal.com".into(),
-        annotations: Annotations {
-            read_only: true,
-            ..Default::default()
-        },
-        flags: vec![],
-    }
+    common::consequential()
 }
 
 fn site(host: &str, tools: Vec<Tool>) -> Site {
-    Site {
-        host: host.into(),
-        status: Status::Verified,
-        checked_at: "2026-11-19T00:00:00Z".into(),
-        pages_checked: vec![format!("https://{host}/")],
-        platform: None,
-        tools,
-        note: None,
-        missed: 0,
-    }
+    sample_site(host, tools)
 }
 
 fn index() -> Index {
@@ -74,22 +33,11 @@ fn index() -> Index {
 }
 
 fn search() -> Search {
-    Search::build(index()).unwrap()
-}
-
-fn allow_all() -> config::Config {
-    let mut cfg = config::Config::default();
-    cfg.permissions.allow.push("*".into());
-    cfg
+    sample_search()
 }
 
 fn opts() -> CallOptions {
-    CallOptions {
-        confirm: true,
-        plan_only: true,
-        fresh: false,
-        retry_hint: call::RETRY_CLI,
-    }
+    plan_opts()
 }
 
 // --- resolve ---
@@ -341,12 +289,7 @@ fn missing_named_driver_is_no_driver() {
     cfg.driver = config::DriverChoice::AgentBrowser;
     cfg.drivers.agent_browser.command = "agent-webmcp-definitely-missing".into();
     let resolved = resolve("cal.com/list_slots", &search()).unwrap();
-    let opts = CallOptions {
-        confirm: true,
-        plan_only: false,
-        fresh: false,
-        retry_hint: call::RETRY_CLI,
-    };
+    let opts = run_opts();
     let e = execute(&resolved, json!({}), &opts, &cfg).unwrap_err();
     assert_eq!(e.code, "no_driver");
     assert!(e.message.contains("npm i -g"), "{}", e.message);
@@ -521,164 +464,21 @@ fn failure_envelope_shape() {
     assert_eq!(call::exit_code(&e), 1);
 }
 
-// --- fake agent-browser runs (unix) ---
-
-#[cfg(unix)]
-fn fake_script(
-    dir: &tempfile::TempDir,
-    name: &str,
-    invoke: &str,
-    open: &str,
-) -> std::path::PathBuf {
-    let log = dir.path().join(format!("{name}.argv"));
-    let path = dir.path().join(name);
-    let script = format!(
-        "#!/bin/sh\necho \"$@\" >> \"{log}\"\ncase \" $* \" in\n  *\" --version \"*) echo \"agent-browser 0.43.1\";;\n  *\" close \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" invoke \"*) echo '{invoke}';;\n  *\" open \"*) echo '{open}';;\nesac\n",
-        log = log.display(),
-        invoke = invoke,
-        open = open,
-    );
-    std::fs::write(&path, script).unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
-    path
-}
-
-#[cfg(unix)]
-fn counting_script(
-    dir: &tempfile::TempDir,
-    name: &str,
-    first: &str,
-    second: &str,
-    open: &str,
-) -> std::path::PathBuf {
-    let log = dir.path().join(format!("{name}.argv"));
-    let count = dir.path().join(format!("{name}.count"));
-    let path = dir.path().join(name);
-    let script = format!(
-        "#!/bin/sh\necho \"$@\" >> \"{log}\"\ncase \" $* \" in\n  *\" --version \"*) echo \"agent-browser 0.43.1\";;\n  *\" close \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" invoke \"*)\n    n=$(cat \"{count}\" 2>/dev/null || echo 0)\n    echo $((n + 1)) > \"{count}\"\n    if [ \"$n\" = \"0\" ]; then echo '{first}'; else echo '{second}'; fi;;\n  *\" open \"*) echo '{open}';;\nesac\n",
-        log = log.display(),
-        count = count.display(),
-        first = first,
-        second = second,
-        open = open,
-    );
-    std::fs::write(&path, script).unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
-    path
-}
-
-#[cfg(unix)]
-fn argv_log(dir: &tempfile::TempDir, name: &str) -> Vec<String> {
-    std::fs::read_to_string(dir.path().join(format!("{name}.argv")))
-        .unwrap_or_default()
-        .lines()
-        .map(str::to_string)
-        .collect()
-}
-
-#[cfg(unix)]
-const OPEN_OK: &str =
-    r#"{"success":true,"data":{"url":"https://cal.com/","lifecycle":{"reused":true}}}"#;
-#[cfg(unix)]
-const INVOKE_OK: &str = r#"{"success":true,"data":{"output":{"answer":1},"durationMs":5}}"#;
-#[cfg(unix)]
-const INVOKE_NOTFOUND: &str = r#"{"success":false,"code":"webmcp_tool_not_found","error":"webmcp_tool_not_found: no such tool"}"#;
-
-#[cfg(unix)]
-fn run_config(script: &std::path::Path) -> config::Config {
-    let mut cfg = allow_all();
-    cfg.drivers.agent_browser.command = script.display().to_string();
-    // Unique per test: parallel runs hold their own session lock.
-    static SESSION_N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let n = SESSION_N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    cfg.drivers.agent_browser.session = format!("test-s-{n}");
-    cfg.call.timeout = 1234;
-    // Legacy settle: existing run tests cover invoke/retry, not settling.
-    cfg.call.settle_ms = 0;
-    cfg
-}
-
-/// Settle-aware fake: `webmcp list` answers from one JSON object per line.
-#[cfg(unix)]
-fn settle_script(
-    dir: &tempfile::TempDir,
-    name: &str,
-    open_json: &str,
-    list_lines: &[&str],
-    invoke_json: &str,
-    evals: &[&str],
-) -> std::path::PathBuf {
-    let log = dir.path().join(format!("{name}.argv"));
-    let count = dir.path().join(format!("{name}.count"));
-    let ecount = dir.path().join(format!("{name}.ecount"));
-    let lists = dir.path().join(format!("{name}.lists"));
-    let evals_file = dir.path().join(format!("{name}.evals"));
-    std::fs::write(&lists, list_lines.join("\n")).unwrap();
-    std::fs::write(&evals_file, evals.join("\n")).unwrap();
-    let path = dir.path().join(name);
-    let script = format!(
-        "#!/bin/sh\necho \"$@\" >> \"{log}\"\ncase \" $* \" in\n  *\" --version \"*) echo \"agent-browser 0.43.1\";;\n  *\" close \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" invoke \"*) echo '{invoke}';;\n  *\" open \"*) echo '{open}';;\n  *\" list \"*) n=$(cat \"{count}\" 2>/dev/null || echo 0); echo $((n + 1)) > \"{count}\"; sed -n \"$((n+1))p\" \"{lists}\";;\n  *\" reload \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" wait \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" eval \"*) n=$(cat \"{ecount}\" 2>/dev/null || echo 0); echo $((n + 1)) > \"{ecount}\"; sed -n \"$((n+1))p\" \"{evals}\";;\nesac\n",
-        log = log.display(),
-        count = count.display(),
-        lists = lists.display(),
-        ecount = ecount.display(),
-        evals = evals_file.display(),
-        invoke = invoke_json,
-        open = open_json,
-    );
-    std::fs::write(&path, script).unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
-    path
-}
-
-#[cfg(unix)]
-fn settle_cfg(script: &std::path::Path, settle_ms: u64) -> config::Config {
-    let mut cfg = run_config(script);
-    cfg.call.settle_ms = settle_ms;
-    cfg
-}
-
-#[cfg(unix)]
-fn run_opts() -> CallOptions {
-    CallOptions {
-        confirm: true,
-        plan_only: false,
-        fresh: false,
-        retry_hint: call::RETRY_CLI,
-    }
-}
-
-#[cfg(unix)]
-const LIST_EMPTY: &str = r#"{"success":true,"data":{"tools":[]}}"#;
-#[cfg(unix)]
-const LIST_WITH_TOOL: &str = r#"{"success":true,"data":{"tools":[{"name":"ask_cal_com"}]}}"#;
-#[cfg(unix)]
-const OPEN_WITH_TOOL: &str = r#"{"success":true,"data":{"url":"https://cal.com/","lifecycle":{"reused":true},"webmcp":{"tools":[{"name":"ask_cal_com"}]}}}"#;
-#[cfg(unix)]
-const EVAL_EMPTY: &str = r#"{"success":true,"data":[]}"#;
-#[cfg(unix)]
-const EVAL_OBJECT: &str = r#"{"success":true,"data":{"result":"object"}}"#;
-#[cfg(unix)]
-const EVAL_UNDEFINED: &str = r#"{"success":true,"data":{"result":"undefined"}}"#;
-#[cfg(unix)]
-const OPEN_WITH_OTHER: &str = r#"{"success":true,"data":{"url":"https://cal.com/","webmcp":{"tools":[{"name":"other_tool"}]}}}"#;
+// --- fake agent-browser runs (unix): the one shared builder lives in
+// `common` (`Fake`), with real envelope shapes as named constants. ---
 
 #[cfg(unix)]
 #[test]
 fn happy_path_returns_output_reused_and_removes_params() {
+    let _home = HomeGuard::isolate();
     let dir = tempfile::tempdir().unwrap();
-    let script = fake_script(&dir, "ab", INVOKE_OK, OPEN_OK);
+    let script = common::Fake::new()
+        .open(common::OPEN_ANNOUNCED)
+        .invoke(&[common::INVOKE_OK])
+        .install(&dir, "ab");
     let cfg = run_config(&script);
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
-    let opts = CallOptions {
-        confirm: true,
-        plan_only: false,
-        fresh: false,
-        retry_hint: call::RETRY_CLI,
-    };
+    let opts = run_opts();
     match execute(&resolved, json!({"question": "hi"}), &opts, &cfg) {
         Ok(Outcome::Ran {
             output,
@@ -692,7 +492,7 @@ fn happy_path_returns_output_reused_and_removes_params() {
         }
         other => panic!("expected a run, got {other:?}"),
     }
-    let lines = argv_log(&dir, "ab");
+    let lines = common::Fake::argv(&dir, "ab");
     let open = lines.iter().find(|l| l.contains(" open ")).unwrap();
     assert!(open.contains("--session test-s-"), "{open}");
     assert!(open.contains("open https://cal.com/"), "{open}");
@@ -720,17 +520,15 @@ fn happy_path_returns_output_reused_and_removes_params() {
 #[cfg(unix)]
 #[test]
 fn tool_is_error_is_tool_error() {
+    let _home = HomeGuard::isolate();
     let dir = tempfile::tempdir().unwrap();
-    let invoke = r#"{"success":true,"data":{"output":{"isError":true,"content":[{"type":"text","text":"boom"}]}}}"#;
-    let script = fake_script(&dir, "ab", invoke, OPEN_OK);
+    let script = common::Fake::new()
+        .open(common::OPEN_ANNOUNCED)
+        .invoke(&[common::INVOKE_TOOL_ERROR])
+        .install(&dir, "ab");
     let cfg = run_config(&script);
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
-    let opts = CallOptions {
-        confirm: true,
-        plan_only: false,
-        fresh: false,
-        retry_hint: call::RETRY_CLI,
-    };
+    let opts = run_opts();
     let e = execute(&resolved, json!({"question": "hi"}), &opts, &cfg).unwrap_err();
     assert_eq!(e.code, "tool_error");
     assert_eq!(e.message, "boom");
@@ -739,21 +537,20 @@ fn tool_is_error_is_tool_error() {
 #[cfg(unix)]
 #[test]
 fn tool_not_found_invokes_once_without_retry() {
+    let _home = HomeGuard::isolate();
     let dir = tempfile::tempdir().unwrap();
     // The second queued answer would succeed: a retry would use it.
-    let script = counting_script(&dir, "ab", INVOKE_NOTFOUND, INVOKE_OK, OPEN_OK);
+    let script = common::Fake::new()
+        .open(common::OPEN_ANNOUNCED)
+        .invoke(&[common::INVOKE_NOT_FOUND, common::INVOKE_OK])
+        .install(&dir, "ab");
     let cfg = run_config(&script);
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
-    let opts = CallOptions {
-        confirm: true,
-        plan_only: false,
-        fresh: false,
-        retry_hint: call::RETRY_CLI,
-    };
+    let opts = run_opts();
     let e = execute(&resolved, json!({"question": "hi"}), &opts, &cfg).unwrap_err();
     assert_eq!(e.code, "tool_not_found");
     assert!(e.message.contains("may need a login"), "{}", e.message);
-    let lines = argv_log(&dir, "ab");
+    let lines = common::Fake::argv(&dir, "ab");
     assert_eq!(
         lines.iter().filter(|l| l.contains(" open ")).count(),
         1,
@@ -769,16 +566,15 @@ fn tool_not_found_invokes_once_without_retry() {
 #[cfg(unix)]
 #[test]
 fn non_json_stdout_is_driver_error() {
+    let _home = HomeGuard::isolate();
     let dir = tempfile::tempdir().unwrap();
-    let script = fake_script(&dir, "ab", "not json at all", OPEN_OK);
+    let script = common::Fake::new()
+        .open(common::OPEN_ANNOUNCED)
+        .invoke(&["not json at all"])
+        .install(&dir, "ab");
     let cfg = run_config(&script);
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
-    let opts = CallOptions {
-        confirm: true,
-        plan_only: false,
-        fresh: false,
-        retry_hint: call::RETRY_CLI,
-    };
+    let opts = run_opts();
     let e = execute(&resolved, json!({"question": "hi"}), &opts, &cfg).unwrap_err();
     assert_eq!(e.code, "driver_error");
     assert!(e.message.contains("not JSON"), "{}", e.message);
@@ -787,28 +583,16 @@ fn non_json_stdout_is_driver_error() {
 #[cfg(unix)]
 #[test]
 fn sleeping_driver_times_out() {
+    let _home = HomeGuard::isolate();
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("ab");
-    let log = dir.path().join("ab.argv");
-    std::fs::write(
-        &path,
-        format!(
-            "#!/bin/sh\necho \"$@\" >> \"{log}\"\ncase \" $* \" in\n  *\" --version \"*) echo \"agent-browser 0.43.1\";;\n  *\" open \"*) echo '{OPEN_OK}';;\n  *\" invoke \"*) sleep 30;;\nesac\n",
-            log = log.display(),
-        ),
-    )
-    .unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let mut cfg = run_config(&path);
+    let script = common::Fake::new()
+        .open(common::OPEN_ANNOUNCED)
+        .stall("invoke", 30)
+        .install(&dir, "ab");
+    let mut cfg = run_config(&script);
     cfg.call.timeout = 200;
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
-    let opts = CallOptions {
-        confirm: true,
-        plan_only: false,
-        fresh: false,
-        retry_hint: call::RETRY_CLI,
-    };
+    let opts = run_opts();
     let e = execute(&resolved, json!({"question": "hi"}), &opts, &cfg).unwrap_err();
     assert_eq!(e.code, "timeout");
 }
@@ -816,8 +600,12 @@ fn sleeping_driver_times_out() {
 #[cfg(unix)]
 #[test]
 fn fresh_uses_a_unique_session_and_closes() {
+    let _home = HomeGuard::isolate();
     let dir = tempfile::tempdir().unwrap();
-    let script = fake_script(&dir, "ab", INVOKE_OK, OPEN_OK);
+    let script = common::Fake::new()
+        .open(common::OPEN_ANNOUNCED)
+        .invoke(&[common::INVOKE_OK])
+        .install(&dir, "ab");
     let cfg = run_config(&script);
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
     let opts = CallOptions {
@@ -830,7 +618,7 @@ fn fresh_uses_a_unique_session_and_closes() {
         Ok(Outcome::Ran { .. }) => {}
         other => panic!("expected a run, got {other:?}"),
     }
-    let lines = argv_log(&dir, "ab");
+    let lines = common::Fake::argv(&dir, "ab");
     let open = lines.iter().find(|l| l.contains(" open ")).unwrap();
     let session = open
         .split_whitespace()
@@ -852,23 +640,22 @@ fn fresh_uses_a_unique_session_and_closes() {
 #[cfg(unix)]
 #[test]
 fn profile_goes_on_open_only() {
+    let _home = HomeGuard::isolate();
     let dir = tempfile::tempdir().unwrap();
-    let script = fake_script(&dir, "ab", INVOKE_OK, OPEN_OK);
+    let script = common::Fake::new()
+        .open(common::OPEN_ANNOUNCED)
+        .invoke(&[common::INVOKE_OK])
+        .install(&dir, "ab");
     let mut cfg = run_config(&script);
     cfg.drivers.agent_browser.profile = Some("/tmp/p".into());
     cfg.drivers.agent_browser.cdp = Some("http://127.0.0.1:1".into());
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
-    let opts = CallOptions {
-        confirm: true,
-        plan_only: false,
-        fresh: false,
-        retry_hint: call::RETRY_CLI,
-    };
+    let opts = run_opts();
     match execute(&resolved, json!({"question": "hi"}), &opts, &cfg) {
         Ok(Outcome::Ran { .. }) => {}
         other => panic!("expected a run, got {other:?}"),
     }
-    let lines = argv_log(&dir, "ab");
+    let lines = common::Fake::argv(&dir, "ab");
     let open = lines.iter().find(|l| l.contains(" open ")).unwrap();
     assert!(open.contains("--profile /tmp/p"), "{open}");
     assert!(open.contains("--cdp http://127.0.0.1:1"), "{open}");
@@ -880,17 +667,14 @@ fn profile_goes_on_open_only() {
 #[cfg(unix)]
 #[test]
 fn unreachable_page_is_page_unreachable() {
+    let _home = HomeGuard::isolate();
     let dir = tempfile::tempdir().unwrap();
-    let open = r#"{"success":false,"code":"navigation_timeout","error":"timed out"}"#;
-    let script = fake_script(&dir, "ab", INVOKE_OK, open);
+    let script = common::Fake::new()
+        .open(common::OPEN_UNREACHABLE)
+        .install(&dir, "ab");
     let cfg = run_config(&script);
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
-    let opts = CallOptions {
-        confirm: true,
-        plan_only: false,
-        fresh: false,
-        retry_hint: call::RETRY_CLI,
-    };
+    let opts = run_opts();
     let e = execute(&resolved, json!({"question": "hi"}), &opts, &cfg).unwrap_err();
     assert_eq!(e.code, "page_unreachable");
 }
@@ -899,7 +683,7 @@ fn unreachable_page_is_page_unreachable() {
 #[test]
 fn plan_with_ready_fake_is_agent_browser_plan() {
     let dir = tempfile::tempdir().unwrap();
-    let script = fake_script(&dir, "ab", INVOKE_OK, OPEN_OK);
+    let script = common::Fake::new().install(&dir, "ab");
     let mut cfg = run_config(&script);
     cfg.driver = config::DriverChoice::AgentBrowser;
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
@@ -1102,15 +886,19 @@ fn mcp_pipeline_needs_confirmation_without_confirm() {
 #[cfg(unix)]
 #[test]
 fn announced_tool_skips_settle() {
+    let _home = HomeGuard::isolate();
     let dir = tempfile::tempdir().unwrap();
-    let script = settle_script(&dir, "ab", OPEN_WITH_TOOL, &[], INVOKE_OK, &[EVAL_EMPTY]);
-    let cfg = settle_cfg(&script, 3000);
+    let script = common::Fake::new()
+        .open(common::OPEN_ANNOUNCED)
+        .invoke(&[common::INVOKE_OK])
+        .install(&dir, "ab");
+    let cfg = run_config_settle(&script, 3000);
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
     match execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg) {
         Ok(Outcome::Ran { output, .. }) => assert_eq!(output, json!({"answer": 1})),
         other => panic!("expected a run, got {other:?}"),
     }
-    let lines = argv_log(&dir, "ab");
+    let lines = common::Fake::argv(&dir, "ab");
     assert!(
         !lines.iter().any(|l| l.contains(" list ")),
         "no settle polls for an announced tool: {lines:?}"
@@ -1121,16 +909,19 @@ fn announced_tool_skips_settle() {
 #[cfg(unix)]
 #[test]
 fn late_tool_found_on_third_list() {
+    let _home = HomeGuard::isolate();
     let dir = tempfile::tempdir().unwrap();
-    let script = settle_script(
-        &dir,
-        "ab",
-        OPEN_OK,
-        &[LIST_EMPTY, LIST_EMPTY, LIST_WITH_TOOL],
-        INVOKE_OK,
-        &[EVAL_EMPTY],
-    );
-    let cfg = settle_cfg(&script, 5000);
+    let script = common::Fake::new()
+        .open(common::OPEN_PLAIN)
+        .lists(&[
+            common::LIST_EMPTY,
+            common::LIST_EMPTY,
+            common::LIST_WITH_TOOL,
+        ])
+        .invoke(&[common::INVOKE_OK])
+        .evals(&[common::EVAL_OBJECT])
+        .install(&dir, "ab");
+    let cfg = run_config_settle(&script, 5000);
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
     match execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg) {
         Ok(Outcome::Ran {
@@ -1144,7 +935,7 @@ fn late_tool_found_on_third_list() {
         }
         other => panic!("expected a run, got {other:?}"),
     }
-    let lists = argv_log(&dir, "ab")
+    let lists = common::Fake::argv(&dir, "ab")
         .iter()
         .filter(|l| l.contains(" list "))
         .count();
@@ -1154,14 +945,19 @@ fn late_tool_found_on_third_list() {
 #[cfg(unix)]
 #[test]
 fn missing_tool_reloads_once_then_not_found() {
+    let _home = HomeGuard::isolate();
     let dir = tempfile::tempdir().unwrap();
-    let script = settle_script(&dir, "ab", OPEN_OK, &[LIST_EMPTY], INVOKE_OK, &[EVAL_EMPTY]);
-    let cfg = settle_cfg(&script, 1000);
+    let script = common::Fake::new()
+        .open(common::OPEN_PLAIN)
+        .lists(&[common::LIST_EMPTY])
+        .evals(&[common::EVAL_ERROR])
+        .install(&dir, "ab");
+    let cfg = run_config_settle(&script, 1000);
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
     let e = execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
     assert_eq!(e.code, "tool_not_found");
     assert!(e.message.contains("did not register"), "{}", e.message);
-    let lines = argv_log(&dir, "ab");
+    let lines = common::Fake::argv(&dir, "ab");
     let opens = lines.iter().filter(|l| l.contains(" open ")).count();
     assert_eq!(opens, 1, "no re-open; reload replaces it: {lines:?}");
     assert_eq!(
@@ -1185,15 +981,13 @@ fn missing_tool_reloads_once_then_not_found() {
 #[cfg(unix)]
 #[test]
 fn settle_zero_skips_list() {
+    let _home = HomeGuard::isolate();
     let dir = tempfile::tempdir().unwrap();
-    let script = settle_script(
-        &dir,
-        "ab",
-        OPEN_OK,
-        &[LIST_WITH_TOOL],
-        INVOKE_OK,
-        &[EVAL_EMPTY],
-    );
+    let script = common::Fake::new()
+        .open(common::OPEN_PLAIN)
+        .lists(&[common::LIST_WITH_TOOL])
+        .invoke(&[common::INVOKE_OK])
+        .install(&dir, "ab");
     let mut cfg = run_config(&script);
     cfg.call.settle_ms = 0;
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
@@ -1201,7 +995,7 @@ fn settle_zero_skips_list() {
         Ok(Outcome::Ran { .. }) => {}
         other => panic!("expected a run, got {other:?}"),
     }
-    let lines = argv_log(&dir, "ab");
+    let lines = common::Fake::argv(&dir, "ab");
     let invoke_at = lines.iter().position(|l| l.contains(" invoke "));
     let list_at = lines.iter().position(|l| l.contains(" list "));
     assert!(invoke_at.is_some(), "{lines:?}");
@@ -1214,15 +1008,18 @@ fn settle_zero_skips_list() {
 #[cfg(unix)]
 #[test]
 fn blocked_title_stops_before_invoke() {
+    let _home = HomeGuard::isolate();
     let dir = tempfile::tempdir().unwrap();
-    let open = r#"{"success":true,"data":{"url":"https://cal.com/","title":"Just a moment...","webmcp":{"tools":[]}}}"#;
-    let script = settle_script(&dir, "ab", open, &[LIST_EMPTY], INVOKE_OK, &[EVAL_EMPTY]);
-    let cfg = settle_cfg(&script, 5000);
+    let script = common::Fake::new()
+        .open(common::OPEN_BLOCKED)
+        .lists(&[common::LIST_EMPTY])
+        .install(&dir, "ab");
+    let cfg = run_config_settle(&script, 5000);
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
     let e = execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
     assert_eq!(e.code, "page_unreachable");
     assert!(e.message.contains("bot check"), "{}", e.message);
-    let lines = argv_log(&dir, "ab");
+    let lines = common::Fake::argv(&dir, "ab");
     assert!(
         !lines.iter().any(|l| l.contains(" invoke ")),
         "blocked pages are never invoked: {lines:?}"
@@ -1264,23 +1061,21 @@ fn blocked_check_matches_scanner_signals() {
 #[cfg(unix)]
 #[test]
 fn extra_args_come_before_the_webmcp_flag() {
+    let _home = HomeGuard::isolate();
     let dir = tempfile::tempdir().unwrap();
-    let script = settle_script(
-        &dir,
-        "ab",
-        OPEN_OK,
-        &[LIST_WITH_TOOL],
-        INVOKE_OK,
-        &[EVAL_EMPTY],
-    );
-    let mut cfg = settle_cfg(&script, 0);
+    let script = common::Fake::new()
+        .open(common::OPEN_PLAIN)
+        .lists(&[common::LIST_WITH_TOOL])
+        .invoke(&[common::INVOKE_OK])
+        .install(&dir, "ab");
+    let mut cfg = run_config(&script);
     cfg.drivers.agent_browser.extra_args = vec!["first".into(), "--flag=x".into()];
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
     match execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg) {
         Ok(Outcome::Ran { .. }) => {}
         other => panic!("expected a run, got {other:?}"),
     }
-    let lines = argv_log(&dir, "ab");
+    let lines = common::Fake::argv(&dir, "ab");
     let open = lines.iter().find(|l| l.contains(" open ")).unwrap();
     let flat = open.split_whitespace().collect::<Vec<_>>().join(" ");
     assert!(
@@ -1292,21 +1087,18 @@ fn extra_args_come_before_the_webmcp_flag() {
 #[cfg(unix)]
 #[test]
 fn announced_tools_skip_the_probe() {
+    let _home = HomeGuard::isolate();
     let dir = tempfile::tempdir().unwrap();
-    let script = settle_script(
-        &dir,
-        "ab",
-        OPEN_WITH_OTHER,
-        &[LIST_EMPTY],
-        INVOKE_OK,
-        &[EVAL_EMPTY],
-    );
-    let cfg = settle_cfg(&script, 3000);
+    let script = common::Fake::new()
+        .open(common::OPEN_OTHER)
+        .lists(&[common::LIST_EMPTY])
+        .install(&dir, "ab");
+    let cfg = run_config_settle(&script, 3000);
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
     let e = execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
     assert_eq!(e.code, "tool_not_found");
     assert!(e.message.contains("did not register"), "{}", e.message);
-    let lines = argv_log(&dir, "ab");
+    let lines = common::Fake::argv(&dir, "ab");
     assert!(
         !lines
             .iter()
@@ -1318,16 +1110,14 @@ fn announced_tools_skip_the_probe() {
 #[cfg(unix)]
 #[test]
 fn missing_api_is_webmcp_unsupported() {
+    let _home = HomeGuard::isolate();
     let dir = tempfile::tempdir().unwrap();
-    let script = settle_script(
-        &dir,
-        "ab",
-        OPEN_OK,
-        &[LIST_EMPTY],
-        INVOKE_OK,
-        &[EVAL_UNDEFINED],
-    );
-    let cfg = settle_cfg(&script, 3000);
+    let script = common::Fake::new()
+        .open(common::OPEN_PLAIN)
+        .lists(&[common::LIST_EMPTY])
+        .evals(&[common::EVAL_UNDEFINED])
+        .install(&dir, "ab");
+    let cfg = run_config_settle(&script, 3000);
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
     let e = execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
     assert_eq!(e.code, "webmcp_unsupported");
@@ -1336,7 +1126,7 @@ fn missing_api_is_webmcp_unsupported() {
         "{}",
         e.message
     );
-    let lines = argv_log(&dir, "ab");
+    let lines = common::Fake::argv(&dir, "ab");
     assert_eq!(
         lines.iter().filter(|l| l.contains(" list ")).count(),
         1,
@@ -1348,13 +1138,17 @@ fn missing_api_is_webmcp_unsupported() {
 #[cfg(unix)]
 #[test]
 fn big_stdout_does_not_deadlock() {
+    let _home = HomeGuard::isolate();
     let big = "x".repeat(200 * 1024);
     let invoke = format!(
         "{{\"success\":true,\"data\":{{\"output\":{{\"answer\":\"{big}\"}},\"durationMs\":5}}}}"
     );
     let dir = tempfile::tempdir().unwrap();
-    let script = settle_script(&dir, "ab", OPEN_WITH_TOOL, &[], &invoke, &[EVAL_EMPTY]);
-    let cfg = settle_cfg(&script, 0);
+    let script = common::Fake::new()
+        .open(common::OPEN_ANNOUNCED)
+        .invoke(&[&invoke])
+        .install(&dir, "ab");
+    let cfg = run_config(&script);
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
     match execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg) {
         Ok(Outcome::Ran { output, .. }) => {
@@ -1367,13 +1161,17 @@ fn big_stdout_does_not_deadlock() {
 #[cfg(unix)]
 #[test]
 fn huge_stdout_is_truncated() {
+    let _home = HomeGuard::isolate();
     let big = "y".repeat(9 * 1024 * 1024);
     let invoke = format!(
         "{{\"success\":true,\"data\":{{\"output\":{{\"answer\":\"{big}\"}},\"durationMs\":5}}}}"
     );
     let dir = tempfile::tempdir().unwrap();
-    let script = settle_script(&dir, "ab", OPEN_WITH_TOOL, &[], &invoke, &[EVAL_EMPTY]);
-    let cfg = settle_cfg(&script, 0);
+    let script = common::Fake::new()
+        .open(common::OPEN_ANNOUNCED)
+        .invoke(&[&invoke])
+        .install(&dir, "ab");
+    let cfg = run_config(&script);
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
     let e = execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
     assert_eq!(e.code, "driver_error");
@@ -1384,20 +1182,10 @@ fn huge_stdout_is_truncated() {
 #[cfg(unix)]
 #[test]
 fn timeout_names_the_phase_and_stays_bounded() {
+    let _home = HomeGuard::isolate();
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("ab");
-    let log = dir.path().join("ab.argv");
-    std::fs::write(
-        &path,
-        format!(
-            "#!/bin/sh\necho \"$@\" >> \"{log}\"\ncase \" $* \" in\n  *\" --version \"*) echo \"agent-browser 0.43.1\";;\n  *) sleep 30;;\nesac\n",
-            log = log.display(),
-        ),
-    )
-    .unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let mut cfg = run_config(&path);
+    let script = common::Fake::new().stall("open", 30).install(&dir, "ab");
+    let mut cfg = run_config(&script);
     cfg.call.timeout = 200;
     cfg.call.settle_ms = 200;
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
@@ -1415,16 +1203,18 @@ fn timeout_names_the_phase_and_stays_bounded() {
 #[cfg(unix)]
 #[test]
 fn fresh_close_runs_on_open_failure() {
+    let _home = HomeGuard::isolate();
     let dir = tempfile::tempdir().unwrap();
-    let open = r#"{"success":false,"code":"navigation_timeout","error":"timed out"}"#;
-    let script = settle_script(&dir, "ab", open, &[], INVOKE_OK, &[EVAL_EMPTY]);
-    let cfg = settle_cfg(&script, 0);
+    let script = common::Fake::new()
+        .open(common::OPEN_UNREACHABLE)
+        .install(&dir, "ab");
+    let cfg = run_config(&script);
     let mut opts = run_opts();
     opts.fresh = true;
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
     let e = execute(&resolved, json!({"question": "hi"}), &opts, &cfg).unwrap_err();
     assert_eq!(e.code, "page_unreachable");
-    let lines = argv_log(&dir, "ab");
+    let lines = common::Fake::argv(&dir, "ab");
     let closes: Vec<_> = lines
         .iter()
         .filter(|l| l.split_whitespace().last() == Some("close"))
@@ -1439,16 +1229,20 @@ fn fresh_close_runs_on_open_failure() {
 #[cfg(unix)]
 #[test]
 fn fresh_close_runs_on_fast_path_invoke_failure() {
+    let _home = HomeGuard::isolate();
     let dir = tempfile::tempdir().unwrap();
     let invoke = r#"{"success":true,"data":{"output":{"isError":true,"content":[{"type":"text","text":"bad"}]}}}"#;
-    let script = settle_script(&dir, "ab", OPEN_WITH_TOOL, &[], invoke, &[EVAL_EMPTY]);
-    let cfg = settle_cfg(&script, 0);
+    let script = common::Fake::new()
+        .open(common::OPEN_ANNOUNCED)
+        .invoke(&[invoke])
+        .install(&dir, "ab");
+    let cfg = run_config(&script);
     let mut opts = run_opts();
     opts.fresh = true;
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
     let e = execute(&resolved, json!({"question": "hi"}), &opts, &cfg).unwrap_err();
     assert_eq!(e.code, "tool_error");
-    let lines = argv_log(&dir, "ab");
+    let lines = common::Fake::argv(&dir, "ab");
     assert_eq!(
         lines
             .iter()
@@ -1462,16 +1256,19 @@ fn fresh_close_runs_on_fast_path_invoke_failure() {
 #[cfg(unix)]
 #[test]
 fn run_envelope_carries_budget() {
+    let _home = HomeGuard::isolate();
     let dir = tempfile::tempdir().unwrap();
-    let script = settle_script(
-        &dir,
-        "ab",
-        OPEN_OK,
-        &[LIST_EMPTY, LIST_EMPTY, LIST_WITH_TOOL],
-        INVOKE_OK,
-        &[EVAL_OBJECT],
-    );
-    let cfg = settle_cfg(&script, 5000);
+    let script = common::Fake::new()
+        .open(common::OPEN_PLAIN)
+        .lists(&[
+            common::LIST_EMPTY,
+            common::LIST_EMPTY,
+            common::LIST_WITH_TOOL,
+        ])
+        .invoke(&[common::INVOKE_OK])
+        .evals(&[common::EVAL_OBJECT])
+        .install(&dir, "ab");
+    let cfg = run_config_settle(&script, 5000);
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
     match execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg) {
         Ok(outcome @ Outcome::Ran { .. }) => {
@@ -1529,31 +1326,30 @@ fn invoke_record_statuses_map_to_errors() {
     for (name, record, code, message) in [
         (
             "failed",
-            r#"{"success":true,"data":{"invocationId":"inv-1","toolName":"ask_cal_com","frameId":"f","origin":"https://cal.com","status":"failed","durationMs":5,"error":"the tool blew up"}}"#,
+            common::RECORD_FAILED,
             "tool_error",
             "the tool blew up",
         ),
         (
             "context",
-            r#"{"success":true,"data":{"invocationId":"inv-1","toolName":"ask_cal_com","frameId":"f","origin":"https://cal.com","status":"failed","durationMs":5,"error":"webmcp_context_changed: the page context changed before the invocation completed"}}"#,
+            common::RECORD_CONTEXT_CHANGED,
             "driver_error",
             "webmcp_context_changed",
         ),
-        (
-            "timed_out",
-            r#"{"success":true,"data":{"invocationId":"inv-1","toolName":"ask_cal_com","frameId":"f","origin":"https://cal.com","status":"timed_out","durationMs":5,"error":"WebMCP invocation timed out"}}"#,
-            "timeout",
-            "invoke",
-        ),
+        ("timed_out", common::RECORD_TIMED_OUT, "timeout", "invoke"),
         (
             "canceled",
-            r#"{"success":true,"data":{"invocationId":"inv-1","toolName":"ask_cal_com","frameId":"f","origin":"https://cal.com","status":"canceled","durationMs":5}}"#,
+            common::RECORD_CANCELED,
             "driver_error",
             "canceled",
         ),
     ] {
+        let _home = HomeGuard::isolate();
         let dir = tempfile::tempdir().unwrap();
-        let script = settle_script(&dir, "ab", OPEN_WITH_TOOL, &[], record, &[EVAL_EMPTY]);
+        let script = common::Fake::new()
+            .open(common::OPEN_ANNOUNCED)
+            .invoke(&[record])
+            .install(&dir, "ab");
         let cfg = run_config(&script);
         let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
         let e = execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
@@ -1565,9 +1361,13 @@ fn invoke_record_statuses_map_to_errors() {
 #[cfg(unix)]
 #[test]
 fn failed_record_carries_the_record_as_data() {
+    let _home = HomeGuard::isolate();
     let dir = tempfile::tempdir().unwrap();
     let record = r#"{"success":true,"data":{"invocationId":"inv-1","toolName":"ask_cal_com","frameId":"f","origin":"https://cal.com","status":"failed","durationMs":5,"error":"bad input"}}"#;
-    let script = settle_script(&dir, "ab", OPEN_WITH_TOOL, &[], record, &[EVAL_EMPTY]);
+    let script = common::Fake::new()
+        .open(common::OPEN_ANNOUNCED)
+        .invoke(&[record])
+        .install(&dir, "ab");
     let cfg = run_config(&script);
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
     let e = execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
@@ -1579,9 +1379,12 @@ fn failed_record_carries_the_record_as_data() {
 #[cfg(unix)]
 #[test]
 fn ambiguous_tool_names_tool_and_frames() {
+    let _home = HomeGuard::isolate();
     let dir = tempfile::tempdir().unwrap();
-    let ambiguous = r#"{"success":false,"code":"webmcp_ambiguous_tool","error":"tool is ambiguous","data":{"frames":[{"frameId":"a"},{"frameId":"b"}]}}"#;
-    let script = settle_script(&dir, "ab", OPEN_WITH_TOOL, &[], ambiguous, &[EVAL_EMPTY]);
+    let script = common::Fake::new()
+        .open(common::OPEN_ANNOUNCED)
+        .invoke(&[common::INVOKE_AMBIGUOUS])
+        .install(&dir, "ab");
     let cfg = run_config(&script);
     let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
     let e = execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
