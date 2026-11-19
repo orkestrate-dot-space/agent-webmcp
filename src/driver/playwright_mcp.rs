@@ -20,7 +20,9 @@ impl Driver for PlaywrightMcp {
     }
 
     fn note(&self) -> Option<&'static str> {
-        Some("needs --enable-features=WebMCP in browser.launchOptions.args")
+        Some(
+            "needs --enable-features=WebMCP in browser.launchOptions.args in the Playwright MCP config file",
+        )
     }
 
     fn plan(&self, req: &CallRequest) -> Plan {
@@ -31,17 +33,12 @@ impl Driver for PlaywrightMcp {
                 Step {
                     tool: "browser_navigate".to_string(),
                     args: serde_json::json!({"url": req.page}),
-                    why: "open the page".to_string(),
-                },
-                Step {
-                    tool: "browser_snapshot".to_string(),
-                    args: serde_json::json!({}),
-                    why: "WebMCP tools appear after a snapshot".to_string(),
+                    why: "open the page; the response lists the registered WebMCP tools".to_string(),
                 },
                 Step {
                     tool: format!("webmcp_{}", req.tool),
                     args: req.input.clone(),
-                    why: "call the tool with the validated input".to_string(),
+                    why: "use the exact webmcp_* name from the navigate listing; Playwright rewrites characters outside A-Za-z0-9_- to _ and cuts names at 64".to_string(),
                 },
             ],
         }

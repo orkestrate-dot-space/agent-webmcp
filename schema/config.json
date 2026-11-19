@@ -12,7 +12,7 @@
     },
     "driver": {
       "type": "string",
-      "enum": ["auto", "agent-browser", "playwright-mcp", "chrome-devtools-mcp", "browse", "none"],
+      "enum": ["auto", "agent-browser", "lightpanda", "playwright-mcp", "chrome-devtools-mcp", "browse", "none"],
       "default": "auto",
       "description": "Which driver call uses: the run driver, a plan driver, or none."
     },
@@ -20,7 +20,7 @@
       "type": "object",
       "additionalProperties": false,
       "default": {},
-      "description": "Per-driver settings; only agent-browser runs outside the agent session.",
+      "description": "Per-driver settings; agent-browser and lightpanda run outside the agent session.",
       "properties": {
         "agent-browser": {
           "type": "object",
@@ -57,6 +57,18 @@
               "items": { "type": "string" },
               "default": [],
               "description": "Extra --args values for agent-browser, before the WebMCP one; user config only."
+            }
+          }
+        },
+        "lightpanda": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "How to reach lightpanda: the program to run.",
+          "properties": {
+            "command": {
+              "type": "string",
+              "default": "lightpanda",
+              "description": "Program to run; user config only, never the project file."
             }
           }
         }

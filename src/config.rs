@@ -17,6 +17,8 @@ pub enum DriverChoice {
     Auto,
     /// Run driver: drives a browser over a local socket.
     AgentBrowser,
+    /// Run driver: lighter browser over PandaScript.
+    Lightpanda,
     /// Plan driver: steps for the agent's Playwright MCP.
     PlaywrightMcp,
     /// Plan driver: steps for the agent's Chrome DevTools MCP.
@@ -27,13 +29,15 @@ pub enum DriverChoice {
     None,
 }
 
-/// Per-driver settings; only agent-browser runs outside the agent session.
+/// Per-driver settings; agent-browser and lightpanda run outside the agent session.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields, default)]
 pub struct Drivers {
     /// Settings for the agent-browser run driver.
     #[serde(rename = "agent-browser")]
     pub agent_browser: AgentBrowserSettings,
+    /// Settings for the lightpanda run driver.
+    pub lightpanda: LightpandaSettings,
 }
 
 /// How to reach agent-browser: command, session, and how to show it.
@@ -67,6 +71,22 @@ impl Default for AgentBrowserSettings {
             profile: None,
             cdp: None,
             extra_args: Vec::new(),
+        }
+    }
+}
+
+/// How to reach lightpanda: just the program to run.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields, default)]
+pub struct LightpandaSettings {
+    /// Program to run; user config only, never the project file.
+    pub command: String,
+}
+
+impl Default for LightpandaSettings {
+    fn default() -> Self {
+        Self {
+            command: "lightpanda".to_string(),
         }
     }
 }
@@ -330,6 +350,12 @@ pub fn user_dir(env: &dyn Fn(&str) -> Option<String>) -> PathBuf {
     home.join(".config/agent-webmcp")
 }
 
+/// The default user config path for messages: the explicit file, or the
+/// `.jsonc` default the loader would read.
+pub fn user_path(env: &dyn Fn(&str) -> Option<String>, cwd: &Path) -> PathBuf {
+    locate(env, cwd).user
+}
+
 /// Find the config files without parsing them.
 pub fn locate(env: &dyn Fn(&str) -> Option<String>, cwd: &Path) -> Locations {
     let set = |key: &str| env(key).filter(|v| !v.is_empty());
@@ -479,7 +505,7 @@ fn allowed_key(parent: &str, key: &str) -> bool {
     match parent {
         "" => matches!(key, "$schema" | "call" | "drivers" | "permissions"),
         "call" => key == "timeout",
-        "drivers" => key == "agent-browser",
+        "drivers" => matches!(key, "agent-browser" | "lightpanda"),
         "drivers.agent-browser" => key == "headed",
         "permissions" => matches!(key, "ask" | "deny"),
         _ => false,
@@ -490,7 +516,7 @@ fn allowed_key(parent: &str, key: &str) -> bool {
 fn is_container(dotted: &str) -> bool {
     matches!(
         dotted,
-        "call" | "drivers" | "drivers.agent-browser" | "permissions"
+        "call" | "drivers" | "drivers.agent-browser" | "drivers.lightpanda" | "permissions"
     )
 }
 
@@ -708,12 +734,13 @@ fn apply_env(config: &mut Config, env: &dyn Fn(&str) -> Option<String>) -> Resul
         config.driver = match value.as_str() {
             "auto" => DriverChoice::Auto,
             "agent-browser" => DriverChoice::AgentBrowser,
+            "lightpanda" => DriverChoice::Lightpanda,
             "playwright-mcp" => DriverChoice::PlaywrightMcp,
             "chrome-devtools-mcp" => DriverChoice::ChromeDevtoolsMcp,
             "browse" => DriverChoice::Browse,
             "none" => DriverChoice::None,
             _ => bail!(
-                "invalid AGENT_WEBMCP_DRIVER value {value:?}; expected one of auto, agent-browser, playwright-mcp, chrome-devtools-mcp, browse, none"
+                "invalid AGENT_WEBMCP_DRIVER value {value:?}; expected one of auto, agent-browser, lightpanda, playwright-mcp, chrome-devtools-mcp, browse, none"
             ),
         };
         used = true;
@@ -754,6 +781,10 @@ fn apply_env(config: &mut Config, env: &dyn Fn(&str) -> Option<String>) -> Resul
     }
     if let Some(value) = set("AGENT_WEBMCP_AGENT_BROWSER") {
         config.drivers.agent_browser.command = value;
+        used = true;
+    }
+    if let Some(value) = set("AGENT_WEBMCP_LIGHTPANDA") {
+        config.drivers.lightpanda.command = value;
         used = true;
     }
     if let Some(value) = set("AGENT_WEBMCP_EXTRA_ARGS") {
