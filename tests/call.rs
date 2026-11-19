@@ -531,14 +531,12 @@ fn fake_script(
     open: &str,
 ) -> std::path::PathBuf {
     let log = dir.path().join(format!("{name}.argv"));
-    let count = dir.path().join(format!("{name}.count"));
     let path = dir.path().join(name);
     let script = format!(
-        "#!/bin/sh\necho \"$@\" >> \"{log}\"\ncase \" $* \" in\n  *\" --version \"*) echo \"agent-browser 0.43.1\";;\n  *\" close \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" invoke \"*)\n    n=$(cat \"{count}\" 2>/dev/null || echo 0)\n    echo $((n + 1)) > \"{count}\"\n    if [ \"$n\" = \"0\" ]; then echo '{first}'; else echo '{second}'; fi;;\n  *\" open \"*) echo '{open}';;\nesac\n",
+        "#!/bin/sh\necho \"$@\" >> \"{log}\"\ncase \" $* \" in\n  *\" --version \"*) echo \"agent-browser 0.43.1\";;\n  *\" close \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" invoke \"*) echo '{pending}';;\n  *\" result \"*) echo '{invoke}';;\n  *\" cancel \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" open \"*) echo '{open}';;\nesac\n",
         log = log.display(),
-        count = count.display(),
-        first = invoke,
-        second = invoke,
+        pending = PENDING,
+        invoke = invoke,
         open = open,
     );
     std::fs::write(&path, script).unwrap();
@@ -559,9 +557,10 @@ fn counting_script(
     let count = dir.path().join(format!("{name}.count"));
     let path = dir.path().join(name);
     let script = format!(
-        "#!/bin/sh\necho \"$@\" >> \"{log}\"\ncase \" $* \" in\n  *\" --version \"*) echo \"agent-browser 0.43.1\";;\n  *\" close \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" invoke \"*)\n    n=$(cat \"{count}\" 2>/dev/null || echo 0)\n    echo $((n + 1)) > \"{count}\"\n    if [ \"$n\" = \"0\" ]; then echo '{first}'; else echo '{second}'; fi;;\n  *\" open \"*) echo '{open}';;\nesac\n",
+        "#!/bin/sh\necho \"$@\" >> \"{log}\"\ncase \" $* \" in\n  *\" --version \"*) echo \"agent-browser 0.43.1\";;\n  *\" close \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" invoke \"*) echo '{pending}';;\n  *\" result \"*)\n    n=$(cat \"{count}\" 2>/dev/null || echo 0)\n    echo $((n + 1)) > \"{count}\"\n    if [ \"$n\" = \"0\" ]; then echo '{first}'; else echo '{second}'; fi;;\n  *\" cancel \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" open \"*) echo '{open}';;\nesac\n",
         log = log.display(),
         count = count.display(),
+        pending = PENDING,
         first = first,
         second = second,
         open = open,
@@ -593,7 +592,10 @@ const INVOKE_NOTFOUND: &str = r#"{"success":false,"code":"webmcp_tool_not_found"
 fn run_config(script: &std::path::Path) -> config::Config {
     let mut cfg = allow_all();
     cfg.drivers.agent_browser.command = script.display().to_string();
-    cfg.drivers.agent_browser.session = "test-s".to_string();
+    // Unique per test: parallel runs hold their own session lock.
+    static SESSION_N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = SESSION_N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    cfg.drivers.agent_browser.session = format!("test-s-{n}");
     cfg.call.timeout = 1234;
     // Legacy settle: existing run tests cover invoke/retry, not settling.
     cfg.call.settle_ms = 0;
@@ -619,12 +621,13 @@ fn settle_script(
     std::fs::write(&evals_file, evals.join("\n")).unwrap();
     let path = dir.path().join(name);
     let script = format!(
-        "#!/bin/sh\necho \"$@\" >> \"{log}\"\ncase \" $* \" in\n  *\" --version \"*) echo \"agent-browser 0.43.1\";;\n  *\" close \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" invoke \"*) echo '{invoke}';;\n  *\" open \"*) echo '{open}';;\n  *\" list \"*) n=$(cat \"{count}\" 2>/dev/null || echo 0); echo $((n + 1)) > \"{count}\"; sed -n \"$((n+1))p\" \"{lists}\";;\n  *\" reload \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" wait \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" eval \"*) n=$(cat \"{ecount}\" 2>/dev/null || echo 0); echo $((n + 1)) > \"{ecount}\"; sed -n \"$((n+1))p\" \"{evals}\";;\nesac\n",
+        "#!/bin/sh\necho \"$@\" >> \"{log}\"\ncase \" $* \" in\n  *\" --version \"*) echo \"agent-browser 0.43.1\";;\n  *\" close \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" invoke \"*) echo '{pending}';;\n  *\" result \"*) echo '{invoke}';;\n  *\" cancel \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" open \"*) echo '{open}';;\n  *\" list \"*) n=$(cat \"{count}\" 2>/dev/null || echo 0); echo $((n + 1)) > \"{count}\"; sed -n \"$((n+1))p\" \"{lists}\";;\n  *\" reload \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" wait \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" eval \"*) n=$(cat \"{ecount}\" 2>/dev/null || echo 0); echo $((n + 1)) > \"{ecount}\"; sed -n \"$((n+1))p\" \"{evals}\";;\nesac\n",
         log = log.display(),
         count = count.display(),
         lists = lists.display(),
         ecount = ecount.display(),
         evals = evals_file.display(),
+        pending = PENDING,
         invoke = invoke_json,
         open = open_json,
     );
@@ -657,6 +660,8 @@ const LIST_EMPTY: &str = r#"{"success":true,"data":{"tools":[]}}"#;
 const LIST_WITH_TOOL: &str = r#"{"success":true,"data":{"tools":[{"name":"ask_cal_com"}]}}"#;
 #[cfg(unix)]
 const OPEN_WITH_TOOL: &str = r#"{"success":true,"data":{"url":"https://cal.com/","lifecycle":{"reused":true},"webmcp":{"tools":[{"name":"ask_cal_com"}]}}}"#;
+#[cfg(unix)]
+const PENDING: &str = r#"{"success":true,"data":{"invocationId":"inv-1","status":"pending"}}"#;
 #[cfg(unix)]
 const EVAL_EMPTY: &str = r#"{"success":true,"data":[]}"#;
 #[cfg(unix)]
@@ -694,14 +699,15 @@ fn happy_path_returns_output_reused_and_removes_params() {
     }
     let lines = argv_log(&dir, "ab");
     let open = lines.iter().find(|l| l.contains(" open ")).unwrap();
-    assert!(open.contains("--session test-s --json"), "{open}");
+    assert!(open.contains("--session test-s-"), "{open}");
     assert!(open.contains("open https://cal.com/"), "{open}");
     assert!(open.contains("--init-script /"), "{open}");
     assert!(!open.contains("--init-script @"), "{open}");
     assert!(!open.contains("--profile"), "{open}");
     let invoke = lines.iter().find(|l| l.contains(" invoke ")).unwrap();
-    assert!(invoke.contains("--session test-s --json"), "{invoke}");
+    assert!(invoke.contains("--session test-s-"), "{invoke}");
     assert!(invoke.contains("--timeout 1234"), "{invoke}");
+    assert!(invoke.contains("--detach"), "{invoke}");
     assert!(!invoke.contains("--profile"), "{invoke}");
     let at = invoke
         .split_whitespace()
@@ -1246,7 +1252,7 @@ fn blocked_title_stops_before_invoke() {
 #[test]
 fn recorder_names_removed_tool() {
     let dir = tempfile::tempdir().unwrap();
-    let seen = r#"{"success":true,"data":["ask_cal_com"]}"#;
+    let seen = r#"{"success":true,"data":{"result":["ask_cal_com"]}}"#;
     let script = settle_script(
         &dir,
         "ab",
@@ -1588,4 +1594,79 @@ fn cli_huge_timeout_is_usage() {
     assert_eq!(out.status.code(), Some(2), "{out:?}");
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("timeout must be 1..3600000 ms"), "{stderr}");
+}
+
+// --- detach + poll (unix) ---
+
+#[cfg(unix)]
+const RESULT_TIMED_OUT: &str =
+    r#"{"success":true,"data":{"invocationId":"inv-1","status":"timed_out"}}"#;
+
+#[cfg(unix)]
+#[test]
+fn daemon_timeout_is_flagged_timeout_without_cancel() {
+    let dir = tempfile::tempdir().unwrap();
+    let script = settle_script(
+        &dir,
+        "ab",
+        OPEN_WITH_TOOL,
+        &[],
+        RESULT_TIMED_OUT,
+        &[EVAL_EMPTY],
+    );
+    let cfg = run_config(&script);
+    let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
+    let e = execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
+    assert_eq!(e.code, "timeout");
+    assert!(e.message.contains("invoke"), "{}", e.message);
+    assert_eq!(e.data.as_ref().unwrap()["daemonTimedOut"], json!(true));
+    let lines = argv_log(&dir, "ab");
+    assert!(
+        lines.iter().any(|l| l.contains(" result inv-1 ")),
+        "{lines:?}"
+    );
+    assert!(!lines.iter().any(|l| l.contains(" cancel ")), "{lines:?}");
+}
+
+#[cfg(unix)]
+#[test]
+fn our_timeout_cancels_the_invocation() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("ab");
+    let log = dir.path().join("ab.argv");
+    std::fs::write(
+        &path,
+        format!(
+            "#!/bin/sh\necho \"$@\" >> \"{log}\"\ncase \" $* \" in\n  *\" --version \"*) echo \"agent-browser 0.43.1\";;\n  *\" close \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\n  *\" open \"*) echo '{OPEN_WITH_TOOL}';;\n  *\" invoke \"*) echo '{PENDING}';;\n  *\" result \"*) sleep 30;;\n  *\" cancel \"*) echo '{{\"success\":true,\"data\":{{}}}}';;\nesac\n",
+            log = log.display(),
+        ),
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let mut cfg = run_config(&path);
+    cfg.call.timeout = 200;
+    let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
+    let e = execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
+    assert_eq!(e.code, "timeout");
+    assert!(e.message.contains("invoke"), "{}", e.message);
+    assert!(e.data.is_none(), "{:?}", e.data);
+    let lines = argv_log(&dir, "ab");
+    let cancel = lines.iter().find(|l| l.contains(" cancel ")).unwrap();
+    assert!(cancel.contains("inv-1"), "{cancel}");
+}
+
+#[cfg(unix)]
+#[test]
+fn ambiguous_tool_names_tool_and_frames() {
+    let dir = tempfile::tempdir().unwrap();
+    let ambiguous = r#"{"success":false,"code":"webmcp_ambiguous_tool","error":"tool is ambiguous","data":{"frames":[{"frameId":"a"},{"frameId":"b"}]}}"#;
+    let script = settle_script(&dir, "ab", OPEN_WITH_TOOL, &[], ambiguous, &[EVAL_EMPTY]);
+    let cfg = run_config(&script);
+    let resolved = resolve("cal.com/ask_cal_com", &search()).unwrap();
+    let e = execute(&resolved, json!({"question": "hi"}), &run_opts(), &cfg).unwrap_err();
+    assert_eq!(e.code, "ambiguous_tool");
+    assert!(e.message.contains("ask_cal_com"), "{}", e.message);
+    assert!(e.message.contains("2 frames"), "{}", e.message);
+    assert!(e.message.contains("browser driver"), "{}", e.message);
 }

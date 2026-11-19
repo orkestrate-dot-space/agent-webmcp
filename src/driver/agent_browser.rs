@@ -307,6 +307,43 @@ fn timed_out(phase: &str) -> CallError {
     }
 }
 
+/// Our timeout, but the daemon timed out first: same error, flagged.
+fn daemon_timed_out() -> CallError {
+    let mut err = timed_out("invoke");
+    err.data = Some(serde_json::json!({ "daemonTimedOut": true }));
+    err
+}
+
+/// The daemon dropped the invocation because the page moved: no retry.
+fn is_context_moved(val: &serde_json::Value) -> bool {
+    let texts = [
+        envelope_code(val),
+        envelope_error(val),
+        val.pointer("/data/error")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(""),
+        val.pointer("/data/rawStatus")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(""),
+    ];
+    texts.iter().any(|t| {
+        let lowered = t.to_lowercase();
+        lowered.contains("context_changed")
+            || (lowered.contains("navigation")
+                && (lowered.contains("moved") || lowered.contains("changed")))
+    })
+}
+
+/// The page navigated mid-call, ending the invocation.
+fn context_moved() -> CallError {
+    CallError {
+        code: "driver_error",
+        message: "agent-browser dropped the invocation: the page navigated mid-call (webmcp_context_changed); re-run the call"
+            .to_string(),
+        data: Some(serde_json::json!({ "code": "webmcp_context_changed" })),
+    }
+}
+
 impl AgentBrowser {
     fn run_inner(&self, req: &CallRequest, opts: &RunOptions) -> Result<RunOutcome, CallError> {
         let session = if opts.fresh {
@@ -320,6 +357,17 @@ impl AgentBrowser {
             )
         } else {
             self.session.clone()
+        };
+        // One process per session for the whole run; fresh sessions are
+        // unique per run, so they skip the lock. The guard releases on drop,
+        // covering every return below; contention returns early here.
+        let _session_lock = if opts.fresh {
+            None
+        } else {
+            Some(super::lock::acquire(
+                &crate::store::data_dir().join("sessions"),
+                &session,
+            )?)
         };
         let mut base = vec![
             "--session".to_string(),
@@ -356,7 +404,9 @@ impl AgentBrowser {
 
         let started = std::time::Instant::now();
         let budgets = CallBudget::new(opts.timeout_ms, opts.settle_ms.min(30_000), started);
-        let outcome = self.run_phases(req, opts, &base, &open_argv, &session, &budgets, started);
+        let outcome = self.run_phases(
+            req, opts, &base, &open_argv, &session, &budgets, started, opts.fresh,
+        );
         // Timeouts already attempted a close inside run_command; a fresh
         // session only needs its close when the call did not time out.
         let timed_out = matches!(&outcome, Err(e) if e.code == "timeout");
@@ -380,18 +430,25 @@ impl AgentBrowser {
         session: &str,
         budgets: &CallBudget,
         started: std::time::Instant,
+        fresh: bool,
     ) -> Result<RunOutcome, CallError> {
         let open_cap = opts.timeout_ms.saturating_add(15_000);
-        let open_val = run_step(
+        let opened = run_step(
             &self.command,
             open_argv,
             budgets.phase(open_cap, "open")?,
             session,
             "open",
         )?;
-        if !is_success(&open_val) {
-            return Err(open_failure(&open_val));
+        if !is_success(&opened) {
+            return Err(open_failure(&opened));
         }
+        // Fresh sessions die with the call, so there is no build to pin.
+        let (open_val, pin) = if fresh {
+            (opened, PinOutcome::none())
+        } else {
+            self.check_pin(open_argv, &opened, session, budgets, open_cap)?
+        };
         let page_url = open_val
             .pointer("/data/url")
             .and_then(serde_json::Value::as_str)
@@ -409,7 +466,7 @@ impl AgentBrowser {
         let settle_ms = opts.settle_ms.min(30_000);
         let announced = tool_names_at(&open_val, "/data/webmcp/tools");
         let result = if announced.iter().any(|n| n == &req.tool) {
-            map_invoke(self.invoke_once(req, base, session, budgets)?)
+            map_invoke(self.invoke_once(req, base, session, budgets)?, &req.tool)
         } else if is_blocked_page(title, page_url, "") {
             Err(blocked_page(page_url, title))
         } else if settle_ms == 0 {
@@ -431,7 +488,88 @@ impl AgentBrowser {
             duration_ms: started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64,
             reused,
             budget_ms: budgets.total_ms,
+            agent_browser: pin.agent_browser,
+            session: session.to_string(),
+            launch_hash: pin.launch_hash,
+            session_age_ms: pin.session_age_ms,
+            recovered: pin.recovered,
         })
+    }
+
+    /// Compare the open against the session pin; on drift close once,
+    /// drop the pin, re-open, re-pin and continue (recovered). A second
+    /// mismatch errors with both hashes. Absent hashes or versions skip
+    /// pinning: older daemons omit `effectiveLaunch`, and without it there
+    /// is nothing to compare.
+    fn check_pin(
+        &self,
+        open_argv: &[String],
+        opened: &serde_json::Value,
+        session: &str,
+        budgets: &CallBudget,
+        open_cap: u64,
+    ) -> Result<(serde_json::Value, PinOutcome), CallError> {
+        let dir = crate::store::data_dir();
+        let now = super::lock::now_ms();
+        let (Some(version), Some(hash)) = (detect_version(&self.command), open_launch_hash(opened))
+        else {
+            return Ok((opened.clone(), PinOutcome::none()));
+        };
+        match read_pin(&dir, session) {
+            None => {
+                write_pin(
+                    &dir,
+                    session,
+                    &SessionPin {
+                        agent_browser: version.clone(),
+                        launch_hash: hash.clone(),
+                        first_seen_ms: now,
+                    },
+                );
+                Ok((opened.clone(), PinOutcome::fresh(version, hash)))
+            }
+            Some(pin) if pin.agent_browser == version && pin.launch_hash == hash => {
+                Ok((opened.clone(), PinOutcome::kept(version, hash, now, pin)))
+            }
+            Some(old) => {
+                self.close_session(session, budgets.cap(15_000));
+                let _ = std::fs::remove_file(pin_path(&dir, session));
+                let Ok(ms) = budgets.phase(open_cap, "open") else {
+                    return Ok((opened.clone(), PinOutcome::none()));
+                };
+                let reopened = run_step(&self.command, open_argv, ms, session, "open")?;
+                if !is_success(&reopened) {
+                    return Err(open_failure(&reopened));
+                }
+                let hash2 = open_launch_hash(&reopened);
+                if hash2.as_deref().is_some_and(|h| h != hash.as_str()) {
+                    return Err(CallError {
+                        code: "driver_error",
+                        message: format!(
+                            "agent-browser build changed mid-call and re-open did not settle it (launch {} vs {}); close the session and retry",
+                            hash2.as_deref().unwrap_or("unknown"),
+                            hash,
+                        ),
+                        data: Some(serde_json::json!({
+                            "launchHash": hash2,
+                            "expectedLaunchHash": hash,
+                            "agentBrowser": version,
+                        })),
+                    });
+                }
+                let hash2 = hash2.unwrap_or(hash);
+                write_pin(
+                    &dir,
+                    session,
+                    &SessionPin {
+                        agent_browser: version.clone(),
+                        launch_hash: hash2.clone(),
+                        first_seen_ms: old.first_seen_ms,
+                    },
+                );
+                Ok((reopened, PinOutcome::drifted(version, hash2, now, &old)))
+            }
+        }
     }
 
     /// Best-effort session close; never fails the call.
@@ -448,7 +586,9 @@ impl AgentBrowser {
         );
     }
 
-    /// One invoke attempt: params file, invoke, parse. No retry here.
+    /// One invoke attempt: params file, detached invoke, poll to completion.
+    /// Immediate envelopes (old daemons, CLI errors) skip polling so the
+    /// existing `map_invoke` mapping below still classifies everything.
     fn invoke_once(
         &self,
         req: &CallRequest,
@@ -465,17 +605,114 @@ impl AgentBrowser {
             req.tool.clone(),
             "--params".to_string(),
             format!("@{}", params.path.display()),
+            "--detach".to_string(),
             "--timeout".to_string(),
             budgets.timeout_ms.to_string(),
         ]);
         let cap = budgets.timeout_ms.saturating_add(15_000);
-        parse_envelope(&run_command(
+        let first = parse_envelope(&run_command(
             &self.command,
             &invoke_argv,
             budgets.phase(cap, "invoke")?,
             session,
             "invoke",
-        )?)
+        )?)?;
+        if !is_success(&first)
+            || first
+                .pointer("/data/status")
+                .and_then(serde_json::Value::as_str)
+                != Some("pending")
+        {
+            return Ok(first);
+        }
+        let Some(id) = first
+            .pointer("/data/invocationId")
+            .and_then(serde_json::Value::as_str)
+        else {
+            return Ok(first);
+        };
+        self.poll_result(base, session, budgets, id)
+    }
+
+    /// Follow a detached invocation until it completes. Our own timeout
+    /// cancels the invocation best-effort; a daemon-side timeout is the
+    /// same error with `data.daemonTimedOut`.
+    fn poll_result(
+        &self,
+        base: &[String],
+        session: &str,
+        budgets: &CallBudget,
+        id: &str,
+    ) -> Result<serde_json::Value, CallError> {
+        let tool_ms = budgets.timeout_ms;
+        let start = std::time::Instant::now();
+        loop {
+            if budgets.remaining_ms() == 0 {
+                self.cancel_invoke(base, id);
+                return Err(timed_out("invoke"));
+            }
+            let elapsed = start.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+            let remaining = tool_ms.saturating_sub(elapsed).min(budgets.remaining_ms());
+            if remaining == 0 {
+                self.cancel_invoke(base, id);
+                return Err(timed_out("invoke"));
+            }
+            let per = remaining.min(5_000);
+            let mut argv = base.to_vec();
+            argv.extend([
+                "webmcp".to_string(),
+                "result".to_string(),
+                id.to_string(),
+                "--timeout".to_string(),
+                per.to_string(),
+            ]);
+            let out = match run_command(&self.command, &argv, per, session, "invoke") {
+                Ok(out) => out,
+                Err(e) if e.code == "timeout" => {
+                    self.cancel_invoke(base, id);
+                    return Err(timed_out("invoke"));
+                }
+                Err(e) => return Err(e),
+            };
+            let val = parse_envelope(&out)?;
+            if !is_success(&val) {
+                if is_context_moved(&val) {
+                    return Err(context_moved());
+                }
+                return Ok(val);
+            }
+            match val
+                .pointer("/data/status")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("")
+            {
+                "completed" | "failed" => {
+                    if is_context_moved(&val) {
+                        return Err(context_moved());
+                    }
+                    return Ok(val);
+                }
+                "timed_out" | "canceled" | "cancelled" => {
+                    return Err(daemon_timed_out());
+                }
+                // No status: the daemon answered synchronously (or an old
+                // one ignored --detach). Hand it to the existing mapper
+                // instead of polling forever.
+                _ => {
+                    if val.pointer("/data/output").is_some() {
+                        return Ok(val);
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+            }
+        }
+    }
+
+    /// Best-effort cancel of a detached invocation; never fails the call.
+    fn cancel_invoke(&self, base: &[String], id: &str) {
+        let mut argv = base.to_vec();
+        argv.extend(["webmcp".to_string(), "cancel".to_string(), id.to_string()]);
+        let _ = run_command_raw(&self.command, &argv, 10_000, "cancel");
     }
 
     /// Today's shape for settle_ms 0: invoke, re-open once on
@@ -490,7 +727,7 @@ impl AgentBrowser {
     ) -> Result<serde_json::Value, CallError> {
         let first = self.invoke_once(req, base, session, budgets)?;
         if is_success(&first) || invoke_code(&first) != "webmcp_tool_not_found" {
-            return map_invoke(first);
+            return map_invoke(first, &req.tool);
         }
         let cap = budgets.timeout_ms.saturating_add(15_000);
         let reopened = run_step(
@@ -507,7 +744,7 @@ impl AgentBrowser {
         if !is_success(&second) && invoke_code(&second) == "webmcp_tool_not_found" {
             return Err(tool_not_found(&req.tool));
         }
-        map_invoke(second)
+        map_invoke(second, &req.tool)
     }
 
     /// Settle for a late tool: first look, probe, poll, reload once, settle
@@ -531,7 +768,7 @@ impl AgentBrowser {
         // The first look: found → invoke; empty plus an empty announcement →
         // probe the JS API before concluding anything.
         if self.poll_once(base, &req.tool, budgets.cap(15_000), session) {
-            return map_invoke(self.invoke_once(req, base, session, budgets)?);
+            return map_invoke(self.invoke_once(req, base, session, budgets)?, &req.tool);
         }
         if announced_empty
             && let Some(api) = self.probe_api(base, session, budgets)
@@ -540,15 +777,15 @@ impl AgentBrowser {
             return Err(webmcp_unsupported(&api));
         }
         if self.poll_until_present(base, &req.tool, stop_at, session) {
-            return map_invoke(self.invoke_once(req, base, session, budgets)?);
+            return map_invoke(self.invoke_once(req, base, session, budgets)?, &req.tool);
         }
         self.reload_and_wait(base, session, budgets);
         if self.poll_until_present(base, &req.tool, stop_at, session) {
-            return map_invoke(self.invoke_once(req, base, session, budgets)?);
+            return map_invoke(self.invoke_once(req, base, session, budgets)?, &req.tool);
         }
         budgets.checkpoint("list")?;
         if self.poll_once(base, &req.tool, budgets.cap(15_000), session) {
-            return map_invoke(self.invoke_once(req, base, session, budgets)?);
+            return map_invoke(self.invoke_once(req, base, session, budgets)?, &req.tool);
         }
         if is_blocked_page(title, page_url, "") {
             return Err(blocked_page(page_url, title));
@@ -755,6 +992,7 @@ fn tool_removed(tool: &str) -> CallError {
 }
 
 /// Names the recorder saw, via one `eval`. Lenient: failure means none.
+/// Eval results land under `/data/result`, not `/data`.
 fn read_recorder(
     command: &str,
     base: &[String],
@@ -776,7 +1014,7 @@ fn read_recorder(
     if !is_success(&val) {
         return Vec::new();
     }
-    val.get("data")
+    val.pointer("/data/result")
         .and_then(serde_json::Value::as_array)
         .map(|names| {
             names
@@ -1037,8 +1275,26 @@ fn invoke_code(invoke: &serde_json::Value) -> &str {
 }
 
 /// Map a final invoke envelope to output or a typed error.
-fn map_invoke(invoke: serde_json::Value) -> Result<serde_json::Value, CallError> {
+fn map_invoke(invoke: serde_json::Value, tool: &str) -> Result<serde_json::Value, CallError> {
     if !is_success(&invoke) {
+        if envelope_code(&invoke) == "webmcp_ambiguous_tool" {
+            let scope = match invoke
+                .pointer("/data/frames")
+                .and_then(serde_json::Value::as_array)
+            {
+                Some(frames) => format!("in {} frames", frames.len()),
+                None => "in more than one frame".to_string(),
+            };
+            return Err(CallError {
+                code: "ambiguous_tool",
+                message: format!(
+                    "the page registers {tool} {scope}; agent-webmcp cannot pick one yet — run it with your browser driver"
+                ),
+                data: Some(
+                    serde_json::json!({ "code": envelope_code(&invoke), "error": envelope_error(&invoke) }),
+                ),
+            });
+        }
         return Err(CallError {
             code: "driver_error",
             message: if envelope_error(&invoke).is_empty() {
@@ -1082,4 +1338,156 @@ fn tool_error_text(output: &serde_json::Value) -> String {
         .next()
         .map(str::to_string)
         .unwrap_or_else(|| "the tool reported an error".to_string())
+}
+
+/// What the session pin said: version and hash for the envelope, and
+/// whether this call recovered from build drift.
+struct PinOutcome {
+    agent_browser: Option<String>,
+    launch_hash: Option<String>,
+    session_age_ms: u64,
+    recovered: Option<String>,
+}
+
+impl PinOutcome {
+    /// Nothing to report: fresh session, or nothing to pin against.
+    fn none() -> Self {
+        Self {
+            agent_browser: None,
+            launch_hash: None,
+            session_age_ms: 0,
+            recovered: None,
+        }
+    }
+
+    /// First sight of this session: age zero, nothing recovered.
+    fn fresh(version: String, hash: String) -> Self {
+        Self {
+            agent_browser: Some(version),
+            launch_hash: Some(hash),
+            session_age_ms: 0,
+            recovered: None,
+        }
+    }
+
+    /// Pin matched: age since first sight.
+    fn kept(version: String, hash: String, now: u64, pin: SessionPin) -> Self {
+        Self {
+            agent_browser: Some(version),
+            launch_hash: Some(hash),
+            session_age_ms: now.saturating_sub(pin.first_seen_ms),
+            recovered: None,
+        }
+    }
+
+    /// Re-open settled on the new build: keep the original first sight,
+    /// so the age still describes the session, and flag the recovery.
+    fn drifted(version: String, hash: String, now: u64, old: &SessionPin) -> Self {
+        Self {
+            agent_browser: Some(version),
+            launch_hash: Some(hash),
+            session_age_ms: now.saturating_sub(old.first_seen_ms),
+            recovered: Some("build-drift".to_string()),
+        }
+    }
+}
+
+/// The build that opened the session, remembered across calls.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SessionPin {
+    agent_browser: String,
+    launch_hash: String,
+    first_seen_ms: u64,
+}
+
+fn pin_path(dir: &std::path::Path, session: &str) -> std::path::PathBuf {
+    dir.join("sessions").join(format!("{session}.json"))
+}
+
+/// Launch hash of the open envelope, if the daemon reports one. Older
+/// daemons omit `effectiveLaunch`; without it there is nothing to pin.
+fn open_launch_hash(open: &serde_json::Value) -> Option<String> {
+    open.pointer("/data/lifecycle/effectiveLaunch/launchHash")
+        .map(|v| {
+            v.as_str()
+                .map(str::to_string)
+                .unwrap_or_else(|| v.to_string())
+        })
+}
+
+/// Read the pin; corrupt files count as absent so the next write heals.
+fn read_pin(dir: &std::path::Path, session: &str) -> Option<SessionPin> {
+    let val: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(pin_path(dir, session)).ok()?).ok()?;
+    Some(SessionPin {
+        agent_browser: val.get("agentBrowser")?.as_str()?.to_string(),
+        launch_hash: val.get("launchHash")?.as_str()?.to_string(),
+        first_seen_ms: val.get("firstSeen")?.as_u64()?,
+    })
+}
+
+/// Write the pin best-effort; pinning never fails the call.
+fn write_pin(dir: &std::path::Path, session: &str, pin: &SessionPin) {
+    let path = pin_path(dir, session);
+    if let Some(parent) = path.parent()
+        && std::fs::create_dir_all(parent).is_err()
+    {
+        return;
+    }
+    let _ = std::fs::write(
+        &path,
+        serde_json::json!({
+            "agentBrowser": pin.agent_browser,
+            "launchHash": pin.launch_hash,
+            "firstSeen": pin.first_seen_ms,
+        })
+        .to_string(),
+    );
+}
+
+/// agent-browser version for the pin; None when detection fails.
+fn detect_version(command: &str) -> Option<String> {
+    match detect_with(command, &run_version) {
+        Detection::Ready { version } => Some(version),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod pin_tests {
+    use super::*;
+
+    #[test]
+    fn pin_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let sessions = dir.path().join("sessions");
+        let pin = SessionPin {
+            agent_browser: "0.43.1".to_string(),
+            launch_hash: "abc".to_string(),
+            first_seen_ms: 42,
+        };
+        assert_eq!(read_pin(&sessions, "s"), None);
+        write_pin(&sessions, "s", &pin);
+        assert_eq!(read_pin(&sessions, "s"), Some(pin));
+    }
+
+    #[test]
+    fn corrupt_pin_reads_as_absent() {
+        let dir = tempfile::tempdir().unwrap();
+        let sessions = dir.path().join("sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        std::fs::write(sessions.join("s.json"), "not json{").unwrap();
+        assert_eq!(read_pin(&sessions, "s"), None);
+    }
+
+    #[test]
+    fn launch_hash_shapes() {
+        let absent = serde_json::json!({"success": true, "data": {}});
+        assert_eq!(open_launch_hash(&absent), None);
+        let text = serde_json::json!({"success": true, "data": {"lifecycle": {"effectiveLaunch": {"launchHash": "B"}}}});
+        assert_eq!(open_launch_hash(&text), Some("B".to_string()));
+        // Non-string hashes stringify instead of failing the pin.
+        let num = serde_json::json!({"success": true, "data": {"lifecycle": {"effectiveLaunch": {"launchHash": 7}}}});
+        assert_eq!(open_launch_hash(&num), Some("7".to_string()));
+    }
 }
