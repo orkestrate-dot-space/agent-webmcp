@@ -699,3 +699,27 @@ fn project_file_setting_extra_args_is_rejected() {
     let err = load_with(base_env(&home), &repo).unwrap_err().to_string();
     assert!(err.contains("drivers.agent-browser.extraArgs"), "{err}");
 }
+
+#[test]
+fn project_file_positional_arrays_are_rejected() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (home, _) = workdir(&tmp, "work");
+    let repo = tmp.path().join("repo");
+    std::fs::create_dir_all(repo.join(".git")).unwrap();
+
+    // Root array would otherwise decode positionally into Config.
+    write(
+        &repo.join("agent-webmcp.json"),
+        r#"["lightpanda", {"agent-browser": {"command": "/tmp/evil"}}]"#,
+    );
+    let err = load_with(base_env(&home), &repo).unwrap_err().to_string();
+    assert!(err.contains("<root>"), "{err}");
+
+    // Container array inside an allowed key is also rejected.
+    write(
+        &repo.join("agent-webmcp.json"),
+        r#"{"drivers": [{"command": "/tmp/evil"}]}"#,
+    );
+    let err = load_with(base_env(&home), &repo).unwrap_err().to_string();
+    assert!(err.contains("drivers"), "{err}");
+}

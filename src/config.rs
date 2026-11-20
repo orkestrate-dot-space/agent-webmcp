@@ -326,8 +326,8 @@ pub fn load_from(env: &dyn Fn(&str) -> Option<String>, cwd: &Path) -> Result<Loa
                 &path,
                 true,
             )?;
-            check_ranges(&check_file(&value, &path)?, &path)?;
             check_project_keys(&value, &path, &user_expected)?;
+            check_ranges(&check_file(&value, &path)?, &path)?;
             merge_into(&mut merged, value);
             sources.push(Source {
                 kind: SourceKind::Project,
@@ -495,7 +495,14 @@ fn check_project_keys(value: &serde_json::Value, path: &Path, user_path: &Path) 
 
 /// First key outside the project allowlist in document order, dotted.
 fn first_disallowed(value: &serde_json::Value, parent: &str) -> Option<String> {
-    for (key, child) in value.as_object()? {
+    let Some(obj) = value.as_object() else {
+        return Some(if parent.is_empty() {
+            "<root>".to_string()
+        } else {
+            parent.to_string()
+        });
+    };
+    for (key, child) in obj {
         let dotted = if parent.is_empty() {
             key.clone()
         } else {
@@ -504,8 +511,8 @@ fn first_disallowed(value: &serde_json::Value, parent: &str) -> Option<String> {
         if !allowed_key(parent, key) {
             return Some(dotted);
         }
-        if child.is_object()
-            && is_container(&dotted)
+        if is_container(&dotted)
+            && !child.is_null()
             && let Some(deep) = first_disallowed(child, &dotted)
         {
             return Some(deep);

@@ -11,6 +11,14 @@ use serde_json::json;
 fn normalize_url_handles_hosts_localhost_and_schemes() {
     assert_eq!(normalize_url("cal.com").unwrap(), "https://cal.com/");
     assert_eq!(
+        normalize_url("https://example.com?view=tools").unwrap(),
+        "https://example.com/?view=tools"
+    );
+    assert_eq!(
+        normalize_url("localhost/app").unwrap(),
+        "http://localhost/app"
+    );
+    assert_eq!(
         normalize_url("localhost:3000/app").unwrap(),
         "http://localhost:3000/app"
     );
@@ -282,6 +290,7 @@ async fn mcp_server_lists_and_runs_inspect() {
                 .call_tool(CallToolRequestParams::new("inspect").with_arguments(map))
                 .await
                 .unwrap();
+            assert_ne!(res.is_error, Some(true));
             let env = res.structured_content.expect("structured envelope");
             assert_eq!(env["success"], json!(true));
             assert_eq!(env["data"]["driver"], json!("agent-browser"));

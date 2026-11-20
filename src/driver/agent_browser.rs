@@ -148,11 +148,14 @@ struct PreparedSession {
     open_argv: Vec<String>,
 }
 
+static FRESH_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 impl AgentBrowser {
     fn prepare_session(&self, url: &str, fresh: bool) -> Result<PreparedSession, CallError> {
         let session = if fresh {
+            let seq = FRESH_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             format!(
-                "agent-webmcp-{}-{}",
+                "agent-webmcp-{}-{}-{seq}",
                 std::process::id(),
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -897,7 +900,7 @@ fn map_invoke(invoke: serde_json::Value, tool: &str) -> Result<serde_json::Value
 }
 
 /// The tool's own error text: first text content, else a fallback.
-fn tool_error_text(output: &serde_json::Value) -> String {
+pub(super) fn tool_error_text(output: &serde_json::Value) -> String {
     output
         .get("content")
         .and_then(serde_json::Value::as_array)

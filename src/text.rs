@@ -19,10 +19,12 @@ pub fn clean(s: &str) -> String {
                     }
                 }
                 Some(']') => {
+                    let mut prev_esc = false;
                     for e in chars.by_ref() {
-                        if e == '\x07' {
+                        if e == '\x07' || (prev_esc && e == '\\') {
                             break;
                         }
+                        prev_esc = e == '\x1b';
                     }
                 }
                 _ => {}
@@ -41,6 +43,7 @@ mod tests {
     #[test]
     fn clean_strips_ansi_escapes_and_controls() {
         assert_eq!(clean("a\x1b[31mred\x1b[0mb"), "aredb");
+        assert_eq!(clean("before\x1b]0;title\x1b\\after"), "beforeafter");
         assert_eq!(clean("a\x07b\tc\nd"), "abcd");
         assert_eq!(clean("plain text"), "plain text");
         // Unicode is untouched.

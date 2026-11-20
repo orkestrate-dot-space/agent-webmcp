@@ -405,7 +405,7 @@ impl Server {
             tokio::task::spawn_blocking(move || crate::inspect::run_inspect(&url, &opts, &cfg))
                 .await;
         match res {
-            Ok(Ok(done)) => complete_envelope(done.envelope()),
+            Ok(Ok(done)) => complete_envelope_with(done.envelope(), false),
             Ok(Err(e)) => complete_envelope(e.envelope()),
             Err(e) => complete_error(format!("inspect task failed: {e}")),
         }

@@ -821,3 +821,18 @@ fn browse_run_maps_challenge_unsupported_and_missing_tool() {
         .unwrap_err();
     assert_eq!(err3.code, "tool_not_found");
 }
+
+#[cfg(unix)]
+#[test]
+fn lightpanda_run_is_error_maps_to_tool_error() {
+    match lp_run(
+        r#"{"ok":true,"output":{"isError":true,"content":[{"type":"text","text":"boom"}]}}"#,
+        "ask_cal_com",
+    ) {
+        Err(e) => {
+            assert_eq!(e.code, "tool_error");
+            assert_eq!(e.message, "boom");
+        }
+        Ok(outcome) => panic!("expected tool_error, got {outcome:?}"),
+    }
+}

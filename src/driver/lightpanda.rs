@@ -205,7 +205,19 @@ fn map_output(
             .and_then(serde_json::Value::as_bool)
             .unwrap_or(false)
         {
-            let output = wrap_output(val.get("output").cloned().unwrap_or_default());
+            let raw_output = val.get("output").cloned().unwrap_or_default();
+            if raw_output
+                .get("isError")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false)
+            {
+                return Err(CallError {
+                    code: "tool_error",
+                    message: super::agent_browser::tool_error_text(&raw_output),
+                    data: Some(raw_output),
+                });
+            }
+            let output = wrap_output(raw_output);
             return Ok(RunOutcome {
                 output,
                 duration_ms: started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64,

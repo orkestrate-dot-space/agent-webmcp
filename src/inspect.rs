@@ -95,7 +95,8 @@ pub fn normalize_url(raw: &str) -> Result<String, CallError> {
                 "unsupported URL scheme in {raw:?}; expected http or https"
             )));
         }
-        if trimmed.starts_with("localhost:") || trimmed == "localhost" {
+        let host_only = host_prefix.split(':').next().unwrap_or("");
+        if host_only.eq_ignore_ascii_case("localhost") {
             format!("http://{trimmed}")
         } else {
             format!("https://{trimmed}")
@@ -109,12 +110,15 @@ pub fn normalize_url(raw: &str) -> Result<String, CallError> {
             "unsupported URL scheme {scheme:?}; expected http or https"
         )));
     }
-    let host_part = rest.split('/').next().unwrap_or("");
+    let before_query = rest.split(['?', '#']).next().unwrap_or("");
+    let host_part = before_query.split('/').next().unwrap_or("");
     if host_part.is_empty() {
         return Err(CallError::usage(format!("missing host in URL {raw:?}")));
     }
-    if !rest.contains('/') {
-        Ok(format!("{with_scheme}/"))
+    if !before_query.contains('/') {
+        let split_at = scheme.len() + 3 + before_query.len();
+        let (head, tail) = with_scheme.split_at(split_at);
+        Ok(format!("{head}/{tail}"))
     } else {
         Ok(with_scheme)
     }
@@ -145,16 +149,16 @@ pub fn run_inspect(
 
 /// Print human-readable `inspect` output.
 pub fn print_human(res: &InspectResult) {
+    let page = crate::text::clean(&res.page);
     if res.tools.is_empty() {
         println!(
-            "no WebMCP tools registered on {} (via {}, {} ms)",
-            res.page, res.driver, res.duration_ms
+            "no WebMCP tools registered on {page} (via {}, {} ms)",
+            res.driver, res.duration_ms
         );
         return;
     }
     println!(
-        "{} ({} {}, via {}, {} ms)",
-        res.page,
+        "{page} ({} {}, via {}, {} ms)",
         res.tools.len(),
         if res.tools.len() == 1 {
             "tool"
@@ -172,15 +176,16 @@ pub fn print_human(res: &InspectResult) {
             (ToolKind::Consequential, _) => "[consequential]",
             (ToolKind::Unspecified, _) => "[unspecified]",
         };
-        println!("{}  {tag}", tool.name);
+        let name = crate::text::clean(&tool.name);
+        println!("{name}  {tag}");
         if let Some(desc) = &tool.description {
-            println!("    {desc}");
+            println!("    {}", crate::text::clean(desc));
         }
         let ex = serde_json::to_string(&example_input(&tool.input_schema))
             .unwrap_or_else(|_| "{}".to_string());
         println!(
-            "    call agent-webmcp call {}#{} '{ex}'",
-            res.page, tool.name
+            "    call agent-webmcp call {page}#{name} '{}'",
+            crate::text::clean(&ex)
         );
     }
 }
