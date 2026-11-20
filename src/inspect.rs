@@ -87,7 +87,7 @@ pub fn normalize_url(raw: &str) -> Result<String, CallError> {
     let with_scheme = if trimmed.contains("://") {
         trimmed.to_string()
     } else {
-        let host_prefix = trimmed.split('/').next().unwrap_or("");
+        let host_prefix = trimmed.split(['/', '?', '#']).next().unwrap_or("");
         if let Some((_, after_colon)) = host_prefix.split_once(':')
             && !after_colon.chars().all(|c| c.is_ascii_digit())
         {

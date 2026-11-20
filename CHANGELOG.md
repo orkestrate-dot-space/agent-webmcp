@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.1 — 2026-11-20
+
+- Address CodeRabbit review findings from `v0.3.0`: reject positional JSON
+  arrays in project config allowlist checks, return `is_error: false` on
+  successful MCP `inspect` calls, sanitize live-page strings in
+  `inspect::print_human`, map Lightpanda `isError` payloads to `tool_error`,
+  add unique sequence ids to `--fresh` sessions, preserve queries/localhost
+  on URL normalization, and recognize ST (`ESC \`) OSC terminators.
+
 ## 0.3.0 — 2026-11-20
 
 - New `inspect` command and MCP `inspect` tool: opens any live URL
