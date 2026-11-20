@@ -1,11 +1,13 @@
 //! agent-browser: the only driver agent-webmcp runs itself, over a session.
 
-use std::sync::{
-    Arc,
-    atomic::{AtomicUsize, Ordering},
+use super::exec::{
+    CallBudget, ChildOutput, TempFile, parse_version, run_command_raw, run_version_arg,
+    tool_not_found, webmcp_unsupported, write_temp,
 };
-
-use super::{CallRequest, Detection, Driver, Kind, Plan, RunOptions, RunOutcome, Step};
+use super::{
+    CallRequest, Detection, Driver, InspectOutcome, InspectedTool, Kind, Plan, RunOptions,
+    RunOutcome, Step, parse_inspected_tools,
+};
 use crate::call::CallError;
 use crate::config::Config;
 
@@ -18,6 +20,10 @@ const INSTALL: &str = "npm i -g agent-browser && agent-browser install";
 pub struct AgentBrowser {
     command: String,
     session: String,
+    headed: bool,
+    profile: Option<String>,
+    cdp: Option<String>,
+    extra_args: Vec<String>,
 }
 
 impl AgentBrowser {
@@ -26,6 +32,10 @@ impl AgentBrowser {
         Self {
             command: cfg.drivers.agent_browser.command.clone(),
             session: cfg.drivers.agent_browser.session.clone(),
+            headed: cfg.drivers.agent_browser.headed,
+            profile: cfg.drivers.agent_browser.profile.clone(),
+            cdp: cfg.drivers.agent_browser.cdp.clone(),
+            extra_args: cfg.drivers.agent_browser.extra_args.clone(),
         }
     }
 }
@@ -49,6 +59,10 @@ impl Driver for AgentBrowser {
 
     fn run(&self, req: &CallRequest, opts: &RunOptions) -> Result<RunOutcome, CallError> {
         self.run_inner(req, opts)
+    }
+
+    fn inspect(&self, url: &str, opts: &RunOptions) -> Result<InspectOutcome, CallError> {
+        self.inspect_inner(url, opts)
     }
 
     fn plan(&self, req: &CallRequest) -> Plan {
@@ -117,207 +131,6 @@ fn run_version(command: &str) -> std::io::Result<std::process::Output> {
     run_version_arg(command, "--version")
 }
 
-/// Run `<command> <arg>`, giving up after five seconds. Lightpanda detects
-/// with `version` (bare `--version` is a fatal error there), so the arg
-/// varies by driver but the bounded spawn stays in one place.
-pub(super) fn run_version_arg(command: &str, arg: &str) -> std::io::Result<std::process::Output> {
-    use std::time::Duration;
-    let mut child = std::process::Command::new(command)
-        .arg(arg)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .spawn()?;
-    let budget = Arc::new(AtomicUsize::new(DRAIN_CAP));
-    let out_rx = drain_stream(child.stdout.take(), budget);
-    let deadline = std::time::Instant::now() + Duration::from_secs(5);
-    match wait_deadline(child, deadline)? {
-        Some(output) => {
-            let (stdout, _) = out_rx.recv().unwrap_or_default();
-            Ok(std::process::Output {
-                status: output.status,
-                stdout,
-                stderr: Vec::new(),
-            })
-        }
-        None => {
-            let grace = std::time::Duration::from_secs(2);
-            let _ = out_rx.recv_timeout(grace);
-            Err(std::io::Error::new(
-                std::io::ErrorKind::TimedOut,
-                "timed out running --version",
-            ))
-        }
-    }
-}
-
-/// First `x.y.z` (plus an optional `-pre`) in `text`, if any.
-pub(super) fn parse_version(text: &str) -> Option<String> {
-    let bytes = text.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if !bytes[i].is_ascii_digit() {
-            i += 1;
-            continue;
-        }
-        let mut j = i;
-        for _ in 0..2 {
-            while j < bytes.len() && bytes[j].is_ascii_digit() {
-                j += 1;
-            }
-            if j < bytes.len() && bytes[j] == b'.' {
-                j += 1;
-            } else {
-                j = i;
-                break;
-            }
-        }
-        if j == i {
-            i += 1;
-            continue;
-        }
-        let end = j;
-        while j < bytes.len() && bytes[j].is_ascii_digit() {
-            j += 1;
-        }
-        if j == end {
-            i += 1;
-            continue;
-        }
-        if j < bytes.len() && bytes[j] == b'-' {
-            let mut k = j + 1;
-            while k < bytes.len()
-                && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'.' || bytes[k] == b'-')
-            {
-                k += 1;
-            }
-            if k > j + 1 {
-                j = k;
-            }
-        }
-        return Some(text[i..j].to_string());
-    }
-    None
-}
-
-/// Per-call budgets: every phase gets min(its cap, remaining total).
-struct CallBudget {
-    /// Hard deadline: timeout + settle + 30 s grace.
-    deadline: std::time::Instant,
-    /// Per-invoke tool budget, passed to the tool itself.
-    timeout_ms: u64,
-    /// The total, reported as `budgetMs`.
-    total_ms: u64,
-}
-
-impl CallBudget {
-    fn new(timeout_ms: u64, settle_ms: u64, started: std::time::Instant) -> Self {
-        let total_ms = timeout_ms.saturating_add(settle_ms).saturating_add(30_000);
-        Self {
-            deadline: started + std::time::Duration::from_millis(total_ms),
-            timeout_ms,
-            total_ms,
-        }
-    }
-
-    /// Milliseconds left of the total, saturating.
-    fn remaining_ms(&self) -> u64 {
-        self.deadline
-            .saturating_duration_since(std::time::Instant::now())
-            .as_millis()
-            .min(u128::from(u64::MAX)) as u64
-    }
-
-    /// Budget for one phase: its hardcoded cap or what is left.
-    fn phase(&self, cap_ms: u64, phase: &str) -> Result<u64, CallError> {
-        self.checkpoint(phase)?;
-        Ok(cap_ms.min(self.remaining_ms()))
-    }
-
-    /// Fail with a phase-naming timeout when the total is exhausted.
-    fn checkpoint(&self, phase: &str) -> Result<(), CallError> {
-        if self.remaining_ms() == 0 {
-            return Err(CallError {
-                code: "timeout",
-                message: format!("timed out before {phase}; total call budget exhausted"),
-                data: None,
-            });
-        }
-        Ok(())
-    }
-
-    /// Cap without failing: for lenient steps that may simply be skipped.
-    fn cap(&self, hard_ms: u64) -> u64 {
-        hard_ms.min(self.remaining_ms())
-    }
-}
-
-/// Piped output collected while waiting; memory is capped, not the child.
-pub(super) struct ChildOutput {
-    pub(super) stdout: String,
-    pub(super) stderr: String,
-    truncated: bool,
-}
-
-/// Cap for piped output kept in memory, total across both streams.
-const DRAIN_CAP: usize = 8 * 1024 * 1024;
-
-/// Drain one pipe into memory, keeping at most the shared budget allows.
-/// Always reads to EOF so the child can never block on a full pipe; bytes
-/// past the budget are counted but dropped, and flagged as truncated.
-pub(super) fn drain_stream<R: std::io::Read + Send + 'static>(
-    pipe: Option<R>,
-    budget: Arc<AtomicUsize>,
-) -> std::sync::mpsc::Receiver<(Vec<u8>, bool)> {
-    let (tx, rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let mut kept = Vec::new();
-        let mut truncated = false;
-        if let Some(mut pipe) = pipe {
-            let mut chunk = [0u8; 32 * 1024];
-            loop {
-                let n = match pipe.read(&mut chunk) {
-                    Ok(0) | Err(_) => break,
-                    Ok(n) => n,
-                };
-                let mut pos = 0;
-                while pos < n {
-                    let remaining = budget.load(Ordering::Relaxed);
-                    if remaining == 0 {
-                        truncated = true;
-                        break;
-                    }
-                    let take = remaining.min(n - pos);
-                    if budget
-                        .compare_exchange_weak(
-                            remaining,
-                            remaining - take,
-                            Ordering::Relaxed,
-                            Ordering::Relaxed,
-                        )
-                        .is_ok()
-                    {
-                        kept.extend_from_slice(&chunk[pos..pos + take]);
-                        pos += take;
-                    }
-                }
-            }
-        }
-        let _ = tx.send((kept, truncated));
-    });
-    rx
-}
-
-/// A timeout error naming the phase that was running.
-fn timed_out(phase: &str) -> CallError {
-    CallError {
-        code: "timeout",
-        message: format!(
-            "agent-browser did not answer during {phase}; retry with a larger --timeout"
-        ),
-        data: None,
-    }
-}
-
 /// The page navigated mid-call, ending the invocation.
 fn context_moved() -> CallError {
     CallError {
@@ -328,9 +141,16 @@ fn context_moved() -> CallError {
     }
 }
 
+struct PreparedSession {
+    session: String,
+    _lock: Option<super::lock::SessionLock>,
+    base: Vec<String>,
+    open_argv: Vec<String>,
+}
+
 impl AgentBrowser {
-    fn run_inner(&self, req: &CallRequest, opts: &RunOptions) -> Result<RunOutcome, CallError> {
-        let session = if opts.fresh {
+    fn prepare_session(&self, url: &str, fresh: bool) -> Result<PreparedSession, CallError> {
+        let session = if fresh {
             format!(
                 "agent-webmcp-{}-{}",
                 std::process::id(),
@@ -342,10 +162,7 @@ impl AgentBrowser {
         } else {
             self.session.clone()
         };
-        // One process per session for the whole run; fresh sessions are
-        // unique per run, so they skip the lock. The guard releases on drop,
-        // covering every return below; contention returns early here.
-        let _session_lock = if opts.fresh {
+        let lock = if fresh {
             None
         } else {
             Some(super::lock::acquire(
@@ -358,43 +175,206 @@ impl AgentBrowser {
             session.clone(),
             "--json".to_string(),
         ];
-        if opts.headed {
+        if self.headed {
             base.push("--headed".to_string());
         }
         let mut open_argv = base.clone();
-        if let Some(profile) = &opts.profile {
+        if let Some(profile) = &self.profile {
             open_argv.push("--profile".to_string());
             open_argv.push(profile.clone());
         }
-        if let Some(cdp) = &opts.cdp {
+        if let Some(cdp) = &self.cdp {
             open_argv.push("--cdp".to_string());
             open_argv.push(cdp.clone());
         }
-        for arg in &opts.extra_args {
+        for arg in &self.extra_args {
             open_argv.push("--args".to_string());
             open_argv.push(arg.clone());
         }
-        // Always launch with the WebMCP feature: without it, registration is
-        // a per-page lottery. agent-browser merges repeated --args into the
-        // one --enable-features switch, so no dedupe here.
         open_argv.push("--args".to_string());
         open_argv.push("--enable-features=WebMCP".to_string());
         open_argv.push("open".to_string());
-        open_argv.push(req.page.clone());
+        open_argv.push(url.to_string());
+        Ok(PreparedSession {
+            session,
+            _lock: lock,
+            base,
+            open_argv,
+        })
+    }
 
+    fn run_inner(&self, req: &CallRequest, opts: &RunOptions) -> Result<RunOutcome, CallError> {
+        let prep = self.prepare_session(&req.page, opts.fresh)?;
         let started = std::time::Instant::now();
         let budgets = CallBudget::new(opts.timeout_ms, opts.settle_ms.min(30_000), started);
-        let outcome = self.run_phases(req, opts, &base, &open_argv, &session, &budgets, started);
-        // Timeouts already attempted a close inside run_command; a fresh
-        // session only needs its close when the call did not time out.
+        let outcome = self.run_phases(
+            req,
+            opts,
+            &prep.base,
+            &prep.open_argv,
+            &prep.session,
+            &budgets,
+            started,
+        );
         let timed_out = matches!(&outcome, Err(e) if e.code == "timeout");
         if !timed_out
             && opts.fresh
             && let Ok(ms) = budgets.phase(15_000, "close")
         {
-            self.close_session(&session, ms);
+            self.close_session(&prep.session, ms);
         }
         outcome
+    }
+
+    fn inspect_inner(&self, url: &str, opts: &RunOptions) -> Result<InspectOutcome, CallError> {
+        let prep = self.prepare_session(url, opts.fresh)?;
+        let started = std::time::Instant::now();
+        let settle_ms = opts.settle_ms.min(30_000);
+        let budgets = CallBudget::new(opts.timeout_ms, settle_ms, started);
+        let outcome = self.inspect_phases(
+            url,
+            opts,
+            &prep.base,
+            &prep.open_argv,
+            &prep.session,
+            &budgets,
+            settle_ms,
+            started,
+        );
+        let timed_out = matches!(&outcome, Err(e) if e.code == "timeout");
+        if !timed_out
+            && opts.fresh
+            && let Ok(ms) = budgets.phase(15_000, "close")
+        {
+            self.close_session(&prep.session, ms);
+        }
+        outcome
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn inspect_phases(
+        &self,
+        url: &str,
+        opts: &RunOptions,
+        base: &[String],
+        open_argv: &[String],
+        session: &str,
+        budgets: &CallBudget,
+        settle_ms: u64,
+        started: std::time::Instant,
+    ) -> Result<InspectOutcome, CallError> {
+        let open_cap = opts.timeout_ms.saturating_add(15_000);
+        let opened = run_step(
+            &self.command,
+            open_argv,
+            budgets.phase(open_cap, "open")?,
+            session,
+            "open",
+        )?;
+        if !is_success(&opened) {
+            return Err(open_failure(&opened));
+        }
+        let page_url = opened
+            .pointer("/data/url")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(url)
+            .to_string();
+        let title = opened
+            .pointer("/data/title")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("");
+        let reused = opened
+            .pointer("/data/lifecycle/reused")
+            .or_else(|| opened.pointer("/lifecycle/reused"))
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
+
+        let announced = parse_inspected_tools(&opened, "/data/webmcp/tools");
+        let mut tools = self.list_all_tools(base, budgets.cap(15_000), session);
+        if tools.is_empty() && !announced.is_empty() {
+            tools = announced.clone();
+        }
+        if tools.is_empty() {
+            if is_blocked_page(title, &page_url, "") {
+                return Err(blocked_page(&page_url, title));
+            }
+            if announced.is_empty()
+                && let Some(api) = self.probe_api(base, session, budgets)
+                && api != "object"
+            {
+                return Err(webmcp_unsupported(&api));
+            }
+            if settle_ms > 0 {
+                let stop_at = std::time::Instant::now()
+                    .checked_add(std::time::Duration::from_millis(settle_ms))
+                    .unwrap_or(budgets.deadline)
+                    .min(budgets.deadline);
+                tools = self.poll_all_tools(base, stop_at, session);
+                if tools.is_empty() {
+                    self.reload_and_wait(base, session, budgets);
+                    tools = self.poll_all_tools(base, stop_at, session);
+                }
+                if tools.is_empty() {
+                    budgets.checkpoint("list")?;
+                    tools = self.list_all_tools(base, budgets.cap(15_000), session);
+                }
+            }
+        }
+        if tools.is_empty() && is_blocked_page(title, &page_url, "") {
+            return Err(blocked_page(&page_url, title));
+        }
+        Ok(InspectOutcome {
+            page: page_url,
+            tools,
+            duration_ms: started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64,
+            reused,
+            budget_ms: budgets.total_ms,
+        })
+    }
+
+    fn list_all_tools(
+        &self,
+        base: &[String],
+        per_poll_ms: u64,
+        session: &str,
+    ) -> Vec<InspectedTool> {
+        let mut argv = base.to_vec();
+        argv.extend(["webmcp".to_string(), "list".to_string()]);
+        let Ok(out) = run_command(&self.command, &argv, per_poll_ms.max(1), session, "list") else {
+            return Vec::new();
+        };
+        let Ok(val) = parse_envelope(&out) else {
+            return Vec::new();
+        };
+        if !is_success(&val) {
+            return Vec::new();
+        }
+        parse_inspected_tools(&val, "/data/tools")
+    }
+
+    fn poll_all_tools(
+        &self,
+        base: &[String],
+        stop_at: std::time::Instant,
+        session: &str,
+    ) -> Vec<InspectedTool> {
+        loop {
+            let now = std::time::Instant::now();
+            if now >= stop_at {
+                return Vec::new();
+            }
+            let remaining = stop_at.saturating_duration_since(now);
+            let per_poll_ms = remaining
+                .min(std::time::Duration::from_millis(15_000))
+                .as_millis()
+                .min(u128::from(u64::MAX)) as u64;
+            let tools = self.list_all_tools(base, per_poll_ms, session);
+            if !tools.is_empty() {
+                return tools;
+            }
+            let remaining = stop_at.saturating_duration_since(std::time::Instant::now());
+            std::thread::sleep(remaining.min(std::time::Duration::from_millis(500)));
+        }
     }
 
     /// Open, settle, and invoke; the caller closes the session afterwards.
@@ -717,85 +697,9 @@ fn blocked_page(url: &str, title: &str) -> CallError {
     }
 }
 
-/// The browser cannot run WebMCP at all: diagnose, do not settle.
-pub(super) fn webmcp_unsupported(api: &str) -> CallError {
-    CallError {
-        code: "webmcp_unsupported",
-        message: "this browser does not expose document.modelContext (needs Chrome 149+ with --enable-features=WebMCP); agent-webmcp passes it automatically — upgrade agent-browser/Chrome"
-            .to_string(),
-        data: Some(serde_json::json!({ "api": api })),
-    }
-}
-
-/// The page never registered the tool.
-pub(super) fn tool_not_found(tool: &str) -> CallError {
-    CallError {
-        code: "tool_not_found",
-        message: format!(
-            "the page did not register {tool}; it may need a login or WebMCP may be off"
-        ),
-        data: None,
-    }
-}
-
-/// A temp file holding the invoke input; removed on drop, come what may.
-pub(super) struct TempFile {
-    pub(super) path: std::path::PathBuf,
-}
-
-impl Drop for TempFile {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.path);
-    }
-}
-
 /// Write the input JSON to a 0600 temp file with a unique name.
 fn write_params_file(input_json: &str) -> Result<TempFile, CallError> {
     write_temp("params", input_json)
-}
-
-/// Write text to a 0600 temp file with a unique name.
-pub(super) fn write_temp(name: &str, contents: &str) -> Result<TempFile, CallError> {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-    for _ in 0..100 {
-        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let path = std::env::temp_dir().join(format!(
-            ".agent-webmcp-{name}-{}-{n}.json",
-            std::process::id()
-        ));
-        let mut options = std::fs::OpenOptions::new();
-        options.write(true).create_new(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600);
-        }
-        match options.open(&path) {
-            Ok(mut file) => {
-                use std::io::Write;
-                file.write_all(contents.as_bytes()).map_err(|e| CallError {
-                    code: "driver_error",
-                    message: format!("could not write params file: {e}"),
-                    data: None,
-                })?;
-                return Ok(TempFile { path });
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(e) => {
-                return Err(CallError {
-                    code: "driver_error",
-                    message: format!("could not write params file: {e}"),
-                    data: None,
-                });
-            }
-        }
-    }
-    Err(CallError {
-        code: "driver_error",
-        message: "could not write params file: no unique name".to_string(),
-        data: None,
-    })
 }
 
 /// Run a child with args, captured output, and a hard deadline.
@@ -825,72 +729,6 @@ fn run_command(
             Err(e)
         }
         Err(e) => Err(e),
-    }
-}
-
-/// Spawn, drain, and wait; timeouts kill without closing anything.
-pub(super) fn run_command_raw(
-    command: &str,
-    args: &[String],
-    deadline_ms: u64,
-    phase: &str,
-) -> Result<ChildOutput, CallError> {
-    let mut child = std::process::Command::new(command)
-        .args(args)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .map_err(|e| CallError {
-            code: "driver_error",
-            message: format!("could not run {command}: {e}"),
-            data: None,
-        })?;
-    let budget = Arc::new(AtomicUsize::new(DRAIN_CAP));
-    let out_rx = drain_stream(child.stdout.take(), budget.clone());
-    let err_rx = drain_stream(child.stderr.take(), budget);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(deadline_ms);
-    match wait_deadline(child, deadline).map_err(|e| CallError {
-        code: "driver_error",
-        message: format!("could not wait for {command}: {e}"),
-        data: None,
-    })? {
-        Some(_) => {
-            let (out, out_truncated) = out_rx.recv().unwrap_or_default();
-            let (err, err_truncated) = err_rx.recv().unwrap_or_default();
-            Ok(ChildOutput {
-                stdout: String::from_utf8_lossy(&out).into_owned(),
-                stderr: String::from_utf8_lossy(&err).into_owned(),
-                truncated: out_truncated || err_truncated,
-            })
-        }
-        None => {
-            // The child is dead; readers only linger if an orphaned
-            // grandchild holds the pipe. Wait briefly, then detach them
-            // rather than hang the call.
-            let grace = std::time::Duration::from_secs(2);
-            let _ = out_rx.recv_timeout(grace);
-            let _ = err_rx.recv_timeout(grace);
-            Err(timed_out(phase))
-        }
-    }
-}
-
-/// Wait for a child until the deadline; kill it past the deadline.
-/// `Ok(None)` means it timed out (and was killed).
-pub(super) fn wait_deadline(
-    mut child: std::process::Child,
-    deadline: std::time::Instant,
-) -> std::io::Result<Option<std::process::Output>> {
-    loop {
-        if child.try_wait()?.is_some() {
-            return child.wait_with_output().map(Some);
-        }
-        if std::time::Instant::now() >= deadline {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Ok(None);
-        }
-        std::thread::sleep(std::time::Duration::from_millis(50));
     }
 }
 
@@ -1031,7 +869,7 @@ fn map_invoke(invoke: serde_json::Value, tool: &str) -> Result<serde_json::Value
                 data: Some(data),
             });
         }
-        Some("timed_out") => return Err(timed_out("invoke")),
+        Some("timed_out") => return Err(super::exec::timed_out("agent-browser", "invoke")),
         Some("canceled") | Some("cancelled") => {
             return Err(CallError {
                 code: "driver_error",

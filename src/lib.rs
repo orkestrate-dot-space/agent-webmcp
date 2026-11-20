@@ -2,6 +2,7 @@ pub mod call;
 pub mod config;
 pub mod driver;
 pub mod index;
+pub mod inspect;
 pub mod mcp;
 pub mod model;
 pub mod platform;

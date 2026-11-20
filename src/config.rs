@@ -17,25 +17,23 @@ pub enum DriverChoice {
     Auto,
     /// Run driver: drives a browser over a local socket.
     AgentBrowser,
+    /// Run driver: drives the user's real Chrome through OpenCode Browse.
+    Browse,
     /// Run driver: lighter browser over PandaScript.
     Lightpanda,
-    /// Plan driver: steps for the agent's Playwright MCP.
-    PlaywrightMcp,
-    /// Plan driver: steps for the agent's Chrome DevTools MCP.
-    ChromeDevtoolsMcp,
-    /// Plan driver: steps for OpenCode Browse.
-    Browse,
     /// Never drive a browser; always print a generic plan.
     None,
 }
 
-/// Per-driver settings; agent-browser and lightpanda run outside the agent session.
+/// Per-driver settings for the three run drivers.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields, default)]
 pub struct Drivers {
     /// Settings for the agent-browser run driver.
     #[serde(rename = "agent-browser")]
     pub agent_browser: AgentBrowserSettings,
+    /// Settings for the browse run driver.
+    pub browse: BrowseSettings,
     /// Settings for the lightpanda run driver.
     pub lightpanda: LightpandaSettings,
 }
@@ -71,6 +69,22 @@ impl Default for AgentBrowserSettings {
             profile: None,
             cdp: None,
             extra_args: Vec::new(),
+        }
+    }
+}
+
+/// How to reach browse: just the program to run.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields, default)]
+pub struct BrowseSettings {
+    /// Program to run; user config only, never the project file.
+    pub command: String,
+}
+
+impl Default for BrowseSettings {
+    fn default() -> Self {
+        Self {
+            command: "browse".to_string(),
         }
     }
 }
@@ -734,13 +748,11 @@ fn apply_env(config: &mut Config, env: &dyn Fn(&str) -> Option<String>) -> Resul
         config.driver = match value.as_str() {
             "auto" => DriverChoice::Auto,
             "agent-browser" => DriverChoice::AgentBrowser,
-            "lightpanda" => DriverChoice::Lightpanda,
-            "playwright-mcp" => DriverChoice::PlaywrightMcp,
-            "chrome-devtools-mcp" => DriverChoice::ChromeDevtoolsMcp,
             "browse" => DriverChoice::Browse,
+            "lightpanda" => DriverChoice::Lightpanda,
             "none" => DriverChoice::None,
             _ => bail!(
-                "invalid AGENT_WEBMCP_DRIVER value {value:?}; expected one of auto, agent-browser, lightpanda, playwright-mcp, chrome-devtools-mcp, browse, none"
+                "invalid AGENT_WEBMCP_DRIVER value {value:?}; expected one of auto, agent-browser, browse, lightpanda, none"
             ),
         };
         used = true;
@@ -781,6 +793,10 @@ fn apply_env(config: &mut Config, env: &dyn Fn(&str) -> Option<String>) -> Resul
     }
     if let Some(value) = set("AGENT_WEBMCP_AGENT_BROWSER") {
         config.drivers.agent_browser.command = value;
+        used = true;
+    }
+    if let Some(value) = set("AGENT_WEBMCP_BROWSE") {
+        config.drivers.browse.command = value;
         used = true;
     }
     if let Some(value) = set("AGENT_WEBMCP_LIGHTPANDA") {

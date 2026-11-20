@@ -342,6 +342,7 @@ fn missing_named_driver_is_no_driver() {
     let mut cfg = allow_all();
     cfg.driver = config::DriverChoice::AgentBrowser;
     cfg.drivers.agent_browser.command = "agent-webmcp-definitely-missing".into();
+    cfg.drivers.browse.command = "browse-definitely-missing".into();
     cfg.drivers.lightpanda.command = "lightpanda-definitely-missing".into();
     let resolved = resolve("cal.com/list_slots", &search()).unwrap();
     let opts = run_opts();
@@ -352,19 +353,16 @@ fn missing_named_driver_is_no_driver() {
     let ids: Vec<&str> = drivers.iter().filter_map(|d| d["id"].as_str()).collect();
     assert_eq!(
         ids,
-        vec![
-            "agent-browser",
-            "lightpanda",
-            "playwright-mcp",
-            "chrome-devtools-mcp",
-            "browse"
-        ],
+        vec!["agent-browser", "browse", "lightpanda"],
         "{drivers:?}"
     );
     let ab = drivers.iter().find(|d| d["id"] == "agent-browser").unwrap();
     assert_eq!(ab["kind"], json!("run"));
     assert_eq!(ab["status"], json!("missing"));
     assert!(ab["install"].as_str().unwrap().contains("npm i -g"));
+    let br = drivers.iter().find(|d| d["id"] == "browse").unwrap();
+    assert_eq!(br["kind"], json!("run"));
+    assert_eq!(br["status"], json!("missing"));
     let lp = drivers.iter().find(|d| d["id"] == "lightpanda").unwrap();
     assert_eq!(lp["status"], json!("missing"));
     assert!(
@@ -374,17 +372,6 @@ fn missing_named_driver_is_no_driver() {
             .contains("pkg.lightpanda.io")
     );
     assert_eq!(lp["note"], json!("experimental, lightest"));
-    let pm = drivers
-        .iter()
-        .find(|d| d["id"] == "playwright-mcp")
-        .unwrap();
-    assert_eq!(pm["kind"], json!("plan"));
-    assert!(
-        pm["setup"]
-            .as_str()
-            .unwrap()
-            .contains("browser.launchOptions.args")
-    );
     assert!(e.data.as_ref().unwrap()["configure"].is_string());
     assert!(e.data.as_ref().unwrap()["config"].is_string());
 }
@@ -394,12 +381,13 @@ fn auto_without_drivers_is_no_driver_with_help() {
     let mut cfg = allow_all();
     cfg.driver = config::DriverChoice::Auto;
     cfg.drivers.agent_browser.command = "agent-webmcp-definitely-missing".into();
+    cfg.drivers.browse.command = "browse-definitely-missing".into();
     cfg.drivers.lightpanda.command = "lightpanda-definitely-missing".into();
     let resolved = resolve("cal.com/list_slots", &search()).unwrap();
     let e = execute(&resolved, json!({}), &run_opts(), &cfg).unwrap_err();
     assert_eq!(e.code, "no_driver");
     let drivers = e.data.as_ref().unwrap()["drivers"].as_array().unwrap();
-    assert_eq!(drivers.len(), 5, "{drivers:?}");
+    assert_eq!(drivers.len(), 3, "{drivers:?}");
 }
 
 // --- example input + find ---

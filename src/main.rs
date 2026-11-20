@@ -5,6 +5,7 @@ use agent_webmcp::config;
 use agent_webmcp::config::DriverChoice;
 use agent_webmcp::driver;
 use agent_webmcp::index::Search;
+use agent_webmcp::inspect;
 use agent_webmcp::mcp::Server;
 use agent_webmcp::setup;
 use agent_webmcp::store;
@@ -18,7 +19,7 @@ use clap::{Parser, Subcommand};
     name = "agent-webmcp",
     bin_name = "agent-webmcp",
     version,
-    about = "Check a site's WebMCP tools before you open it, or search tools by task"
+    about = "Discover, inspect, and call WebMCP tools on websites"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -75,6 +76,32 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Inspect a live page and list the WebMCP tools it registers
+    Inspect {
+        /// Page URL or host (e.g. https://cal.com/ or cal.com)
+        url: String,
+        /// Driver to use (default from config)
+        #[arg(long)]
+        driver: Option<String>,
+        /// Browser session for agent-browser (default from config)
+        #[arg(long)]
+        session: Option<String>,
+        /// Use a throwaway session or tab, closed afterwards
+        #[arg(long)]
+        fresh: bool,
+        /// Show the browser window
+        #[arg(long)]
+        headed: bool,
+        /// Timeout in milliseconds (default from config)
+        #[arg(long)]
+        timeout: Option<u64>,
+        /// Settle budget in milliseconds for late tool registration
+        #[arg(long)]
+        settle: Option<u64>,
+        /// Print machine-readable JSON instead of text
+        #[arg(long)]
+        json: bool,
+    },
     /// Download the latest index now
     Update,
     /// Upgrade agent-webmcp itself to the latest or a given version
@@ -82,15 +109,8 @@ enum Command {
         /// Version to install (with or without a leading v), or `next`
         target: Option<String>,
     },
-    /// First-run setup: fetch the index, install the skill, wire up OpenCode
-    Setup {
-        /// Install this driver without asking (for scripts and non-interactive use)
-        #[arg(long = "install-driver", value_parser = ["lightpanda"])]
-        install_driver: Option<String>,
-        /// Never ask, never install (CI)
-        #[arg(long = "no-install")]
-        no_install: bool,
-    },
+    /// First-run setup: fetch the index, install the skill, and check drivers
+    Setup,
     /// Show the index in use
     Status,
     /// Show or check the effective configuration
@@ -146,6 +166,25 @@ async fn main() -> Result<()> {
             settle,
             json,
         ),
+        Command::Inspect {
+            url,
+            driver,
+            session,
+            fresh,
+            headed,
+            timeout,
+            settle,
+            json,
+        } => inspect_command(
+            &url,
+            driver.as_deref(),
+            session,
+            fresh,
+            headed,
+            timeout,
+            settle,
+            json,
+        ),
         Command::Update => {
             let (index, changed) = tokio::task::spawn_blocking(store::refresh_changed).await??;
             let search = Search::build(index)?;
@@ -166,19 +205,7 @@ async fn main() -> Result<()> {
             Ok(())
         }
         Command::Upgrade { target } => upgrade::run(target),
-        Command::Setup {
-            install_driver,
-            no_install,
-        } => {
-            let flag = if no_install {
-                setup::InstallFlag::NoInstall
-            } else if install_driver.as_deref() == Some("lightpanda") {
-                setup::InstallFlag::InstallLightpanda
-            } else {
-                setup::InstallFlag::None
-            };
-            setup::run(flag)
-        }
+        Command::Setup => setup::run(),
         Command::Status => {
             let search = Search::build(tokio::task::spawn_blocking(store::load).await??)?;
             let file = std::env::var_os("AGENT_WEBMCP_INDEX")
@@ -393,20 +420,13 @@ fn find(query: &str, limit: usize, json: bool) -> Result<()> {
 
 /// Run one `call`: config, index, then the shared pipeline.
 #[allow(clippy::too_many_arguments)]
-fn call_command(
-    target: &str,
-    input: Option<&str>,
-    params: Option<&str>,
+fn prepare_run_config(
     driver: Option<&str>,
     session: Option<String>,
-    fresh: bool,
     headed: bool,
-    confirm: bool,
-    plan_only: bool,
     timeout: Option<u64>,
     settle: Option<u64>,
-    json: bool,
-) -> Result<()> {
+) -> config::Config {
     let mut cfg = match config::load() {
         Ok(loaded) => {
             for warning in &loaded.warnings {
@@ -443,22 +463,6 @@ fn call_command(
             std::process::exit(call::exit_code(&e));
         }
     }
-    for (name, value, check) in [
-        (
-            "--timeout",
-            timeout,
-            config::check_timeout_ms as fn(u64, &str) -> anyhow::Result<()>,
-        ),
-        ("--settle", settle, config::check_settle_ms),
-    ] {
-        if let Some(v) = value
-            && let Err(e) = check(v, name)
-        {
-            let e = call::CallError::usage(format!("{e:#}"));
-            call::print_failure(&e);
-            std::process::exit(call::exit_code(&e));
-        }
-    }
     cfg.apply_overrides(&config::Overrides {
         driver: choice,
         session,
@@ -467,6 +471,25 @@ fn call_command(
         settle,
         command: None,
     });
+    cfg
+}
+
+#[allow(clippy::too_many_arguments)]
+fn call_command(
+    target: &str,
+    input: Option<&str>,
+    params: Option<&str>,
+    driver: Option<&str>,
+    session: Option<String>,
+    fresh: bool,
+    headed: bool,
+    confirm: bool,
+    plan_only: bool,
+    timeout: Option<u64>,
+    settle: Option<u64>,
+    json: bool,
+) -> Result<()> {
+    let cfg = prepare_run_config(driver, session, headed, timeout, settle);
     let search = Search::build(store::load()?)?;
     let opts = call::CallOptions {
         confirm,
@@ -493,18 +516,48 @@ fn call_command(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+fn inspect_command(
+    url: &str,
+    driver: Option<&str>,
+    session: Option<String>,
+    fresh: bool,
+    headed: bool,
+    timeout: Option<u64>,
+    settle: Option<u64>,
+    json: bool,
+) -> Result<()> {
+    let cfg = prepare_run_config(driver, session, headed, timeout, settle);
+    let opts = inspect::InspectOptions { fresh };
+    match inspect::run_inspect(url, &opts, &cfg) {
+        Ok(done) => {
+            if json {
+                println!("{}", serde_json::to_string_pretty(&done.envelope())?);
+            } else {
+                inspect::print_human(&done);
+            }
+            Ok(())
+        }
+        Err(e) => {
+            if json {
+                println!("{}", serde_json::to_string_pretty(&e.envelope())?);
+            }
+            call::print_failure(&e);
+            std::process::exit(call::exit_code(&e));
+        }
+    }
+}
+
 /// A `--driver` name, or a usage error naming the valid ids.
 fn parse_driver_choice(name: &str) -> Result<DriverChoice, call::CallError> {
     match name {
         "auto" => Ok(DriverChoice::Auto),
         "agent-browser" => Ok(DriverChoice::AgentBrowser),
-        "lightpanda" => Ok(DriverChoice::Lightpanda),
-        "playwright-mcp" => Ok(DriverChoice::PlaywrightMcp),
-        "chrome-devtools-mcp" => Ok(DriverChoice::ChromeDevtoolsMcp),
         "browse" => Ok(DriverChoice::Browse),
+        "lightpanda" => Ok(DriverChoice::Lightpanda),
         "none" => Ok(DriverChoice::None),
         _ => Err(call::CallError::usage(format!(
-            "unknown driver {name:?}; expected one of auto, agent-browser, lightpanda, playwright-mcp, chrome-devtools-mcp, browse, none"
+            "unknown driver {name:?}; expected one of auto, agent-browser, browse, lightpanda, none"
         ))),
     }
 }

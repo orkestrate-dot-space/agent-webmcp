@@ -1,4 +1,4 @@
-//! MCP server exposing `find` and `call`.
+//! MCP server exposing `find`, `inspect`, and `call`.
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -19,10 +19,11 @@ const LIMIT_DEFAULT: usize = 5;
 const LIMIT_MAX: usize = 20;
 
 pub const INSTRUCTIONS: &str = "Check whether a website offers WebMCP tools before opening it, \
-or search tools by task. `find` returns the page to open and the tool to call there. \
-Then `call` runs the tool when agent-webmcp can drive a browser, or returns exact \
-steps for your own browser driver. Open the page with your browser driver; the tool \
-is registered on the page and appears in your driver's WebMCP tools.";
+or search tools by task. `find` searches the public directory and returns the page to open \
+and the tool to call there. Use `inspect` to check any live page (unindexed sites, localhost, \
+or logged-in dashboards) and retrieve live input schemas without calling anything. Then `call` \
+runs the tool through your configured run driver (`agent-browser`, `browse`, or `lightpanda`), \
+or returns generic steps when `driver` is `none`.";
 
 pub struct Server {
     search: Arc<Mutex<Search>>,
@@ -363,6 +364,7 @@ impl ServerHandler for Server {
     ) -> Result<ListToolsResult, McpError> {
         Ok(ListToolsResult::with_all_items(vec![
             find_tool(),
+            inspect_tool(),
             call_tool(),
         ]))
     }
@@ -374,6 +376,7 @@ impl ServerHandler for Server {
     ) -> Result<CallToolResponse, McpError> {
         match request.name.as_ref() {
             "find" => Ok(self.find(&request.arguments.unwrap_or_default()).into()),
+            "inspect" => Ok(self.inspect(&request.arguments.unwrap_or_default()).await),
             "call" => Ok(self.call(&request, &context).await),
             other => Err(McpError::invalid_params(
                 format!("unknown tool {other:?}"),
@@ -381,6 +384,55 @@ impl ServerHandler for Server {
             )),
         }
     }
+}
+
+impl Server {
+    async fn inspect(&self, args: &serde_json::Map<String, Value>) -> CallToolResponse {
+        let Some(url) = args.get("url").and_then(Value::as_str) else {
+            return complete_error("`url` is required: https://page or host to inspect");
+        };
+        let url = url.to_string();
+        let fresh = args.get("fresh").and_then(Value::as_bool).unwrap_or(false);
+        let cfg = match self.fixed_config.clone() {
+            Some(cfg) => cfg,
+            None => match crate::config::load() {
+                Ok(loaded) => loaded.config,
+                Err(e) => return complete_error(format!("could not load config: {e:#}")),
+            },
+        };
+        let opts = crate::inspect::InspectOptions { fresh };
+        let res =
+            tokio::task::spawn_blocking(move || crate::inspect::run_inspect(&url, &opts, &cfg))
+                .await;
+        match res {
+            Ok(Ok(done)) => complete_envelope(done.envelope()),
+            Ok(Err(e)) => complete_envelope(e.envelope()),
+            Err(e) => complete_error(format!("inspect task failed: {e}")),
+        }
+    }
+}
+
+/// The `inspect` tool definition, as `list_tools` advertises it.
+pub fn inspect_tool() -> Tool {
+    let schema = json!({
+        "type": "object",
+        "properties": {
+            "url": { "type": "string", "description": "Page URL or host to inspect (e.g. https://cal.com/ or cal.com)" },
+            "fresh": { "type": "boolean", "description": "Use a throwaway session or tab, closed afterwards" }
+        },
+        "required": ["url"],
+        "additionalProperties": false
+    });
+    let Value::Object(schema) = schema else {
+        unreachable!()
+    };
+    Tool::new(
+        "inspect",
+        "Open a live URL in the browser and list the WebMCP tools it registers (names, descriptions, \
+         and live input schemas) without calling any of them.",
+        Arc::new(schema),
+    )
+    .annotate(ToolAnnotations::new().read_only(true).open_world(true))
 }
 
 /// The `call` tool definition, as `list_tools` advertises it.
@@ -400,8 +452,8 @@ pub fn call_tool() -> Tool {
     };
     Tool::new(
         "call",
-        "Call a WebMCP tool: if agent-webmcp can drive a browser (agent-browser) it returns \
-         the tool's output, otherwise it returns exact steps for your own browser driver. \
+        "Call a WebMCP tool: if agent-webmcp can drive a browser (agent-browser, browse, or lightpanda) it returns \
+         the tool's output, otherwise it returns generic steps when `driver` is `none`. \
          When the client supports it, agent-webmcp asks the user itself before calls that \
          need approval; `confirm` only applies to clients that cannot ask.",
         Arc::new(schema),

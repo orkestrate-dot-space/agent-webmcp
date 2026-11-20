@@ -7,16 +7,18 @@
 //! `navigator.modelContext.getTools()` instead; sleeps use an in-page
 //! promise because PandaScript has no `setTimeout`.
 
-use super::agent_browser::{
+use super::exec::{
     parse_version, run_command_raw, run_version_arg, tool_not_found, webmcp_unsupported, write_temp,
 };
-use super::{CallRequest, Detection, Driver, Kind, Plan, RunOptions, RunOutcome, Step};
+use super::{
+    CallRequest, Detection, Driver, InspectOutcome, Kind, Plan, RunOptions, RunOutcome, Step,
+    parse_inspected_tools,
+};
 use crate::call::CallError;
 use crate::config::Config;
 
 /// Install line when the binary is missing, from the one-liner docs.
-pub(crate) const INSTALL: &str =
-    "curl -fsSL https://pkg.lightpanda.io/install.sh | bash -s \"1.0.4\"";
+const INSTALL: &str = "curl -fsSL https://pkg.lightpanda.io/install.sh | bash -s \"1.0.4\"";
 
 /// Run driver: opens the page and invokes the tool with one PandaScript.
 pub struct Lightpanda {
@@ -46,6 +48,22 @@ impl Lightpanda {
         let out = run_command_raw(&self.command, &argv, total_ms, "run")?;
         map_output(&out.stdout, &out.stderr, req, started, total_ms)
     }
+
+    fn inspect_inner(&self, url: &str, opts: &RunOptions) -> Result<InspectOutcome, CallError> {
+        let started = std::time::Instant::now();
+        let settle_ms = opts.settle_ms.min(30_000);
+        let total_ms = opts
+            .timeout_ms
+            .saturating_add(settle_ms)
+            .saturating_add(30_000);
+        let file = write_temp(
+            "lightpanda-inspect",
+            &render_inspect_script(url, opts.timeout_ms, settle_ms),
+        )?;
+        let argv = vec!["run".to_string(), file.path.display().to_string()];
+        let out = run_command_raw(&self.command, &argv, total_ms, "inspect")?;
+        map_inspect_output(&out.stdout, &out.stderr, url, started, total_ms)
+    }
 }
 
 impl Driver for Lightpanda {
@@ -63,6 +81,10 @@ impl Driver for Lightpanda {
 
     fn run(&self, req: &CallRequest, opts: &RunOptions) -> Result<RunOutcome, CallError> {
         self.run_inner(req, opts)
+    }
+
+    fn inspect(&self, url: &str, opts: &RunOptions) -> Result<InspectOutcome, CallError> {
+        self.inspect_inner(url, opts)
     }
 
     fn plan(&self, req: &CallRequest) -> Plan {
@@ -247,4 +269,89 @@ fn wrap_output(output: serde_json::Value) -> serde_json::Value {
         }
         other => other,
     }
+}
+
+fn render_inspect_script(url: &str, timeout_ms: u64, settle_ms: u64) -> String {
+    let url = serde_json::to_string(url).unwrap_or_default();
+    [
+        "const page = new Page();".to_string(),
+        format!("await page.goto({url}, {{waitUntil: \"load\", timeout: {timeout_ms}}});"),
+        "const __t0 = Date.now();".to_string(),
+        "let __tools = [];".to_string(),
+        "for (;;) {".to_string(),
+        "  const __mc = await page.evaluate(\"typeof navigator.modelContext\");".to_string(),
+        "  if (__mc === \"undefined\") return JSON.stringify({ok: false, code: \"unsupported\"});"
+            .to_string(),
+        concat!(
+            "  const __list = await page.evaluate(\"",
+            "navigator.modelContext.getTools().then(function(ts){",
+            "return ts.map(function(t){",
+            "return {name:t.name,description:t.description,inputSchema:t.inputSchema,annotations:t.annotations}",
+            "})",
+            "})",
+            "\");"
+        )
+            .to_string(),
+        "  __tools = JSON.parse(__list || \"[]\");".to_string(),
+        "  if (__tools.length > 0) break;".to_string(),
+        format!("  if (Date.now() - __t0 >= {settle_ms}) break;"),
+        "  await page.evaluate(\"new Promise(function(__r){setTimeout(__r, 300)})\");".to_string(),
+        "}".to_string(),
+        "return JSON.stringify({ok: true, tools: __tools});".to_string(),
+    ]
+    .join("\n")
+        + "\n"
+}
+
+fn map_inspect_output(
+    stdout: &str,
+    stderr: &str,
+    url: &str,
+    started: std::time::Instant,
+    total_ms: u64,
+) -> Result<InspectOutcome, CallError> {
+    if let Ok(val) = serde_json::from_str::<serde_json::Value>(stdout.trim()) {
+        if val
+            .get("ok")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+        {
+            let tools = parse_inspected_tools(&val, "/tools");
+            return Ok(InspectOutcome {
+                page: url.to_string(),
+                tools,
+                duration_ms: started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64,
+                reused: false,
+                budget_ms: total_ms,
+            });
+        }
+        if val.get("code").and_then(serde_json::Value::as_str) == Some("unsupported") {
+            return Err(webmcp_unsupported("undefined"));
+        }
+        let error = val
+            .get("error")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("lightpanda inspect failed");
+        return Err(CallError {
+            code: "driver_error",
+            message: error.to_string(),
+            data: None,
+        });
+    }
+    let haystack = format!("{stdout}\n{stderr}").to_lowercase();
+    if haystack.contains("navigation failed") || haystack.contains("navigation timed out") {
+        return Err(CallError {
+            code: "page_unreachable",
+            message: "could not open the page".to_string(),
+            data: None,
+        });
+    }
+    Err(CallError {
+        code: "driver_error",
+        message: "lightpanda printed something that is not JSON".to_string(),
+        data: Some(serde_json::json!({
+            "stdout": stdout.chars().take(200).collect::<String>(),
+            "stderr": stderr.chars().take(500).collect::<String>(),
+        })),
+    })
 }

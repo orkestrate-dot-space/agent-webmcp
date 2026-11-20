@@ -23,78 +23,15 @@ fn config_with(driver: config::DriverChoice, command: &str) -> config::Config {
 }
 
 #[test]
-fn devtools_plan_uses_its_own_tool_names() {
-    let cfg = config_with(config::DriverChoice::ChromeDevtoolsMcp, "agent-browser");
-    let driver = driver::by_choice(config::DriverChoice::ChromeDevtoolsMcp, &cfg).unwrap();
-    assert_eq!(driver.id(), "chrome-devtools-mcp");
-    let plan = driver.plan(&sample());
-    assert_eq!(plan.driver, "chrome-devtools-mcp");
-    assert!(
-        plan.note
-            .as_deref()
-            .unwrap()
-            .contains("--categoryExperimentalWebmcp"),
-        "{:?}",
-        plan.note
-    );
-    assert_eq!(plan.steps.len(), 3);
-    assert_eq!(plan.steps[0].tool, "navigate_page");
-    assert_eq!(
-        plan.steps[0].args,
-        serde_json::json!({"url": "https://cal.com/"})
-    );
-    assert_eq!(plan.steps[1].tool, "list_webmcp_tools");
-    assert_eq!(plan.steps[1].args, serde_json::json!({}));
-    assert!(
-        plan.steps[1].why.contains("pageId"),
-        "{}",
-        plan.steps[1].why
-    );
-    assert_eq!(plan.steps[2].tool, "execute_webmcp_tool");
-    assert_eq!(
-        plan.steps[2].args,
-        serde_json::json!({"toolName": "ask_cal_com", "input": "{\"question\":\"hi\"}"})
-    );
-}
-
-#[test]
-fn playwright_plan_has_two_steps_no_snapshot() {
-    let cfg = config_with(config::DriverChoice::PlaywrightMcp, "agent-browser");
-    let driver = driver::by_choice(config::DriverChoice::PlaywrightMcp, &cfg).unwrap();
-    assert_eq!(driver.id(), "playwright-mcp");
-    let plan = driver.plan(&sample());
-    assert!(
-        plan.note
-            .as_deref()
-            .unwrap()
-            .contains("browser.launchOptions.args in the Playwright MCP config file"),
-        "{:?}",
-        plan.note
-    );
-    assert_eq!(plan.steps.len(), 2);
-    assert_eq!(plan.steps[0].tool, "browser_navigate");
-    assert_eq!(
-        plan.steps[0].args,
-        serde_json::json!({"url": "https://cal.com/"})
-    );
-    assert!(plan.steps.iter().all(|s| s.tool != "browser_snapshot"));
-    assert_eq!(plan.steps[1].tool, "webmcp_ask_cal_com");
-    assert_eq!(plan.steps[1].args, serde_json::json!({"question": "hi"}));
-    assert!(
-        plan.steps[1].why.contains("A-Za-z0-9_-"),
-        "{}",
-        plan.steps[1].why
-    );
-    assert!(plan.steps[1].why.contains("64"), "{}", plan.steps[1].why);
-}
-
-#[test]
 fn browse_plan_passes_the_tab() {
     let cfg = config_with(config::DriverChoice::Browse, "agent-browser");
     let driver = driver::by_choice(config::DriverChoice::Browse, &cfg).unwrap();
     assert_eq!(driver.id(), "browse");
     let plan = driver.plan(&sample());
-    assert_eq!(plan.note, None);
+    assert_eq!(
+        plan.note.as_deref(),
+        Some("uses your connected Chrome via the browse extension")
+    );
     assert_eq!(plan.steps.len(), 2);
     assert_eq!(plan.steps[0].tool, "navigate");
     assert_eq!(
@@ -271,19 +208,11 @@ fn choose_auto_missing_both_is_unusable() {
         config::DriverChoice::Auto,
         "agent-webmcp-definitely-missing-binary",
     );
+    cfg.drivers.browse.command = "browse-definitely-missing-binary".to_string();
     cfg.drivers.lightpanda.command = "lightpanda-definitely-missing-binary".to_string();
     match driver::choose(&cfg) {
         Choice::Unusable { driver, .. } => assert_eq!(driver, "agent-browser"),
         _ => panic!("auto with nothing installed must not run or plan"),
-    }
-}
-
-#[test]
-fn choose_named_plan_driver_plans() {
-    let cfg = config_with(config::DriverChoice::PlaywrightMcp, "agent-browser");
-    match driver::choose(&cfg) {
-        Choice::Plan(driver) => assert_eq!(driver.id(), "playwright-mcp"),
-        _ => panic!("playwright-mcp should plan"),
     }
 }
 
@@ -432,11 +361,7 @@ fn lp_run_opts() -> driver::RunOptions {
     driver::RunOptions {
         timeout_ms: 1234,
         settle_ms: 300,
-        extra_args: Vec::new(),
-        headed: false,
         fresh: false,
-        profile: None,
-        cdp: None,
     }
 }
 
@@ -716,6 +641,7 @@ fn choose_auto_falls_back_to_lightpanda() {
         config::DriverChoice::Auto,
         "agent-webmcp-definitely-missing-binary",
     );
+    cfg.drivers.browse.command = "browse-definitely-missing-binary".to_string();
     cfg.drivers.lightpanda.command = lp.display().to_string();
     match driver::choose(&cfg) {
         Choice::Run(driver, _) => assert_eq!(driver.id(), "lightpanda"),
@@ -731,4 +657,167 @@ fn choose_named_lightpanda_missing_is_unusable() {
         Choice::Unusable { driver, .. } => assert_eq!(driver, "lightpanda"),
         _ => panic!("a missing named driver must not fall back"),
     }
+}
+
+#[cfg(unix)]
+struct BrowseFake {
+    connected: bool,
+    nav_json: String,
+    list_json: String,
+    call_json: String,
+}
+
+#[cfg(unix)]
+impl BrowseFake {
+    fn ready() -> Self {
+        Self {
+            connected: true,
+            nav_json: r#"{"tab":12,"url":"https://cal.com/","title":"Cal.com"}"#.to_string(),
+            list_json: r#"{"available":true,"tools":[{"name":"ask_cal_com"}]}"#.to_string(),
+            call_json: r#"{"result":{"content":[{"type":"text","text":"ok"}]}}"#.to_string(),
+        }
+    }
+
+    fn install(&self, dir: &tempfile::TempDir, name: &str) -> (PathBuf, PathBuf) {
+        use std::os::unix::fs::PermissionsExt;
+        let log = dir.path().join(format!("{name}.log"));
+        let status_json = format!(
+            r#"{{"connected":{},"relay":{{"version":"0.1.5"}}}}"#,
+            self.connected
+        );
+        let script = format!(
+            "#!/bin/sh\n\
+printf '%s\\n' \"$*\" >> '{}'\n\
+case \"$1\" in\n\
+  status) printf '%s\\n' '{}' ;;\n\
+  navigate) printf '%s\\n' '{}' ;;\n\
+  webmcp)\n\
+    case \"$3\" in\n\
+      *list*) printf '%s\\n' '{}' ;;\n\
+      *) printf '%s\\n' '{}' ;;\n\
+    esac ;;\n\
+  tabs) printf '{{\"ok\":true}}\\n' ;;\n\
+  *) echo \"unknown: $*\" >&2; exit 2 ;;\n\
+esac\n",
+            log.display(),
+            status_json,
+            self.nav_json,
+            self.list_json,
+            self.call_json
+        );
+        let path = dir.path().join(name);
+        std::fs::write(&path, script).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        (path, log)
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn choose_auto_prefers_browse_over_lightpanda() {
+    let dir = tempfile::tempdir().unwrap();
+    let (br, _) = BrowseFake::ready().install(&dir, "browse");
+    let lp = LpFake::new("").install(&dir, "lightpanda");
+    let mut cfg = config_with(
+        config::DriverChoice::Auto,
+        "agent-webmcp-definitely-missing-binary",
+    );
+    cfg.drivers.browse.command = br.display().to_string();
+    cfg.drivers.lightpanda.command = lp.display().to_string();
+    match driver::choose(&cfg) {
+        Choice::Run(driver, version) => {
+            assert_eq!(driver.id(), "browse");
+            assert_eq!(version, "0.1.5");
+        }
+        _ => panic!("connected browse should run before lightpanda"),
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn browse_disconnected_is_missing() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut fake = BrowseFake::ready();
+    fake.connected = false;
+    let (br, _) = fake.install(&dir, "browse");
+    let mut cfg = config_with(config::DriverChoice::Browse, "agent-browser");
+    cfg.drivers.browse.command = br.display().to_string();
+    match driver::choose(&cfg) {
+        Choice::Unusable {
+            driver,
+            detection: Detection::Missing { detail, .. },
+        } => {
+            assert_eq!(driver, "browse");
+            assert!(
+                detail.as_deref().unwrap_or("").contains("not connected")
+                    || detail
+                        .as_deref()
+                        .unwrap_or("")
+                        .contains("no browser extension"),
+                "{detail:?}"
+            );
+        }
+        _ => panic!("disconnected browse must be unusable"),
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn browse_run_happy_path_and_fresh_closes_tab() {
+    let dir = tempfile::tempdir().unwrap();
+    let (br, log) = BrowseFake::ready().install(&dir, "browse");
+    let mut cfg = config_with(config::DriverChoice::Browse, "agent-browser");
+    cfg.drivers.browse.command = br.display().to_string();
+    let driver = driver::by_choice(config::DriverChoice::Browse, &cfg).unwrap();
+    let mut opts = lp_run_opts();
+    opts.fresh = true;
+    let out = driver.run(&sample(), &opts).unwrap();
+    assert_eq!(out.output["content"][0]["text"], "ok");
+    let logged = std::fs::read_to_string(log).unwrap();
+    assert!(logged.contains("navigate --json"), "{logged}");
+    assert!(logged.contains("webmcp --json"), "{logged}");
+    assert!(logged.contains("tabs --json"), "{logged}");
+}
+
+#[cfg(unix)]
+#[test]
+fn browse_run_maps_challenge_unsupported_and_missing_tool() {
+    let dir = tempfile::tempdir().unwrap();
+
+    let mut blocked = BrowseFake::ready();
+    blocked.nav_json =
+        r#"{"tab":12,"url":"https://cal.com/","title":"Just a moment...","challenge":true}"#
+            .to_string();
+    let (br1, _) = blocked.install(&dir, "browse1");
+    let mut cfg1 = config_with(config::DriverChoice::Browse, "agent-browser");
+    cfg1.drivers.browse.command = br1.display().to_string();
+    let err1 = driver::by_choice(config::DriverChoice::Browse, &cfg1)
+        .unwrap()
+        .run(&sample(), &lp_run_opts())
+        .unwrap_err();
+    assert_eq!(err1.code, "page_unreachable");
+
+    let mut unsup = BrowseFake::ready();
+    unsup.list_json = r#"{"available":false,"tools":[]}"#.to_string();
+    let (br2, _) = unsup.install(&dir, "browse2");
+    let mut cfg2 = config_with(config::DriverChoice::Browse, "agent-browser");
+    cfg2.drivers.browse.command = br2.display().to_string();
+    let err2 = driver::by_choice(config::DriverChoice::Browse, &cfg2)
+        .unwrap()
+        .run(&sample(), &lp_run_opts())
+        .unwrap_err();
+    assert_eq!(err2.code, "webmcp_unsupported");
+
+    let mut missing = BrowseFake::ready();
+    missing.list_json = r#"{"available":true,"tools":[]}"#.to_string();
+    let (br3, _) = missing.install(&dir, "browse3");
+    let mut cfg3 = config_with(config::DriverChoice::Browse, "agent-browser");
+    cfg3.drivers.browse.command = br3.display().to_string();
+    let mut opts3 = lp_run_opts();
+    opts3.settle_ms = 50;
+    let err3 = driver::by_choice(config::DriverChoice::Browse, &cfg3)
+        .unwrap()
+        .run(&sample(), &opts3)
+        .unwrap_err();
+    assert_eq!(err3.code, "tool_not_found");
 }

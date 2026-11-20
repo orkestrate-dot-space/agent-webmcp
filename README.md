@@ -36,14 +36,20 @@ googlechromelabs.github.io/searchFlights  [unspecified]
 | Breaks when the layout changes | Calls the interface the site publishes for agents |
 | Never learns the site had a tool | Knows before the page loads |
 
-It works with the browser driver you already use: agent-browser, Playwright
-MCP, Chrome DevTools MCP or OpenCode Browse. agent-webmcp never opens pages
-or calls tools itself; your driver does. When nothing matches, `find` says
-so, and the agent uses its driver as usual.
+It works with three real run drivers (`agent-browser`, `browse` for your
+logged-in Chrome, and experimental `lightpanda`), plus `--plan` (`none`)
+for driver-agnostic steps. When nothing matches, `find` says so, and the
+agent uses its browser as usual.
 
 ## Quickstart
 
-Install one of two ways:
+Hand your agent one prompt:
+
+```text
+Set up agent-webmcp for yourself by reading the docs at https://web.orkestrate.space/webmcp/agent.md.
+```
+
+Or install manually:
 
 | | |
 |---|---|
@@ -56,25 +62,18 @@ Then run first-run setup:
 $ agent-webmcp setup
 ```
 
-The curl script installs one checksum-verified binary to `~/.local/bin`
-and never edits your shell profile; it tells you if that folder is not on
-your PATH. Both installs upgrade with `agent-webmcp upgrade`.
+`setup` downloads the index, installs or updates the `agent-webmcp` skill (`~/.agents/skills`, plus `~/.claude/skills` and `~/.config/opencode/skills` when those client directories exist), and reports detected browser drivers. You can also install the skill via `npx skills add orkestrate-dot-space/agent-webmcp`.
 
-`setup` downloads the index, installs the agent skill (Claude Code, OpenCode
-and any `~/.agents` client), adds the MCP server to OpenCode, and prints
-one-line installs for Claude Code and Codex:
+The curl script installs one checksum-verified binary to `~/.local/bin` and never edits your shell profile; it tells you if that folder is not on your PATH. Both installs upgrade with `agent-webmcp upgrade`.
+
+**MCP server (optional):** the CLI and skill work out of the box with no client restart. If you prefer MCP tools (`find`, `inspect`, `call`), wire `agent-webmcp mcp` into your client:
 
 ```console
 $ claude mcp add agent-webmcp -s user -- agent-webmcp mcp
 $ codex mcp add agent-webmcp -- agent-webmcp mcp
 ```
 
-Some drivers need a flag to turn WebMCP on. [docs/drivers.md](docs/drivers.md)
-has the setup for each one, checked on 18 Nov 2026.
-
-Or skip all of this: the **Copy prompt** button on
-[web.orkestrate.space/webmcp](https://web.orkestrate.space/webmcp) gives your
-agent a prompt that installs and checks everything itself.
+For OpenCode, Cursor, or other MCP clients, configure a local stdio server running `["agent-webmcp", "mcp"]`. See [docs/drivers.md](docs/drivers.md) for browser driver details.
 
 ## Check a site, a URL or a task
 
@@ -109,25 +108,18 @@ Owners can ask for removal at support@orkestrate.space.
 | Command | What it does |
 |---|---|
 | `find <site, URL or task>` | Check a site first, or search by task. `--json` for machine output. |
-| `setup` | First run: index, skill, MCP wiring, driver notes. |
-| `mcp` | Run an MCP server with one tool, `find`. |
+| `inspect <url>` | Open a live page and list the WebMCP tools and schemas it registers. |
+| `call <target> [input]` | Validate input, check permissions, and call a WebMCP tool (or `--plan` for driver steps). |
+| `config [show\|path\|validate]` | Inspect or validate JSONC user/project config (`--json` supported). |
+| `setup` | First run: fetch the index, install or update the skill for detected clients, and report drivers. |
+| `mcp` | Run an MCP server exposing `find`, `inspect`, and `call` (with elicitation for confirmations). |
 | `update` | Check for a newer index now (it also checks hourly). |
 | `upgrade [version]` | Upgrade agent-webmcp itself the way you installed it (latest by default). |
-| `status` | Show the index in use and where it came from. |
+| `status` | Show the index in use, detected drivers, and active session locks. |
 
 How matching, listing and index updates work: [docs/index.md](docs/index.md).
-
-## Next
-
-Planned for 0.3, not shipped yet:
-
-- **`call`**: open the page and call a site's tool in one command, from the
-  CLI or the MCP server. Tools marked consequential will need explicit
-  confirmation.
-- **Registry**: `agent-webmcp add` for reviewed, versioned items, pinned in a
-  lockfile and kept current with `outdated` and `update`.
-
-Watch the repo or follow the [changelog](CHANGELOG.md) to hear when they land.
+Driver setup: [docs/drivers.md](docs/drivers.md). Configuration & permissions:
+[docs/config.md](docs/config.md).
 
 ## Privacy
 

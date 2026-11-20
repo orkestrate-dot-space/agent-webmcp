@@ -1,15 +1,14 @@
 //! Driver adapters: detect what can run here, or plan steps for the agent.
 //!
-//! Only agent-browser runs from a separate process; the MCP drivers live
-//! inside the agent's session, so agent-webmcp hands back exact steps.
+//! Three run drivers (`agent-browser`, `browse`, `lightpanda`) execute tools
+//! through their CLIs; `none` (`generic`) emits a driver-agnostic plan.
 
 pub mod agent_browser;
 pub mod browse;
-pub mod devtools_mcp;
+pub mod exec;
 pub mod generic;
 pub mod lightpanda;
 pub mod lock;
-pub mod playwright_mcp;
 
 use serde::Serialize;
 use serde_json::Value;
@@ -93,20 +92,80 @@ pub trait Driver {
             data: None,
         })
     }
+    /// Inspect a live page and return its registered WebMCP tools without calling them.
+    fn inspect(&self, url: &str, opts: &RunOptions) -> Result<InspectOutcome, CallError> {
+        let _ = (url, opts);
+        Err(CallError {
+            code: "driver_error",
+            message: format!("{} cannot inspect live pages", self.id()),
+            data: None,
+        })
+    }
 }
 
-/// How to run: budgets and which browser surface.
+/// One WebMCP tool discovered on a live page by `inspect`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InspectedTool {
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    pub input_schema: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub read_only: Option<bool>,
+}
+
+/// What `inspect` found on a live page.
+#[derive(Debug, Clone)]
+pub struct InspectOutcome {
+    pub page: String,
+    pub tools: Vec<InspectedTool>,
+    pub duration_ms: u64,
+    pub reused: bool,
+    pub budget_ms: u64,
+}
+
+/// Parse a JSON array of WebMCP tool objects at `pointer` into `InspectedTool`s.
+pub(crate) fn parse_inspected_tools(value: &Value, pointer: &str) -> Vec<InspectedTool> {
+    let Some(arr) = value.pointer(pointer).and_then(Value::as_array) else {
+        return Vec::new();
+    };
+    arr.iter()
+        .filter_map(|item| {
+            let name = item.get("name")?.as_str()?.to_string();
+            let description = item
+                .get("description")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string);
+            let input_schema = item
+                .get("inputSchema")
+                .or_else(|| item.get("input_schema"))
+                .filter(|v| v.is_object())
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!({}));
+            let read_only = item
+                .pointer("/annotations/readOnlyHint")
+                .and_then(Value::as_bool)
+                .or_else(|| item.get("readOnly").and_then(Value::as_bool));
+            Some(InspectedTool {
+                name,
+                description,
+                input_schema,
+                read_only,
+            })
+        })
+        .collect()
+}
+
+/// How to run: universal call budgets and session freshness.
 #[derive(Debug, Clone)]
 pub struct RunOptions {
     pub timeout_ms: u64,
     /// How long to wait for a late tool registration, in milliseconds.
     pub settle_ms: u64,
-    /// Extra `--args` values, passed on `open` before the WebMCP one.
-    pub extra_args: Vec<String>,
-    pub headed: bool,
     pub fresh: bool,
-    pub profile: Option<String>,
-    pub cdp: Option<String>,
 }
 
 /// What a run returned.
@@ -121,15 +180,12 @@ pub struct RunOutcome {
 
 /// Every driver, agent-browser first; sessions come from config.
 pub fn all(cfg: &Config) -> Vec<Box<dyn Driver>> {
-    let drivers: Vec<Box<dyn Driver>> = vec![
+    vec![
         Box::new(agent_browser::AgentBrowser::from_config(cfg)),
+        Box::new(browse::Browse::from_config(cfg)),
         Box::new(lightpanda::Lightpanda::from_config(cfg)),
-        Box::new(playwright_mcp::PlaywrightMcp),
-        Box::new(devtools_mcp::DevtoolsMcp),
-        Box::new(browse::Browse),
         Box::new(generic::Generic),
-    ];
-    drivers
+    ]
 }
 
 /// The named driver, if the choice names one; `auto` names none.
@@ -137,10 +193,8 @@ pub fn by_choice(choice: DriverChoice, cfg: &Config) -> Option<Box<dyn Driver>> 
     let driver: Box<dyn Driver> = match choice {
         DriverChoice::Auto => return None,
         DriverChoice::AgentBrowser => Box::new(agent_browser::AgentBrowser::from_config(cfg)),
+        DriverChoice::Browse => Box::new(browse::Browse::from_config(cfg)),
         DriverChoice::Lightpanda => Box::new(lightpanda::Lightpanda::from_config(cfg)),
-        DriverChoice::PlaywrightMcp => Box::new(playwright_mcp::PlaywrightMcp),
-        DriverChoice::ChromeDevtoolsMcp => Box::new(devtools_mcp::DevtoolsMcp),
-        DriverChoice::Browse => Box::new(browse::Browse),
         DriverChoice::None => Box::new(generic::Generic),
     };
     Some(driver)
@@ -170,6 +224,16 @@ pub fn choose(cfg: &Config) -> Choice {
                 },
             }
         }
+        DriverChoice::Browse => {
+            let driver = browse::Browse::from_config(cfg);
+            match driver.detect(cfg) {
+                Detection::Ready { version } => Choice::Run(Box::new(driver), version),
+                detection => Choice::Unusable {
+                    driver: "browse",
+                    detection,
+                },
+            }
+        }
         DriverChoice::Lightpanda => {
             let driver = lightpanda::Lightpanda::from_config(cfg);
             match driver.detect(cfg) {
@@ -180,15 +244,16 @@ pub fn choose(cfg: &Config) -> Choice {
                 },
             }
         }
-        DriverChoice::PlaywrightMcp => Choice::Plan(Box::new(playwright_mcp::PlaywrightMcp)),
-        DriverChoice::ChromeDevtoolsMcp => Choice::Plan(Box::new(devtools_mcp::DevtoolsMcp)),
-        DriverChoice::Browse => Choice::Plan(Box::new(browse::Browse)),
         DriverChoice::None => Choice::Plan(Box::new(generic::Generic)),
         DriverChoice::Auto => {
             let agent = agent_browser::AgentBrowser::from_config(cfg);
             match agent.detect(cfg) {
                 Detection::Ready { version } => Choice::Run(Box::new(agent), version),
                 agent_detection => {
+                    let browse = browse::Browse::from_config(cfg);
+                    if let Detection::Ready { version } = browse.detect(cfg) {
+                        return Choice::Run(Box::new(browse), version);
+                    }
                     let lightpanda = lightpanda::Lightpanda::from_config(cfg);
                     match lightpanda.detect(cfg) {
                         Detection::Ready { version } => Choice::Run(Box::new(lightpanda), version),
@@ -208,7 +273,6 @@ pub fn status_line(driver: &dyn Driver, cfg: &Config) -> String {
     match driver.kind() {
         Kind::Run => match driver.detect(cfg) {
             Detection::Ready { version } => {
-                // Lightpanda is a nightly build: say so on its status line.
                 if driver.id() == "lightpanda" {
                     format!(
                         "driver {}: ready {version} (run, experimental)",
@@ -218,9 +282,15 @@ pub fn status_line(driver: &dyn Driver, cfg: &Config) -> String {
                     format!("driver {}: ready {version} (run)", driver.id())
                 }
             }
-            Detection::Missing { install, .. } => {
-                format!("driver {}: missing; install: {install}", driver.id())
-            }
+            Detection::Missing {
+                install, detail, ..
+            } => match detail {
+                Some(detail) => format!(
+                    "driver {}: missing ({detail}); install: {install}",
+                    driver.id()
+                ),
+                None => format!("driver {}: missing; install: {install}", driver.id()),
+            },
             Detection::TooOld {
                 version,
                 min,
@@ -238,8 +308,8 @@ pub fn status_line(driver: &dyn Driver, cfg: &Config) -> String {
     }
 }
 
-/// The `no_driver` data: every real driver, how to get it, and where to
-/// select it. Skips the generic fallback, which is not a driver.
+/// The `no_driver` data: every run driver and how to get it.
+/// Skips the generic fallback, which is not a driver.
 pub fn setup_help(cfg: &Config, config_path: &str) -> serde_json::Value {
     let mut drivers = Vec::new();
     for driver in all(cfg) {
@@ -253,25 +323,28 @@ pub fn setup_help(cfg: &Config, config_path: &str) -> serde_json::Value {
         let mut entry = serde_json::json!({"id": driver.id(), "kind": kind});
         match driver.kind() {
             Kind::Run => {
-                if let Some(install) = driver.install() {
-                    entry["install"] = serde_json::Value::String(install.to_string());
-                }
-                entry["status"] = serde_json::Value::String(
-                    match driver.detect(cfg) {
-                        Detection::Ready { .. } => "ready",
-                        Detection::TooOld { .. } => "too_old",
-                        Detection::Missing { .. } => "missing",
-                        Detection::Unknown => "unknown",
+                let (status, install) = match driver.detect(cfg) {
+                    Detection::Ready { version } => ("ready", Some(version)),
+                    Detection::TooOld {
+                        version, install, ..
+                    } => {
+                        entry["version"] = serde_json::json!(version);
+                        ("too_old", Some(install))
                     }
-                    .to_string(),
-                );
+                    Detection::Missing { install, .. } => ("missing", Some(install)),
+                    Detection::Unknown => ("unknown", driver.install().map(str::to_string)),
+                };
+                entry["status"] = serde_json::json!(status);
+                if let Some(install) = install.filter(|_| status != "ready") {
+                    entry["install"] = serde_json::json!(install);
+                }
                 if let Some(note) = driver.note() {
-                    entry["note"] = serde_json::Value::String(note.to_string());
+                    entry["note"] = serde_json::json!(note);
                 }
             }
             Kind::Plan => {
-                if let Some(setup) = driver.note() {
-                    entry["setup"] = serde_json::Value::String(setup.to_string());
+                if let Some(note) = driver.note() {
+                    entry["setup"] = serde_json::json!(note);
                 }
             }
         }
@@ -279,7 +352,7 @@ pub fn setup_help(cfg: &Config, config_path: &str) -> serde_json::Value {
     }
     serde_json::json!({
         "drivers": drivers,
-        "configure": "set \"driver\" in agent-webmcp.json, e.g. {\"driver\": \"playwright-mcp\"}",
         "config": config_path,
+        "configure": "set \"driver\" in agent-webmcp.json, e.g. {\"driver\": \"browse\"}",
     })
 }

@@ -770,11 +770,7 @@ pub fn finish(prepared: Prepared, opts: &CallOptions, cfg: &Config) -> Result<Ou
                     &driver::RunOptions {
                         timeout_ms: cfg.call.timeout,
                         settle_ms: cfg.call.settle_ms.min(30_000),
-                        extra_args: cfg.drivers.agent_browser.extra_args.clone(),
-                        headed: cfg.drivers.agent_browser.headed,
                         fresh: opts.fresh,
-                        profile: cfg.drivers.agent_browser.profile.clone(),
-                        cdp: cfg.drivers.agent_browser.cdp.clone(),
                     },
                 )?;
                 let driver::RunOutcome {
@@ -860,7 +856,7 @@ fn unusable_plan(req: &CallRequest, detection: &Detection) -> Plan {
     plan
 }
 
-fn no_driver(cfg: &Config) -> CallError {
+pub fn no_driver(cfg: &Config) -> CallError {
     CallError {
         code: "no_driver",
         message: "no browser driver is available".to_string(),

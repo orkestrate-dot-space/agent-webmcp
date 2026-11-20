@@ -1,11 +1,8 @@
 # Driver setup
 
-`agent-webmcp find` tells you which page has the tool you need.
-Your browser driver opens that page and calls the tool.
-This guide shows how to set up each supported driver.
-Verified against the drivers on 18 Nov 2026.
+`agent-webmcp` supports three real run drivers—`agent-browser`, `browse`, and `lightpanda`—all of which execute tools directly via `agent-webmcp call` and also support `call --plan`. Setting `driver: "none"` emits generic driver-agnostic steps.
 
-Install with one of these, then run first-run setup once:
+Install `agent-webmcp` and run first-run setup once:
 
 ```bash
 curl -fsSL https://web.orkestrate.space/webmcp/install | bash   # Linux, macOS
@@ -14,11 +11,9 @@ npm i -g @orkestrate/agent-webmcp                               # any OS
 agent-webmcp setup
 ```
 
-`setup` fetches the index, installs the skill, and wires the MCP
-server into OpenCode. It also prints one-line installs for Claude
-Code and Codex. `find` doubles as a setup check: if it names tools
-for a site and your driver lists none on that page, the driver is
-misconfigured.
+`setup` fetches the index, installs or updates the skill for detected clients, and checks which run drivers are available (printing manual install lines if none are ready). Setup never edits client MCP configs or installs browser drivers automatically.
+
+Run `agent-webmcp status` at any time to see detected drivers, the selected driver, and any active session lock.
 
 ## Check a site before you open it
 
@@ -26,79 +21,43 @@ misconfigured.
 agent-webmcp find cal.com
 ```
 
-This is the main use: you already know the site, and `find` answers
-whether it registers WebMCP tools and which page they're on. Task
-search (`agent-webmcp find "search flights"`) works the same way but
-covers about a hundred sites, so a miss means no indexed tool does it.
+`find` answers whether a site registers WebMCP tools, which page they're on, and prints a ready-to-run `call` command.
 
-## agent-browser
+## agent-browser (default run driver)
 
-agent-browser 0.43+ switches WebMCP on by itself. No flags needed.
+`agent-browser` `>= 0.43.0` is the primary run driver. `agent-webmcp call` launches it with `--enable-features=WebMCP`, manages a per-session lock so concurrent calls don't collide, waits for late tool registration (`--settle`), and detects blocked pages.
 
-```bash
-agent-browser open <url-from-find>
-agent-browser webmcp list
-agent-browser webmcp invoke <tool> --params '{...}'
-```
+Useful `call` flags and config keys (`drivers.agent-browser` in [docs/config.md](config.md)):
 
-Without the tool in the list after the page loads, wait a moment
-and list again. Older versions needed
-`AGENT_BROWSER_ARGS="--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport"`;
-upgrade instead.
+- `--session <name>` (default `"agent-webmcp"`): reuse a named session so logins persist across calls.
+- `--fresh`: use a throwaway session closed after the call.
+- `--headed`: show the browser window.
+- `profile`, `cdp`, `extraArgs` (user config only): attach to an existing Chrome profile or CDP endpoint.
 
-## Playwright MCP
+## OpenCode Browse (real Chrome run driver)
 
-Playwright MCP collects page tools by default, but it does not switch
-WebMCP on in its browser. Add the Chrome flag to its config, or pages
-register nothing and no error tells you:
+`browse` drives your own logged-in Chrome through the `browse` CLI and extension—opening background tabs without stealing focus.
 
-```json
-{ "browser": { "launchOptions": { "args": ["--enable-features=WebMCP"] } } }
-```
+- `agent-webmcp status` checks `browse status --json` and marks `browse` ready when the extension is connected.
+- Under `driver: "auto"`, `browse` is used automatically when `agent-browser` is missing and the `browse` extension is connected; or select it explicitly with `--driver browse` / `"driver": "browse"`.
+- Pass `--fresh` to close the opened background tab after the call finishes.
 
-Then open the page from the `find` result, take a snapshot, and tools
-named `webmcp_<tool>` appear. Tools arrive during snapshot capture,
-not on navigation alone. Call `webmcp_<tool>` with the arguments from
-the schema.
+## Lightpanda (experimental run driver)
 
-## Chrome DevTools MCP
+Lightpanda is an experimental headless fallback when `agent-browser` and `browse` are not ready (used automatically by `driver: "auto"`, or explicitly with `--driver lightpanda`).
 
-Start the server with its experimental category switched on:
-
-```bash
---categoryExperimentalWebmcp
-```
-
-List with `list_webmcp_tools` (it takes the page id), call with
-`execute_webmcp_tool`, whose `input` is a JSON string, not an object.
-
-## OpenCode Browse
-
-OpenCode Browse drives your own Chrome and needs no flags.
-Open the page from the `find` result, then use `webmcp`:
-
-- List tools with `webmcp` and `action: "list"`.
-- Call a tool with `webmcp` and `action: "call"`.
-
-Only sites with a WebMCP origin-trial token show tools here.
-If a tool is missing, wait for the page to finish loading and list again.
+Install with `curl -fsSL https://pkg.lightpanda.io/install.sh | bash -s "1.0.4"` or configure `drivers.lightpanda.command` in your user config.
 
 ## Check it works
 
 Run a search against a real indexed demo site:
 
 ```bash
-agent-webmcp find "search flights"
+agent-webmcp find "search flights" --json
 ```
 
-You should see `searchFlights` on
-`https://googlechromelabs.github.io/webmcp-tools/demos/react-flightsearch/`.
-Open that page with your driver and list its WebMCP tools.
-If the tool appears, your driver is ready.
+You should see `searchFlights` on `https://googlechromelabs.github.io/webmcp-tools/demos/react-flightsearch/`. Test a call (or `--plan` to inspect steps without running):
 
-Add `--json` to `find` to get each tool's input schema. If the schema is
-empty (as for `searchFlights`), read it from the page with your driver
-before calling: `agent-browser webmcp list <tool> --json`, the
-`webmcp_<tool>` tool's own input schema (Playwright MCP),
-`list_webmcp_tools` (DevTools MCP), or `webmcp` with `action: "list"`
-(Browse).
+```bash
+agent-webmcp call googlechromelabs.github.io/searchFlights '{"origin":"SFO","destination":"JFK","tripType":"one-way","outboundDate":"2026-12-01","inboundDate":"","passengers":1}'
+```
