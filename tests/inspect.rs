@@ -23,6 +23,10 @@ fn normalize_url_handles_hosts_localhost_and_schemes() {
         "http://localhost/?view=tools"
     );
     assert_eq!(
+        normalize_url("localhost?next=https://example.com").unwrap(),
+        "http://localhost/?next=https://example.com"
+    );
+    assert_eq!(
         normalize_url("localhost:3000/app").unwrap(),
         "http://localhost:3000/app"
     );

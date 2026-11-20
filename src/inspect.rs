@@ -84,10 +84,14 @@ pub fn normalize_url(raw: &str) -> Result<String, CallError> {
     if trimmed.contains(char::is_whitespace) {
         return Err(CallError::usage(format!("invalid URL {raw:?}")));
     }
-    let with_scheme = if trimmed.contains("://") {
+    let host_prefix = trimmed.split(['/', '?', '#']).next().unwrap_or("");
+    let has_scheme = host_prefix.ends_with(':')
+        && trimmed
+            .get(host_prefix.len()..)
+            .is_some_and(|rest| rest.starts_with("//"));
+    let with_scheme = if has_scheme {
         trimmed.to_string()
     } else {
-        let host_prefix = trimmed.split(['/', '?', '#']).next().unwrap_or("");
         if let Some((_, after_colon)) = host_prefix.split_once(':')
             && !after_colon.chars().all(|c| c.is_ascii_digit())
         {
