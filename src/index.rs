@@ -7,7 +7,7 @@ use rusqlite::{Connection, params};
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::model::{Index, Status};
+use crate::model::{Annotations, Index, Status};
 
 /// One search hit, as agents see it.
 #[derive(Debug, Clone, Serialize)]
@@ -20,8 +20,13 @@ pub struct Hit {
     /// Open this page with your browser driver; the tool is registered there.
     pub open: String,
     pub kind: &'static str,
+    /// True when the kind was inferred from the name (no index hint).
+    #[serde(skip_serializing_if = "is_false")]
+    pub kind_inferred: bool,
     pub input_schema: Value,
     pub checked_at: String,
+    /// How to call this hit.
+    pub call: CallInfo,
     /// When the tool is a platform's shared tool, the platform and how many
     /// indexed sites share it.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -39,9 +44,36 @@ pub struct Platform {
     pub sites: usize,
 }
 
+/// How to call a hit, ready to paste.
+#[derive(Debug, Clone, Serialize)]
+pub struct CallInfo {
+    /// `<host>/<tool>`, the `call` target.
+    pub target: String,
+    /// Example input with a placeholder per required property.
+    #[serde(default)]
+    pub input: Value,
+}
+
+/// One tool looked up by host and name, for `call` target resolution.
+#[derive(Debug, Clone)]
+pub struct ToolRef {
+    /// Tool name.
+    pub name: String,
+    /// Page the tool was seen on.
+    pub page: String,
+    /// The tool's input schema.
+    pub input_schema: Value,
+    pub annotations: Annotations,
+    pub flags: Vec<String>,
+}
+
 struct Row {
     site: usize,
     tool: usize,
+}
+
+fn is_false(b: &bool) -> bool {
+    !b
 }
 
 pub struct Search {
@@ -91,6 +123,27 @@ impl Search {
             index,
             platform_sites,
         })
+    }
+
+    /// First verified tool named `name` on `host`, in index order.
+    pub fn tool(&self, host: &str, name: &str) -> Option<ToolRef> {
+        for site in &self.index.sites {
+            if site.host != host || site.status != Status::Verified {
+                continue;
+            }
+            for tool in &site.tools {
+                if tool.name == name {
+                    return Some(ToolRef {
+                        name: tool.name.clone(),
+                        page: tool.page.clone(),
+                        input_schema: tool.input_schema.clone(),
+                        annotations: tool.annotations.clone(),
+                        flags: tool.flags.clone(),
+                    });
+                }
+            }
+        }
+        None
     }
 
     pub fn sites(&self) -> usize {
@@ -203,21 +256,23 @@ impl Search {
                 continue;
             }
             seen_ids.push(id.clone());
+            let call = CallInfo {
+                target: id.clone(),
+                input: crate::call::example_input(&tool.input_schema),
+            };
+            let (tool_kind, kind_inferred) = crate::call::kind_of(&tool.name, &tool.annotations);
+            let kind = crate::call::kind_str(tool_kind);
             let hit = Hit {
                 id,
                 site: site.host.clone(),
                 tool: tool.name.clone(),
                 description: tool.description.clone(),
                 open: tool.page.clone(),
-                kind: if tool.annotations.consequential {
-                    "consequential"
-                } else if tool.annotations.read_only {
-                    "read"
-                } else {
-                    "unspecified"
-                },
+                kind,
+                kind_inferred,
                 input_schema: tool.input_schema.clone(),
                 checked_at: site.checked_at.clone(),
+                call,
                 platform,
                 flags: tool.flags.clone(),
                 relevance,

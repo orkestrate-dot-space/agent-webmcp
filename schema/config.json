@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://web.orkestrate.space/webmcp/config.json",
+  "title": "agent-webmcp configuration",
+  "description": "The user config may set everything; a project agent-webmcp.json(c) may only set call.timeout, drivers.agent-browser.headed, permissions.ask and permissions.deny.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Schema URL for editor validation; read and ignored."
+    },
+    "driver": {
+      "type": "string",
+      "enum": ["auto", "agent-browser", "browse", "lightpanda", "none"],
+      "default": "auto",
+      "description": "Which driver call uses: auto, a run driver, or none (plan only)."
+    },
+    "drivers": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "description": "Per-driver settings for the three run drivers.",
+      "properties": {
+        "agent-browser": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "How to reach agent-browser: command, session, and how to show it.",
+          "properties": {
+            "command": {
+              "type": "string",
+              "default": "agent-browser",
+              "description": "Program to run; user config only, never the project file."
+            },
+            "session": {
+              "type": "string",
+              "default": "agent-webmcp",
+              "description": "Named session to reuse, so logins persist across calls."
+            },
+            "headed": {
+              "type": "boolean",
+              "default": false,
+              "description": "Show the browser window instead of running headless."
+            },
+            "profile": {
+              "type": ["string", "null"],
+              "default": null,
+              "description": "Logged-in Chrome profile dir; user config only."
+            },
+            "cdp": {
+              "type": ["string", "null"],
+              "default": null,
+              "description": "Attach to a running Chrome; user config only."
+            },
+            "extraArgs": {
+              "type": "array",
+              "items": { "type": "string" },
+              "default": [],
+              "description": "Extra --args values for agent-browser, before the WebMCP one; user config only."
+            }
+          }
+        },
+        "browse": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "How to reach browse: the program to run.",
+          "properties": {
+            "command": {
+              "type": "string",
+              "default": "browse",
+              "description": "Program to run; user config only, never the project file."
+            }
+          }
+        },
+        "lightpanda": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "How to reach lightpanda: the program to run.",
+          "properties": {
+            "command": {
+              "type": "string",
+              "default": "lightpanda",
+              "description": "Program to run; user config only, never the project file."
+            }
+          }
+        }
+      }
+    },
+    "call": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "description": "Call-wide settings shared by every driver.",
+      "properties": {
+        "timeout": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 60000,
+          "description": "How long one tool call may take, in milliseconds."
+        },
+        "settleMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 30000,
+          "default": 8000,
+          "description": "How long to wait for a late tool registration, in milliseconds; 0 waits not at all."
+        }
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "description": "Tool patterns governing whether a call runs, asks, or is refused.",
+      "properties": {
+        "allow": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Patterns allowed without asking."
+        },
+        "ask": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Patterns needing confirmation first."
+        },
+        "deny": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Patterns never called; deny wins over ask and allow."
+        }
+      }
+    }
+  }
+}

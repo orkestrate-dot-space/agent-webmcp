@@ -25,11 +25,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - if: github.ref_type == 'tag'
         run: |
           TAG="${GITHUB_REF_NAME#v}"
           CARGO="$(sed -n 's/^version *= *"\(.*\)"/\1/p' Cargo.toml | head -1)"
           [ "$TAG" = "$CARGO" ] || { echo "tag v$TAG does not match Cargo.toml $CARGO"; exit 1; }
+          git fetch origin main
+          git merge-base --is-ancestor HEAD origin/main || { echo "tag commit is not on main; merge PR before releasing"; exit 1; }
 
   build:
     needs: check-tag

@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.3.1 — 2026-11-20
+
+- Address CodeRabbit review findings from `v0.3.0`: reject positional JSON
+  arrays in project config allowlist checks, return `is_error: false` on
+  successful MCP `inspect` calls, sanitize live-page strings in
+  `inspect::print_human`, map Lightpanda `isError` payloads to `tool_error`,
+  add unique sequence ids to `--fresh` sessions, preserve queries/localhost
+  on URL normalization, and recognize ST (`ESC \`) OSC terminators.
+
+## 0.3.0 — 2026-11-20
+
+- New `inspect` command and MCP `inspect` tool: opens any live URL
+  (`https://...`, `localhost`, or bare host) through the active run
+  driver and lists its registered WebMCP tools, descriptions, live
+  `inputSchema`s, and read/write hints without calling them.
+- New `call` command and MCP `call` tool: resolves `site/tool` or
+  `https://page#tool`, validates input against the tool's JSON Schema,
+  enforces `allow`/`ask`/`deny` permission globs (with `--confirm` and
+  MCP form elicitation), and runs through `agent-browser` (>= 0.43.0),
+  `browse` (your connected Chrome), or experimental `lightpanda`, with
+  `--plan` / `none` for step-by-step output.
+- New `config [show|path|validate]` command with JSONC user & project
+  configs, `${env:...}` / `${file:...}` substitution, and a restricted
+  project-config allowlist.
+- `find` results now include ready-to-paste `call` targets and inferred
+  read/write hints (`kind_inferred`).
+- `setup` now stays non-invasive (fetches the index, installs/updates the
+  skill only for detected client directories, reports driver readiness,
+  and never edits MCP configs or auto-installs drivers); `status` reports
+  detected drivers and active session locks.
+
 ## 0.2.3 — 2026-11-18
 
 - `upgrade` on an install-script copy now refuses releases before 0.2.2,

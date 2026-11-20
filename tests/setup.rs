@@ -1,36 +1,6 @@
-use agent_webmcp::setup::{
-    Configured, browser_report, configure_opencode, merge_opencode_mcp, newer_available, skill_dirs,
-};
-use std::path::PathBuf;
-use std::sync::Mutex;
+mod common;
 
-/// Tests below mutate XDG_CONFIG_HOME; serialise them.
-static ENV_LOCK: Mutex<()> = Mutex::new(());
-
-#[test]
-fn merge_adds_server() {
-    let out = merge_opencode_mcp(r#"{"mcp": {}}"#, "/bin/agent-webmcp")
-        .unwrap()
-        .unwrap();
-    let doc: serde_json::Value = serde_json::from_str(&out).unwrap();
-    assert_eq!(doc["mcp"]["agent-webmcp"]["type"], "local");
-    assert_eq!(doc["mcp"]["agent-webmcp"]["command"][1], "mcp");
-}
-
-#[test]
-fn merge_keeps_existing_when_present() {
-    let existing = r#"{"mcp": {"agent-webmcp": {"type": "local", "command": ["x", "mcp"]}}}"#;
-    assert!(
-        merge_opencode_mcp(existing, "/bin/agent-webmcp")
-            .unwrap()
-            .is_none()
-    );
-}
-
-#[test]
-fn merge_rejects_bad_json() {
-    assert!(merge_opencode_mcp("not json", "/bin/agent-webmcp").is_err());
-}
+use agent_webmcp::setup::{SkillSync, driver_report, newer_available, skill_dirs, sync_skills};
 
 #[test]
 fn versions_compare_numerically() {
@@ -54,61 +24,124 @@ fn versions_follow_semver_prerelease_order() {
 }
 
 #[test]
-fn skill_dirs_cover_the_three_clients() {
-    let dirs = skill_dirs(&PathBuf::from("/home/test"));
-    assert_eq!(dirs.len(), 3);
-    assert!(dirs.iter().all(|d| d.starts_with("/home/test")));
-}
-
-#[test]
-fn browser_report_covers_drivers() {
-    let report = browser_report().join("\n");
-    assert!(report.contains("agent-browser"));
-    assert!(report.contains("Playwright"));
-    assert!(report.contains("DevTools"));
-    assert!(report.contains("Browse"));
-}
-
-/// A config with comments (JSONC) is not valid strict JSON: setup must leave
-/// it untouched and report Skipped instead of aborting.
-#[test]
-fn jsonc_config_is_left_untouched() {
-    let _lock = ENV_LOCK.lock().unwrap();
+fn skill_dirs_only_targets_detected_clients() {
     let dir = tempfile::tempdir().unwrap();
-    let cfg_dir = dir.path().join("opencode");
-    std::fs::create_dir_all(&cfg_dir).unwrap();
-    let path = cfg_dir.join("opencode.json");
-    let original = "{\n  // comments are not strict JSON\n  \"mcp\": {}\n}\n";
-    std::fs::write(&path, original).unwrap();
+    let home = dir.path().join("home");
+    std::fs::create_dir_all(&home).unwrap();
 
-    let old = std::env::var_os("XDG_CONFIG_HOME");
-    unsafe { std::env::set_var("XDG_CONFIG_HOME", dir.path()) };
-    let result = configure_opencode();
-    match old {
-        Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
-        None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
-    }
+    // Fresh home: only ~/.agents/skills.
+    assert_eq!(skill_dirs(&home, None), vec![home.join(".agents/skills")]);
 
-    assert!(matches!(result.unwrap(), Configured::Skipped(_)));
-    assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
+    // Existing ~/.claude adds ~/.claude/skills.
+    std::fs::create_dir_all(home.join(".claude")).unwrap();
+    assert_eq!(
+        skill_dirs(&home, None),
+        vec![home.join(".agents/skills"), home.join(".claude/skills")]
+    );
+
+    // XDG_CONFIG_HOME overrides ~/.config for OpenCode detection.
+    let xdg = dir.path().join("xdg");
+    std::fs::create_dir_all(xdg.join("opencode")).unwrap();
+    assert_eq!(
+        skill_dirs(&home, Some(&xdg)),
+        vec![
+            home.join(".agents/skills"),
+            home.join(".claude/skills"),
+            xdg.join("opencode/skills"),
+        ]
+    );
+
+    // Without XDG_CONFIG_HOME, checks ~/.config/opencode.
+    std::fs::create_dir_all(home.join(".config/opencode")).unwrap();
+    assert_eq!(
+        skill_dirs(&home, None),
+        vec![
+            home.join(".agents/skills"),
+            home.join(".claude/skills"),
+            home.join(".config/opencode/skills"),
+        ]
+    );
 }
 
-/// Valid JSON with the wrong shape is a real error, not a silent skip.
 #[test]
-fn valid_json_with_wrong_shape_still_errors() {
-    let _lock = ENV_LOCK.lock().unwrap();
+fn sync_skills_installs_updates_and_skips_unchanged() {
     let dir = tempfile::tempdir().unwrap();
-    let cfg_dir = dir.path().join("opencode");
-    std::fs::create_dir_all(&cfg_dir).unwrap();
-    std::fs::write(cfg_dir.join("opencode.json"), r#"{"mcp": 42}"#).unwrap();
+    let skills_root = dir.path().join(".agents/skills");
+    let target = skills_root.join("agent-webmcp/SKILL.md");
 
-    let old = std::env::var_os("XDG_CONFIG_HOME");
-    unsafe { std::env::set_var("XDG_CONFIG_HOME", dir.path()) };
-    let result = configure_opencode();
-    match old {
-        Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
-        None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
-    }
+    // Pass 1: fresh install.
+    let first = sync_skills(std::slice::from_ref(&skills_root)).unwrap();
+    assert_eq!(
+        first,
+        SkillSync {
+            installed: vec![target.clone()],
+            updated: vec![],
+        }
+    );
+    let current = std::fs::read_to_string(&target).unwrap();
+    assert!(current.contains("name: agent-webmcp"));
 
-    assert!(result.is_err());
+    // Pass 2: unchanged content is skipped.
+    let second = sync_skills(std::slice::from_ref(&skills_root)).unwrap();
+    assert_eq!(second, SkillSync::default());
+
+    // Pass 3: stale content is updated.
+    std::fs::write(&target, "# stale skill\n").unwrap();
+    let third = sync_skills(std::slice::from_ref(&skills_root)).unwrap();
+    assert_eq!(
+        third,
+        SkillSync {
+            installed: vec![],
+            updated: vec![target.clone()],
+        }
+    );
+    assert_eq!(std::fs::read_to_string(&target).unwrap(), current);
+}
+
+#[cfg(unix)]
+#[test]
+fn driver_report_comes_from_detection() {
+    let dir = tempfile::tempdir().unwrap();
+    let script = common::Fake::new().install(&dir, "ab");
+    let mut cfg = common::run_config(&script);
+    cfg.drivers.browse.command = dir.path().join("no-such-browse").display().to_string();
+    cfg.drivers.lightpanda.command = dir.path().join("no-such-lightpanda").display().to_string();
+    let report = driver_report(&cfg).join("\n");
+    assert!(report.contains("agent-browser (run): ready"), "{report}");
+    assert!(
+        report.contains("browse (run): missing; install:"),
+        "{report}"
+    );
+    assert!(
+        report.contains("lightpanda (run, experimental): missing; install:"),
+        "{report}"
+    );
+    assert!(report.contains("call will use: agent-browser"), "{report}");
+}
+
+#[cfg(unix)]
+#[test]
+fn driver_report_without_run_driver() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut cfg = common::allow_all();
+    cfg.drivers.agent_browser.command = dir
+        .path()
+        .join("no-such-agent-browser")
+        .display()
+        .to_string();
+    cfg.drivers.browse.command = dir.path().join("no-such-browse").display().to_string();
+    cfg.drivers.lightpanda.command = dir.path().join("no-such-lightpanda").display().to_string();
+    let report = driver_report(&cfg).join("\n");
+    assert!(
+        report.contains("agent-browser (run): missing; install:"),
+        "{report}"
+    );
+    assert!(
+        report.contains("lightpanda (run, experimental): missing; install:"),
+        "{report}"
+    );
+    assert!(
+        report.contains("call will use: nothing yet (no run driver installed)"),
+        "{report}"
+    );
 }

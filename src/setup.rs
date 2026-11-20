@@ -1,17 +1,32 @@
-//! First-run setup: fetch the index, install the skill, wire the MCP server
-//! into OpenCode, print the one-line installs for Claude Code and Codex, and
-//! report the per-driver WebMCP setup.
+//! First-run setup: fetch the index, install or update the skill for
+//! detected clients, and report available browser drivers.
 //!
-//! Everything here is additive: files are only created or extended, never
-//! overwritten, and `setup` reports each change it made.
+//! Setup never edits client MCP configs or installs drivers automatically.
 
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
+use crate::config::{self, Config};
+use crate::driver::{self, Choice, Detection, Kind};
+
 const SKILL: &str = include_str!("../skills/agent-webmcp/SKILL.md");
 
-/// Run the whole setup and report what changed.
+/// Summary of files written by [`sync_skills`].
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct SkillSync {
+    pub installed: Vec<PathBuf>,
+    pub updated: Vec<PathBuf>,
+}
+
+/// True when any run driver (`agent-browser`, `browse`, or `lightpanda`) detects as Ready.
+fn any_run_ready(cfg: &Config) -> bool {
+    driver::all(cfg)
+        .iter()
+        .any(|d| d.kind() == Kind::Run && matches!(d.detect(cfg), Detection::Ready { .. }))
+}
+
+/// Run the first-run setup and report what changed.
 pub fn run() -> Result<()> {
     let index = crate::store::refresh()?;
     let (sites, tools) = crate::model::count_index(&index.sites);
@@ -21,57 +36,43 @@ pub fn run() -> Result<()> {
     );
 
     let home = home_dir()?;
-    let mut installed = Vec::new();
-    for dir in skill_dirs(&home) {
-        let target = dir.join("agent-webmcp").join("SKILL.md");
-        if target.exists() {
-            continue;
-        }
-        if let Some(parent) = target.parent() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("creating {}", parent.display()))?;
-        }
-        std::fs::write(&target, SKILL).with_context(|| format!("writing {}", target.display()))?;
-        installed.push(target);
-    }
-    if installed.is_empty() {
-        println!("skill: already installed");
+    let xdg = std::env::var_os("XDG_CONFIG_HOME")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from);
+    let sync = sync_skills(&skill_dirs(&home, xdg.as_deref()))?;
+    if sync.installed.is_empty() && sync.updated.is_empty() {
+        println!("skill: already up to date");
     } else {
-        for p in &installed {
+        for p in &sync.installed {
             println!("skill installed: {}", p.display());
         }
-    }
-
-    match configure_opencode()? {
-        Configured::Added(path) => println!(
-            "opencode: added the agent-webmcp MCP server to {}",
-            path.display()
-        ),
-        Configured::Present(path) => {
-            println!("opencode: {} already lists agent-webmcp", path.display())
-        }
-        Configured::Skipped(path) => {
-            println!(
-                "opencode: {} was not changed (it has comments or is not plain JSON); add this under \"mcp\":",
-                path.display()
-            );
-            println!("{}", mcp_snippet(&mcp_command()?));
-        }
-        Configured::Missing => {
-            println!("opencode: no config file found; add this under \"mcp\":");
-            println!("{}", mcp_snippet(&mcp_command()?));
+        for p in &sync.updated {
+            println!("skill updated: {}", p.display());
         }
     }
 
-    for line in browser_report() {
+    // A bad config must not kill setup; report it and carry on.
+    let cfg = match config::load() {
+        Ok(loaded) => {
+            for warning in &loaded.warnings {
+                eprintln!("warning: {warning}");
+            }
+            loaded.config
+        }
+        Err(e) => {
+            println!("config: {e:#}");
+            Config::default()
+        }
+    };
+    for line in driver_report(&cfg) {
         println!("{line}");
     }
-    println!("other clients (not configured automatically):");
+    if !any_run_ready(&cfg) {
+        print_manual_lines(&cfg);
+    }
     println!(
-        "  claude mcp add agent-webmcp -s user -- {} mcp",
-        mcp_command()?
+        "mcp (optional): run `agent-webmcp mcp` as a stdio server in your client if you prefer MCP over the CLI"
     );
-    println!("  codex mcp add agent-webmcp -- {} mcp", mcp_command()?);
     Ok(())
 }
 
@@ -81,162 +82,128 @@ fn home_dir() -> Result<PathBuf> {
         .context("HOME is not set; cannot install the skill")
 }
 
-/// The well-known local skill directories.
-pub fn skill_dirs(home: &Path) -> Vec<PathBuf> {
-    [
-        ".agents/skills",
-        ".claude/skills",
-        ".config/opencode/skills",
-    ]
-    .iter()
-    .map(|d| home.join(d))
-    .collect()
-}
-
-pub enum Configured {
-    Added(PathBuf),
-    Present(PathBuf),
-    Missing,
-    /// The config exists but is not plain JSON (comments, JSONC): left
-    /// untouched, with the manual snippet printed instead.
-    Skipped(PathBuf),
-}
-
-fn opencode_config_path() -> Option<PathBuf> {
-    if let Some(dir) = std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from) {
-        let p = dir.join("opencode/opencode.json");
-        if p.exists() {
-            return Some(p);
-        }
+/// Skill directories to populate: always `~/.agents/skills`, plus
+/// `~/.claude/skills` and `<xdg-or-home-config>/opencode/skills` only when
+/// those client directories already exist.
+pub fn skill_dirs(home: &Path, xdg_config_home: Option<&Path>) -> Vec<PathBuf> {
+    let mut dirs = vec![home.join(".agents").join("skills")];
+    if home.join(".claude").is_dir() {
+        dirs.push(home.join(".claude").join("skills"));
     }
-    std::env::var_os("HOME")
-        .map(|h| PathBuf::from(h).join(".config/opencode/opencode.json"))
-        .filter(|p| p.exists())
-}
-
-/// The command that runs this program: the plain `agent-webmcp` from PATH
-/// when one is there (the npm wrapper survives `npm i -g` upgrades while the
-/// inner binary path changes with each platform-package layout), else this
-/// binary's own canonical path (argv[0] may be relative or a symlink).
-fn mcp_command() -> Result<String> {
-    if path_resolves_to_us() {
-        return Ok("agent-webmcp".to_string());
+    let opencode_dir = match xdg_config_home.filter(|p| !p.as_os_str().is_empty()) {
+        Some(xdg) => xdg.join("opencode"),
+        None => home.join(".config").join("opencode"),
+    };
+    if opencode_dir.is_dir() {
+        dirs.push(opencode_dir.join("skills"));
     }
-    let exe = std::env::current_exe()?;
-    Ok(std::fs::canonicalize(&exe)
-        .unwrap_or(exe)
-        .to_string_lossy()
-        .into_owned())
+    dirs
 }
 
-fn path_resolves_to_us() -> bool {
-    let exe = if cfg!(windows) {
-        "agent-webmcp.exe"
-    } else {
-        "agent-webmcp"
-    };
-    let current = match std::env::current_exe() {
-        Ok(exe) => std::fs::canonicalize(&exe).unwrap_or(exe),
-        Err(_) => return false,
-    };
-    let ours = format!("agent-webmcp {}", env!("CARGO_PKG_VERSION"));
-    let Some(paths) = std::env::var_os("PATH") else {
-        return false;
-    };
-    // Mirror shell resolution: only the first match on PATH matters. A stale
-    // install earlier in PATH wins over a good one later, so later entries
-    // must not qualify.
-    let cand = match std::env::split_paths(&paths)
-        .map(|dir| dir.join(exe))
-        .find(|cand| cand.is_file())
-    {
-        Some(cand) => cand,
-        None => return false,
-    };
-    // The same file (a symlinked or hardlinked install).
-    if std::fs::canonicalize(&cand).is_ok_and(|canon| canon == current) {
-        return true;
-    }
-    // The same release under a different path (e.g. the npm wrapper shim,
-    // which survives `npm i -g` upgrades while the inner binary path does
-    // not). A stale install with another version does not qualify.
-    std::process::Command::new(&cand)
-        .arg("--version")
-        .output()
-        .is_ok_and(|out| String::from_utf8_lossy(&out.stdout).trim() == ours)
-}
-
-pub fn configure_opencode() -> Result<Configured> {
-    let Some(path) = opencode_config_path() else {
-        return Ok(Configured::Missing);
-    };
-    let text =
-        std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
-    let exe = mcp_command()?;
-    match merge_opencode_mcp(&text, &exe) {
-        Ok(None) => Ok(Configured::Present(path)),
-        Ok(Some(merged)) => {
-            crate::store::write_atomically(&path, &merged)
-                .with_context(|| format!("writing {}", path.display()))?;
-            Ok(Configured::Added(path))
-        }
-        Err(e) => {
-            // Valid JSON with the wrong shape is a real error; text that is
-            // not JSON at all (comments, JSONC) just means hands off.
-            if serde_json::from_str::<serde_json::Value>(&text).is_ok() {
-                return Err(e);
+/// Install or update `agent-webmcp/SKILL.md` in each target skill directory.
+pub fn sync_skills(dirs: &[PathBuf]) -> Result<SkillSync> {
+    let mut sync = SkillSync::default();
+    for dir in dirs {
+        let target = dir.join("agent-webmcp").join("SKILL.md");
+        if let Ok(existing) = std::fs::read_to_string(&target) {
+            if existing == SKILL {
+                continue;
             }
-            Ok(Configured::Skipped(path))
+            std::fs::write(&target, SKILL)
+                .with_context(|| format!("updating {}", target.display()))?;
+            sync.updated.push(target);
+            continue;
+        }
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("creating {}", parent.display()))?;
+        }
+        std::fs::write(&target, SKILL).with_context(|| format!("writing {}", target.display()))?;
+        sync.installed.push(target);
+    }
+    Ok(sync)
+}
+
+/// The driver report, built from real detection: one line per driver plus
+/// what `call` will use. Skips the generic fallback, which is not a driver.
+pub fn driver_report(cfg: &Config) -> Vec<String> {
+    let mut lines = vec!["drivers:".to_string()];
+    for driver in driver::all(cfg) {
+        if driver.id() == "generic" {
+            continue;
+        }
+        match driver.kind() {
+            Kind::Run => {
+                let experimental = driver
+                    .note()
+                    .is_some_and(|note| note.contains("experimental"));
+                let kind = if experimental {
+                    "run, experimental"
+                } else {
+                    "run"
+                };
+                let state = match driver.detect(cfg) {
+                    Detection::Ready { version } => format!("ready {version}"),
+                    Detection::Missing { install, .. } => {
+                        format!("missing; install: {install}")
+                    }
+                    Detection::TooOld {
+                        version,
+                        min,
+                        install,
+                    } => {
+                        format!("too old {version} (need {min}); install: {install}")
+                    }
+                    Detection::Unknown => "unknown".to_string(),
+                };
+                lines.push(format!("  {} ({kind}): {state}", driver.id()));
+            }
+            Kind::Plan => match driver.note() {
+                Some(note) => lines.push(format!("  {} (plan): {note}", driver.id())),
+                None => lines.push(format!("  {} (plan)", driver.id())),
+            },
         }
     }
-}
-
-/// Merge the agent-webmcp MCP server into an opencode.json document.
-/// Returns `Ok(None)` when the server is already listed. A successful merge
-/// is re-serialised, so formatting and comments are normalised; callers leave
-/// non-JSON configs (JSONC with comments) untouched instead.
-pub fn merge_opencode_mcp(existing: &str, exe: &str) -> Result<Option<String>> {
-    let mut doc: serde_json::Value =
-        serde_json::from_str(existing).context("the opencode config is not valid JSON")?;
-    let mcp = doc
-        .as_object_mut()
-        .context("the opencode config is not a JSON object")?
-        .entry("mcp")
-        .or_insert_with(|| serde_json::Value::Object(Default::default()));
-    let servers = mcp
-        .as_object_mut()
-        .context("the opencode config's \"mcp\" is not an object")?;
-    if servers.contains_key("agent-webmcp") {
-        return Ok(None);
+    match driver::choose(cfg) {
+        Choice::Run(driver, _) => lines.push(format!("call will use: {}", driver.id())),
+        Choice::Plan(driver) => lines.push(format!("call will use: {}", driver.id())),
+        Choice::Unusable { .. } => {
+            lines.push("call will use: nothing yet (no run driver installed)".to_string());
+        }
     }
-    servers.insert(
-        "agent-webmcp".to_string(),
-        serde_json::json!({
-            "type": "local",
-            "command": [exe, "mcp"],
-            "enabled": true,
-        }),
+    lines
+}
+
+/// Print non-invasive manual install instructions when no run driver is ready.
+fn print_manual_lines(cfg: &Config) {
+    println!("no run driver ready; install one to run `inspect` and `call`:");
+    for driver in driver::all(cfg) {
+        if driver.id() == "generic" || driver.kind() != Kind::Run {
+            continue;
+        }
+        if let Some(install) = driver.install() {
+            let label = match driver.id() {
+                "agent-browser" => "agent-browser (recommended)",
+                "browse" => "browse (your Chrome)",
+                "lightpanda" => "lightpanda (experimental)",
+                other => other,
+            };
+            println!("  {label}: {install}");
+        }
+    }
+    println!(
+        "or use `--plan` / `--driver none` with another browser driver (Playwright, Chrome DevTools, etc.)"
     );
-    Ok(Some(serde_json::to_string_pretty(&doc)?))
+    println!(
+        "set \"driver\" in {} to pick one",
+        user_config_path().display()
+    );
 }
 
-fn mcp_snippet(exe: &str) -> String {
-    serde_json::to_string_pretty(&serde_json::json!({
-        "mcp": { "agent-webmcp": { "type": "local", "command": [exe, "mcp"], "enabled": true } }
-    }))
-    .unwrap_or_default()
-}
-
-/// Human-readable notes about each driver's WebMCP setup, verified against
-/// the drivers on 18 Nov 2026. agent-browser turns WebMCP on itself; the
-/// others need a flag the user adds to their own config.
-pub fn browser_report() -> Vec<String> {
-    vec![
-        "browser: agent-browser 0.43+ enables WebMCP itself; no flags needed.".to_string(),
-        "browser: Playwright MCP needs --enable-features=WebMCP in browser.launchOptions.args; tools appear after a snapshot.".to_string(),
-        "browser: Chrome DevTools MCP needs --categoryExperimentalWebmcp.".to_string(),
-        "browser: OpenCode Browse drives your own Chrome and takes no flags.".to_string(),
-    ]
+/// The user config path for messages, without failing setup.
+fn user_config_path() -> PathBuf {
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    config::user_path(&|key: &str| std::env::var(key).ok(), &cwd)
 }
 
 /// True when `latest` names a newer release than `installed`, by SemVer

@@ -1,9 +1,15 @@
 use std::path::PathBuf;
 
+use agent_webmcp::call;
+use agent_webmcp::config;
+use agent_webmcp::config::DriverChoice;
+use agent_webmcp::driver;
 use agent_webmcp::index::Search;
+use agent_webmcp::inspect;
 use agent_webmcp::mcp::Server;
 use agent_webmcp::setup;
 use agent_webmcp::store;
+use agent_webmcp::text;
 use agent_webmcp::upgrade;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -13,7 +19,7 @@ use clap::{Parser, Subcommand};
     name = "agent-webmcp",
     bin_name = "agent-webmcp",
     version,
-    about = "Check a site's WebMCP tools before you open it, or search tools by task"
+    about = "Discover, inspect, and call WebMCP tools on websites"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -33,6 +39,69 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Call a WebMCP tool, or print the steps for your driver
+    Call {
+        /// site/tool from find, or https://page#tool
+        target: String,
+        /// Tool input as JSON (or use --params)
+        input: Option<String>,
+        /// Tool input as JSON or @file (@- reads stdin)
+        #[arg(long)]
+        params: Option<String>,
+        /// Driver to use (default from config)
+        #[arg(long)]
+        driver: Option<String>,
+        /// Browser session for agent-browser (default from config)
+        #[arg(long)]
+        session: Option<String>,
+        /// Use a throwaway session, closed after the call
+        #[arg(long)]
+        fresh: bool,
+        /// Show the browser window
+        #[arg(long)]
+        headed: bool,
+        /// Approve a tool that needs confirmation
+        #[arg(long)]
+        confirm: bool,
+        /// Print the steps instead of running
+        #[arg(long)]
+        plan: bool,
+        /// Timeout in milliseconds (default from config)
+        #[arg(long)]
+        timeout: Option<u64>,
+        /// Settle budget in milliseconds for late tool registration
+        #[arg(long)]
+        settle: Option<u64>,
+        /// Print machine-readable JSON instead of text
+        #[arg(long)]
+        json: bool,
+    },
+    /// Inspect a live page and list the WebMCP tools it registers
+    Inspect {
+        /// Page URL or host (e.g. https://cal.com/ or cal.com)
+        url: String,
+        /// Driver to use (default from config)
+        #[arg(long)]
+        driver: Option<String>,
+        /// Browser session for agent-browser (default from config)
+        #[arg(long)]
+        session: Option<String>,
+        /// Use a throwaway session or tab, closed afterwards
+        #[arg(long)]
+        fresh: bool,
+        /// Show the browser window
+        #[arg(long)]
+        headed: bool,
+        /// Timeout in milliseconds (default from config)
+        #[arg(long)]
+        timeout: Option<u64>,
+        /// Settle budget in milliseconds for late tool registration
+        #[arg(long)]
+        settle: Option<u64>,
+        /// Print machine-readable JSON instead of text
+        #[arg(long)]
+        json: bool,
+    },
     /// Download the latest index now
     Update,
     /// Upgrade agent-webmcp itself to the latest or a given version
@@ -40,18 +109,82 @@ enum Command {
         /// Version to install (with or without a leading v), or `next`
         target: Option<String>,
     },
-    /// First-run setup: fetch the index, install the skill, wire up OpenCode
+    /// First-run setup: fetch the index, install the skill, and check drivers
     Setup,
     /// Show the index in use
     Status,
+    /// Show or check the effective configuration
+    Config {
+        /// Print machine-readable JSON instead of text
+        #[arg(long, global = true)]
+        json: bool,
+        #[command(subcommand)]
+        action: Option<ConfigAction>,
+    },
     /// Run the MCP server on stdio
     Mcp,
+}
+
+#[derive(Subcommand)]
+enum ConfigAction {
+    /// Print the effective config and where each value came from
+    Show,
+    /// Print the config file locations
+    Path,
+    /// Check the config files for errors
+    Validate,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     match Cli::parse().command {
         Command::Find { query, limit, json } => find(&query.join(" "), limit, json),
+        Command::Call {
+            target,
+            input,
+            params,
+            driver,
+            session,
+            fresh,
+            headed,
+            confirm,
+            plan,
+            timeout,
+            settle,
+            json,
+        } => call_command(
+            &target,
+            input.as_deref(),
+            params.as_deref(),
+            driver.as_deref(),
+            session,
+            fresh,
+            headed,
+            confirm,
+            plan,
+            timeout,
+            settle,
+            json,
+        ),
+        Command::Inspect {
+            url,
+            driver,
+            session,
+            fresh,
+            headed,
+            timeout,
+            settle,
+            json,
+        } => inspect_command(
+            &url,
+            driver.as_deref(),
+            session,
+            fresh,
+            headed,
+            timeout,
+            settle,
+            json,
+        ),
         Command::Update => {
             let (index, changed) = tokio::task::spawn_blocking(store::refresh_changed).await??;
             let search = Search::build(index)?;
@@ -89,8 +222,50 @@ async fn main() -> Result<()> {
             if let Some(note) = cli_update_note() {
                 println!("{note}");
             }
+            // A bad config must not kill status; report it and carry on.
+            let cfg = match config::load() {
+                Ok(loaded) => {
+                    for warning in &loaded.warnings {
+                        eprintln!("warning: {warning}");
+                    }
+                    loaded.config
+                }
+                Err(e) => {
+                    println!("config: {e:#}");
+                    config::Config::default()
+                }
+            };
+            for driver in driver::all(&cfg) {
+                println!("{}", driver::status_line(driver.as_ref(), &cfg));
+            }
+            println!("data dir {}", store::data_dir().display());
+            let sessions = store::data_dir().join("sessions");
+            if let Some((pid, _)) =
+                driver::lock::holder(&sessions, &cfg.drivers.agent_browser.session)
+            {
+                println!(
+                    "session {}: in use by pid {pid}",
+                    cfg.drivers.agent_browser.session
+                );
+            }
+            match driver::choose(&cfg) {
+                driver::Choice::Run(driver, _) => {
+                    println!("selected: {} (run)", driver.id());
+                }
+                driver::Choice::Plan(driver) => {
+                    println!("selected: {} (plan)", driver.id());
+                }
+                driver::Choice::Unusable { driver, .. } => {
+                    println!("selected: {driver} (unusable)");
+                }
+            }
             Ok(())
         }
+        Command::Config { json, action } => match action.unwrap_or(ConfigAction::Show) {
+            ConfigAction::Show => config_show(json),
+            ConfigAction::Path => config_path(),
+            ConfigAction::Validate => config_validate(),
+        },
         Command::Mcp => {
             use rmcp::ServiceExt;
             let search = Search::build(tokio::task::spawn_blocking(store::load).await??)?;
@@ -111,6 +286,78 @@ fn cli_update_note() -> Option<String> {
         ))
     } else {
         None
+    }
+}
+
+/// Print the merged config and, unless `--json`, the sources below it.
+fn config_show(json: bool) -> Result<()> {
+    let loaded = config::load()?;
+    for warning in &loaded.warnings {
+        eprintln!("warning: {warning}");
+    }
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "config": loaded.config,
+                "sources": loaded.sources,
+                "warnings": loaded.warnings,
+            }))?
+        );
+        return Ok(());
+    }
+    println!(
+        "{}\n\nsources:",
+        serde_json::to_string_pretty(&loaded.config)?
+    );
+    if loaded.sources.is_empty() {
+        println!("(none, using defaults)");
+    }
+    for source in &loaded.sources {
+        println!("{source}");
+    }
+    Ok(())
+}
+
+/// Print where the user and project configs live, whether they exist or not.
+fn config_path() -> Result<()> {
+    let env = |key: &str| std::env::var(key).ok();
+    let cwd = std::env::current_dir()?;
+    let found = config::locate(&env, &cwd);
+    for warning in &found.warnings {
+        eprintln!("warning: {warning}");
+    }
+    if found.user_exists {
+        println!("user: {}", found.user.display());
+    } else {
+        println!("user: {} (not found)", found.user.display());
+    }
+    if let Some(project) = found.project {
+        println!("project: {}", project.display());
+    }
+    Ok(())
+}
+
+/// Load the configs and report success or the first error.
+fn config_validate() -> Result<()> {
+    match config::load() {
+        Ok(loaded) => {
+            for warning in &loaded.warnings {
+                eprintln!("warning: {warning}");
+            }
+            println!("ok");
+            for source in &loaded.sources {
+                println!("{source}");
+            }
+            if loaded.sources.is_empty() {
+                println!("(no config files, using defaults)");
+            }
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("{e:#}");
+            std::process::exit(1);
+        }
     }
 }
 
@@ -138,7 +385,7 @@ fn find(query: &str, limit: usize, json: bool) -> Result<()> {
         let shared = h
             .platform
             .as_ref()
-            .map(|p| format!("  (shared by {} {} sites)", p.sites, clean(&p.name)))
+            .map(|p| format!("  (shared by {} {} sites)", p.sites, text::clean(&p.name)))
             .unwrap_or_default();
         let flags = if h.flags.is_empty() {
             String::new()
@@ -147,20 +394,172 @@ fn find(query: &str, limit: usize, json: bool) -> Result<()> {
                 "  [flagged: {}]",
                 h.flags
                     .iter()
-                    .map(|f| clean(f))
+                    .map(|f| text::clean(f))
                     .collect::<Vec<_>>()
                     .join(", "),
             )
         };
+        let example =
+            serde_json::to_string(&call::example_input(&h.input_schema)).unwrap_or_default();
+        let kind = if h.kind_inferred {
+            "[read, inferred]".to_string()
+        } else {
+            format!("[{}]", h.kind)
+        };
         println!(
-            "{}  [{}]{shared}{flags}\n    {}\n    open {}\n",
-            clean(&h.id),
-            h.kind,
-            clean(&h.description),
-            clean(&h.open)
+            "{}  {kind}{shared}{flags}\n    {}\n    open {}\n    call agent-webmcp call {} '{}'\n",
+            text::clean(&h.id),
+            text::clean(&h.description),
+            text::clean(&h.open),
+            text::clean(&h.id),
+            example
         );
     }
     Ok(())
+}
+
+/// Run one `call`: config, index, then the shared pipeline.
+#[allow(clippy::too_many_arguments)]
+fn prepare_run_config(
+    driver: Option<&str>,
+    session: Option<String>,
+    headed: bool,
+    timeout: Option<u64>,
+    settle: Option<u64>,
+) -> config::Config {
+    let mut cfg = match config::load() {
+        Ok(loaded) => {
+            for warning in &loaded.warnings {
+                eprintln!("warning: {warning}");
+            }
+            loaded.config
+        }
+        Err(e) => {
+            eprintln!("error: {e:#}");
+            std::process::exit(1);
+        }
+    };
+    let choice = match driver.map(parse_driver_choice) {
+        None => None,
+        Some(Ok(choice)) => Some(choice),
+        Some(Err(e)) => {
+            call::print_failure(&e);
+            std::process::exit(call::exit_code(&e));
+        }
+    };
+    for (name, value, check) in [
+        (
+            "--timeout",
+            timeout,
+            config::check_timeout_ms as fn(u64, &str) -> anyhow::Result<()>,
+        ),
+        ("--settle", settle, config::check_settle_ms),
+    ] {
+        if let Some(v) = value
+            && let Err(e) = check(v, name)
+        {
+            let e = call::CallError::usage(format!("{e:#}"));
+            call::print_failure(&e);
+            std::process::exit(call::exit_code(&e));
+        }
+    }
+    cfg.apply_overrides(&config::Overrides {
+        driver: choice,
+        session,
+        headed: headed.then_some(true),
+        timeout,
+        settle,
+        command: None,
+    });
+    cfg
+}
+
+#[allow(clippy::too_many_arguments)]
+fn call_command(
+    target: &str,
+    input: Option<&str>,
+    params: Option<&str>,
+    driver: Option<&str>,
+    session: Option<String>,
+    fresh: bool,
+    headed: bool,
+    confirm: bool,
+    plan_only: bool,
+    timeout: Option<u64>,
+    settle: Option<u64>,
+    json: bool,
+) -> Result<()> {
+    let cfg = prepare_run_config(driver, session, headed, timeout, settle);
+    let search = Search::build(store::load()?)?;
+    let opts = call::CallOptions {
+        confirm,
+        plan_only,
+        fresh,
+        retry_hint: call::RETRY_CLI,
+    };
+    match call::run_call(target, input, params, &opts, &cfg, &search) {
+        Ok(done) => {
+            if json {
+                println!("{}", serde_json::to_string_pretty(&done.envelope())?);
+            } else {
+                call::print_human(&done);
+            }
+            Ok(())
+        }
+        Err(e) => {
+            if json {
+                println!("{}", serde_json::to_string_pretty(&e.envelope())?);
+            }
+            call::print_failure(&e);
+            std::process::exit(call::exit_code(&e));
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn inspect_command(
+    url: &str,
+    driver: Option<&str>,
+    session: Option<String>,
+    fresh: bool,
+    headed: bool,
+    timeout: Option<u64>,
+    settle: Option<u64>,
+    json: bool,
+) -> Result<()> {
+    let cfg = prepare_run_config(driver, session, headed, timeout, settle);
+    let opts = inspect::InspectOptions { fresh };
+    match inspect::run_inspect(url, &opts, &cfg) {
+        Ok(done) => {
+            if json {
+                println!("{}", serde_json::to_string_pretty(&done.envelope())?);
+            } else {
+                inspect::print_human(&done);
+            }
+            Ok(())
+        }
+        Err(e) => {
+            if json {
+                println!("{}", serde_json::to_string_pretty(&e.envelope())?);
+            }
+            call::print_failure(&e);
+            std::process::exit(call::exit_code(&e));
+        }
+    }
+}
+
+/// A `--driver` name, or a usage error naming the valid ids.
+fn parse_driver_choice(name: &str) -> Result<DriverChoice, call::CallError> {
+    match name {
+        "auto" => Ok(DriverChoice::Auto),
+        "agent-browser" => Ok(DriverChoice::AgentBrowser),
+        "browse" => Ok(DriverChoice::Browse),
+        "lightpanda" => Ok(DriverChoice::Lightpanda),
+        "none" => Ok(DriverChoice::None),
+        _ => Err(call::CallError::usage(format!(
+            "unknown driver {name:?}; expected one of auto, agent-browser, browse, lightpanda, none"
+        ))),
+    }
 }
 
 /// The no-match line echoes the query; keep it to one short line.
@@ -174,52 +573,9 @@ fn short_query(query: &str) -> String {
     format!("{:?}", format!("{cut}…"))
 }
 
-/// Strip control characters (including ANSI escapes) from site-provided text
-/// before printing. JSON output stays as-is.
-fn clean(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut chars = s.chars();
-    while let Some(c) = chars.next() {
-        if c == '\x1b' {
-            // Skip an ANSI escape sequence: CSI (ESC [ … final byte) or OSC
-            // (ESC ] … BEL); anything else drops just the ESC and its
-            // introducer.
-            match chars.next() {
-                Some('[') => {
-                    for e in chars.by_ref() {
-                        if ('@'..='~').contains(&e) {
-                            break;
-                        }
-                    }
-                }
-                Some(']') => {
-                    for e in chars.by_ref() {
-                        if e == '\x07' {
-                            break;
-                        }
-                    }
-                }
-                _ => {}
-            }
-        } else if !c.is_control() {
-            out.push(c);
-        }
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn clean_strips_ansi_escapes_and_controls() {
-        assert_eq!(clean("a\x1b[31mred\x1b[0mb"), "aredb");
-        assert_eq!(clean("a\x07b\tc\nd"), "abcd");
-        assert_eq!(clean("plain text"), "plain text");
-        // Unicode is untouched.
-        assert_eq!(clean("héllo→world"), "héllo→world");
-    }
 
     #[test]
     fn short_query_keeps_short_queries_whole() {
