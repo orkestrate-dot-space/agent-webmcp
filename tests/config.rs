@@ -354,6 +354,22 @@ fn env_substitution_replaces_and_empties_missing() {
 }
 
 #[test]
+fn dollar_before_brace_is_preserved() {
+    // `src/config.rs` preserves `$` before `{`: `${env:FOO}` expands to
+    // `$<value>`, so docs use brace-only `{env:FOO}`.
+    let tmp = tempfile::tempdir().unwrap();
+    let (home, cwd) = workdir(&tmp, "work");
+    write(
+        &home.join(".config/agent-webmcp/agent-webmcp.json"),
+        r#"{"drivers": {"agent-browser": {"session": "${env:WB_SESSION}"}}}"#,
+    );
+    let mut env = base_env(&home);
+    env.insert("WB_SESSION".to_string(), "live".to_string());
+    let loaded = load_with(env, &cwd).unwrap();
+    assert_eq!(loaded.config.drivers.agent_browser.session, "$live");
+}
+
+#[test]
 fn file_substitution_reads_from_home() {
     let tmp = tempfile::tempdir().unwrap();
     let (home, cwd) = workdir(&tmp, "work");

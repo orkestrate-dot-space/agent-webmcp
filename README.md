@@ -5,7 +5,6 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/@orkestrate/agent-webmcp"><img src="https://img.shields.io/npm/v/@orkestrate/agent-webmcp?color=000&label=npm" alt="npm version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-000" alt="MIT license"></a>
-  <a href="https://web.orkestrate.space/webmcp/sites"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fagent-webmcp-index.agent-webmcp.workers.dev%2Findex.json&query=%24.sites&suffix=%20sites&label=directory&color=000" alt="Sites in the directory"></a>
 </p>
 
 # agent-webmcp
@@ -24,22 +23,41 @@ agent-webmcp is that missing lookup. One call, before the agent opens a
 page:
 
 ```console
-$ agent-webmcp find "search flights"
-googlechromelabs.github.io/searchFlights  [unspecified]
-    Searches for flights with the given parameters.
-    open https://googlechromelabs.github.io/webmcp-tools/demos/react-flightsearch/
+$ agent-webmcp find cal.com
+cal.com/ask_cal_com  [read, inferred]
+    Ask a question about Cal.com (plans, features, integrations, self-hosting, the API) and get an answer grounded in the documentation.
+    open https://cal.com/
+    call agent-webmcp call cal.com/ask_cal_com '{"question":""}'
+
+$ agent-webmcp find stripe.com
+No indexed site has a tool for "stripe.com". Use your browser driver as usual.
+$ agent-webmcp tools validate stripe.com
+stripe.com: ok (get_prices, create_checkout)
+$ agent-webmcp call --confirm stripe.com/get_prices '{"product":"pro"}'
 ```
+
+Native WebMCP when a site has it, local custom tools when it doesn't —
+one permission-gated `call` across every driver (`agent-browser`,
+`browse`, `lightpanda`, `--plan`).
+
+Author it once (`manifest.json` + `tools.js`), `call` it like a native
+tool, and when the site later ships native WebMCP, the native tool
+automatically wins.
 
 | Without agent-webmcp | With agent-webmcp |
 |---|---|
-| Open the page, snapshot, find the form, type into each field, click search, snapshot again to check | `find` names the page and tool, open it, call `searchFlights` once with typed arguments |
+| Open the page, snapshot, find the form, type into each field, click search, snapshot again to check | `find` names the page and tool, open it, call `ask_cal_com` once with typed arguments |
 | Breaks when the layout changes | Calls the interface the site publishes for agents |
 | Never learns the site had a tool | Knows before the page loads |
+| The 99.9% of sites with no tools: click forever | Author a local custom tool once, `call` it like a native one; native wins automatically when the site adds WebMCP |
 
-It works with three real run drivers (`agent-browser`, `browse` for your
-logged-in Chrome, and experimental `lightpanda`), plus `--plan` (`none`)
-for driver-agnostic steps. When nothing matches, `find` says so, and the
-agent uses its browser as usual.
+One permission-gated runtime across every browser driver: the same
+`find`/`inspect`/`call` on `agent-browser`, your logged-in Chrome via
+`browse`, experimental `lightpanda`, or driver-agnostic `--plan` steps —
+backed by the local custom-tool engine and the `allow`/`ask`/`deny`
+boundary (`--confirm`, MCP elicitation) so consequential tools always stop
+for approval. When nothing matches, `find` says so, and the agent uses its
+browser as usual.
 
 ## Quickstart
 
@@ -62,7 +80,7 @@ Then run first-run setup:
 $ agent-webmcp setup
 ```
 
-`setup` downloads the index, installs or updates the `agent-webmcp` skill (`~/.agents/skills`, plus `~/.claude/skills` and `~/.config/opencode/skills` when those client directories exist), and reports detected browser drivers. You can also install the skill via `npx skills add orkestrate-dot-space/agent-webmcp`.
+`setup` downloads the index, installs or updates the `agent-webmcp` skill (`~/.agents/skills`, plus `~/.claude/skills`, `~/.codex/skills`, `~/.openclaw/skills`, `~/.cursor/skills`, and `~/.config/opencode/skills` when those client directories exist), and reports detected browser drivers. You can also install the skill via `npx skills add orkestrate-dot-space/agent-webmcp`. The version-matched guide lives in the CLI itself: `agent-webmcp skills get core` (refresh stubs with `agent-webmcp skills sync`).
 
 The curl script installs one checksum-verified binary to `~/.local/bin` and never edits your shell profile; it tells you if that folder is not on your PATH. Both installs upgrade with `agent-webmcp upgrade`.
 
@@ -89,7 +107,27 @@ No indexed site has a tool for "stripe.com". Use your browser driver as usual.
 
 Site lookup is the main use: your agent already knows where it is going.
 Task search covers the sites in the index. Add `--json` for each tool's
-input schema.
+input schema. When a site you reuse has no native tools, author a local
+custom tool (see Custom tools below) instead of clicking forever.
+
+## Custom tools
+
+`find` searches two catalogs at once: the public native WebMCP index and
+your local custom tools (`manifest.json` + `tools.js` per host, managed
+with `agent-webmcp tools [list|validate|path]`). A site with no native
+WebMCP still gets a typed `call` target — and when the site later ships
+native WebMCP, the native tool automatically shadows yours.
+
+```console
+$ agent-webmcp tools validate example.com
+example.com: ok (search_docs, lookup_order)
+```
+
+Author per host with `agent-webmcp skills get core --ref authoring`, then
+validate. `call` treats a custom tool like a native one: same input-schema
+validation, same `allow`/`ask`/`deny` permissions and `--confirm`
+boundary, same `toolHash` pinning in approvals. Hosts matched by `deny`
+are never evaluated — not even by `inspect` availability probes.
 
 ## The directory
 
@@ -110,6 +148,8 @@ Owners can ask for removal at support@orkestrate.space.
 | `find <site, URL or task>` | Check a site first, or search by task. `--json` for machine output. |
 | `inspect <url>` | Open a live page and list the WebMCP tools and schemas it registers. |
 | `call <target> [input]` | Validate input, check permissions, and call a WebMCP tool (or `--plan` for driver steps). |
+| `tools [list\|validate\|path]` | List, validate, or locate local custom tools (`manifest.json` + `tools.js` per host). |
+| `skills [list\|get\|path\|sync]` | Read the bundled core guide, list local skills, or install the stub skill. |
 | `config [show\|path\|validate]` | Inspect or validate JSONC user/project config (`--json` supported). |
 | `setup` | First run: fetch the index, install or update the skill for detected clients, and report drivers. |
 | `mcp` | Run an MCP server exposing `find`, `inspect`, and `call` (with elicitation for confirmations). |

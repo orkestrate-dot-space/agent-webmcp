@@ -197,7 +197,29 @@ sh "$f""#
     if now != format!("agent-webmcp {wanted}") {
         bail!("the script finished but {} reports {now:?}", path.display());
     }
+    refresh_skills(path);
     Ok(())
+}
+
+/// Refresh installed skill stubs with the newly installed binary, so the
+/// stub is never stale after an upgrade. Failures warn gently: the
+/// upgrade itself already succeeded.
+fn refresh_skills(binary: &Path) {
+    let outcome = Command::new(binary)
+        .current_dir(std::env::temp_dir())
+        .args(["skills", "sync"])
+        .status();
+    // Older binaries predate `skills sync`: point them at `setup`, with the
+    // newer subcommand as the 0.4.0+ alternative.
+    let fallback = "run `agent-webmcp setup` (or `agent-webmcp skills sync` on 0.4.0+)";
+    match outcome {
+        Ok(status) if status.success() => {}
+        Ok(_) => eprintln!("warning: skill refresh failed; {fallback}"),
+        Err(e) => eprintln!(
+            "warning: could not run {} skills sync ({e:#}); {fallback}",
+            binary.display()
+        ),
+    }
 }
 
 pub fn run(target: Option<String>) -> Result<()> {
@@ -281,5 +303,6 @@ pub fn run(target: Option<String>) -> Result<()> {
         );
     }
     println!("{now} installed. The MCP server picks it up the next time your client starts it.");
+    refresh_skills(&shim(&prefix));
     Ok(())
 }

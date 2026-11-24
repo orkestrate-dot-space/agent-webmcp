@@ -266,9 +266,7 @@ pub fn load() -> Result<Loaded> {
 /// Missing files mean defaults; bad values name the file, variable, or key.
 pub fn load_from(env: &dyn Fn(&str) -> Option<String>, cwd: &Path) -> Result<Loaded> {
     let set = |key: &str| env(key).filter(|v| !v.is_empty());
-    let home: PathBuf = set("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir);
+    let home: PathBuf = home_dir(&set).unwrap_or_else(std::env::temp_dir);
     let mut merged = serde_json::Value::Object(serde_json::Map::new());
     let mut sources = Vec::new();
     let mut warnings = Vec::new();
@@ -351,16 +349,26 @@ pub fn load_from(env: &dyn Fn(&str) -> Option<String>, cwd: &Path) -> Result<Loa
     })
 }
 
+/// Platform-aware home: `$HOME` when non-empty, else `$USERPROFILE`
+/// (Windows) when non-empty. Empty values count as unset.
+pub fn home_dir(env: &dyn Fn(&str) -> Option<String>) -> Option<PathBuf> {
+    if let Some(home) = env("HOME").filter(|v| !v.is_empty()) {
+        return Some(PathBuf::from(home));
+    }
+    if let Some(profile) = env("USERPROFILE").filter(|v| !v.is_empty()) {
+        return Some(PathBuf::from(profile));
+    }
+    None
+}
+
 /// The directory holding the user config: `$XDG_CONFIG_HOME/agent-webmcp`,
-/// else `$HOME/.config/agent-webmcp`. Empty values count as unset.
+/// else `$HOME/.config/agent-webmcp` (`$USERPROFILE` fallback on Windows).
+/// Empty values count as unset.
 pub fn user_dir(env: &dyn Fn(&str) -> Option<String>) -> PathBuf {
     if let Some(dir) = env("XDG_CONFIG_HOME").filter(|v| !v.is_empty()) {
         return PathBuf::from(dir).join("agent-webmcp");
     }
-    let home = env("HOME")
-        .filter(|v| !v.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir);
+    let home = home_dir(env).unwrap_or_else(std::env::temp_dir);
     home.join(".config/agent-webmcp")
 }
 

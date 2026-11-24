@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.0 — 2026-11-24
+
+- Local custom tools: per-host `manifest.json` + `tools.js`, managed with
+  `tools [list|validate|path]`. `find` searches the local catalog
+  alongside the public index, `inspect` reports live `available()` probes
+  without ever calling `execute()`, and a same-named live native tool
+  automatically takes precedence. `call` validates input against the
+  manifest schema, enforces `allow`/`ask`/`deny` (plus `custom/*` rules
+  and the native-collision policy), and pins `ask` approvals to the
+  `sha256` tool hash.
+- Bundled version-matched skills: `skills [list|get|path|sync]` with
+  progressive `--ref` disclosure (`drivers`, `permissions`, `config`,
+  `authoring`), installed into every detected client.
+- Security hardening from CodeRabbit review: port-aware `deny`
+  enforcement for custom tools in `inspect` (CWE-863), approval binding
+  to the effective (`-headed`) session in `call`/`mcp` (CWE-863), and a
+  session-auth redirect guard refusing unguarded `lightpanda`
+  navigation (CWE-319).
+
 ## 0.3.1 — 2026-11-20
 
 - Address CodeRabbit review findings from `v0.3.0`: reject positional JSON

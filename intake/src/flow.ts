@@ -132,11 +132,25 @@ export interface StatusView {
   message: string | null;
   tools: number;
   checked_at: string | null;
+  created_at: string;
+  updated_at: string;
+  queue_position: number;
+  attempts: number;
 }
 
 export async function status(env: Env, id: string): Promise<StatusView | null> {
   const row = await env.DB.prepare("SELECT * FROM requests WHERE id = ?").bind(id).first<Row>();
   if (!row) return null;
+  // Position in line, counting queued site requests created before this one.
+  let queue_position = 0;
+  if (row.state === "queued") {
+    const ahead = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM requests WHERE kind='site' AND state='queued' AND created_at < ?",
+    )
+      .bind(row.created_at)
+      .first<{ n: number }>();
+    queue_position = (ahead?.n ?? 0) + 1;
+  }
   return {
     id: row.id,
     host: row.host,
@@ -145,6 +159,10 @@ export async function status(env: Env, id: string): Promise<StatusView | null> {
     message: row.message,
     tools: row.tools,
     checked_at: row.checked_at,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    queue_position,
+    attempts: row.attempts,
   };
 }
 
@@ -170,21 +188,23 @@ export async function pumpQueue(env: Env): Promise<void> {
     }
   }
 
-  // One scan at a time: the box has one browser and the scripts share a
-  // session. A live scan means wait for the next minute.
-  const live = await env.DB.prepare(
-    "SELECT 1 AS n FROM requests WHERE state = 'scanning' AND kind = 'site' AND updated_at > ? LIMIT 1",
+  // Claim the oldest queued scan atomically: the live-scan check and the
+  // state flip happen in ONE statement, so two concurrent pumps (the cron
+  // tick and a per-submission pump from POST /submit) can never double-claim
+  // a job or clobber a running scan. The winner gets the row via RETURNING;
+  // the loser gets nothing and returns.
+  const at = now();
+  const claimed = await env.DB.prepare(
+    `UPDATE requests SET state='scanning', updated_at=?
+     WHERE id = (SELECT id FROM requests WHERE state='queued' AND kind='site' ORDER BY created_at LIMIT 1)
+     AND NOT EXISTS (SELECT 1 FROM requests WHERE state='scanning' AND kind='site' AND updated_at > ?)
+     RETURNING *`,
   )
-    .bind(new Date(Date.now() - SCAN_TIMEOUT_MS).toISOString())
-    .first<{ n: number }>();
-  if (live) return;
-
-  const next = await env.DB.prepare(
-    "SELECT * FROM requests WHERE state = 'queued' AND kind = 'site' ORDER BY created_at LIMIT 1",
-  ).first<Row>();
+    .bind(at, new Date(Date.now() - SCAN_TIMEOUT_MS).toISOString())
+    .all<Row>();
+  const next = (claimed.results ?? [])[0] as Row | undefined;
   if (!next) return;
 
-  await env.DB.prepare("UPDATE requests SET state='scanning', updated_at=? WHERE id=?").bind(now(), next.id).run();
   try {
     let extras: string[] = [];
     try {
@@ -269,10 +289,13 @@ export async function receiveResult(
   }
 
   const outcome = listed ? "listed" : rec.status === "verified" ? "not_listed" : rec.status;
+  // The record host is validated (exact or subdomain) above, so when the
+  // site is listed, store it: /status returns the exact listed host for the
+  // "See the listing" link.
   await env.DB.prepare(
-    "UPDATE requests SET state='done', outcome=?, message=?, tools=?, checked_at=?, updated_at=? WHERE id=?",
+    "UPDATE requests SET host=?, state='done', outcome=?, message=?, tools=?, checked_at=?, updated_at=? WHERE id=?",
   )
-    .bind(outcome, message, rec.tools.length, rec.checked_at, now(), id)
+    .bind(listed ? rec.host : row.host, outcome, message, rec.tools.length, rec.checked_at, now(), id)
     .run();
   return { status: 200, body: { ok: true, listed } };
 }
