@@ -236,9 +236,7 @@ pub fn run_inspect_in(
                 // No native API and nothing allowed to probe: still report
                 // the withheld tools instead of failing outright, so a deny
                 // rule is visible even on pages without WebMCP support.
-                Err(e)
-                    if e.code == "webmcp_unsupported" && !custom_denied.is_empty() =>
-                {
+                Err(e) if e.code == "webmcp_unsupported" && !custom_denied.is_empty() => {
                     DriverInspectOutcome {
                         page: url.clone(),
                         tools: Vec::new(),

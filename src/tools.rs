@@ -140,7 +140,9 @@ fn normalize_authority(
         return Err(invalid(format!("host {original:?} must not contain '*'")));
     }
     if authority.contains('/') || authority.contains('\\') {
-        return Err(invalid(format!("host {original:?} must not contain a path")));
+        return Err(invalid(format!(
+            "host {original:?} must not contain a path"
+        )));
     }
     if authority.contains('@') {
         return Err(invalid(format!(

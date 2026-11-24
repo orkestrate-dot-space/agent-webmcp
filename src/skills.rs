@@ -1947,11 +1947,7 @@ fn read_exact_attachment(
     if !query.contains('/') {
         return None;
     }
-    if query.is_empty()
-        || query.starts_with('/')
-        || query.contains('\\')
-        || query.contains(':')
-    {
+    if query.is_empty() || query.starts_with('/') || query.contains('\\') || query.contains(':') {
         return None;
     }
     for part in query.split('/') {
@@ -1980,12 +1976,10 @@ fn read_exact_attachment(
     if std::fs::symlink_metadata(&file).is_err() {
         return None;
     }
-    Some(
-        read_inside(skills_root, &file).map(|content| RefContent {
-            ref_path: query.to_string(),
-            content,
-        }),
-    )
+    Some(read_inside(skills_root, &file).map(|content| RefContent {
+        ref_path: query.to_string(),
+        content,
+    }))
 }
 
 /// Match `--ref` against already-discovered relative paths: exact path
@@ -2555,8 +2549,7 @@ mod tests {
         assert!(read_exact_attachment(&skill_root, dir.path(), "references/nope.md").is_none());
 
         // End to end: the exact read path serves the attachment.
-        let hit =
-            get_ref_content_with("exact", "references/ok.md", Some(dir.path())).unwrap();
+        let hit = get_ref_content_with("exact", "references/ok.md", Some(dir.path())).unwrap();
         assert_eq!(hit.ref_path, "references/ok.md");
         assert_eq!(hit.content, "# ok\n");
     }

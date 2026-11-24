@@ -90,11 +90,8 @@ pub(super) fn run_probe(command: &str, args: &[&str]) -> std::io::Result<std::pr
     if let Some(ref out) = child.stdout {
         let _ = set_fd_nonblocking(out);
     }
-    let (out_rx, out_handle) = drain_stream(
-        child.stdout.take(),
-        budget,
-        Arc::clone(&drain_cancelled),
-    );
+    let (out_rx, out_handle) =
+        drain_stream(child.stdout.take(), budget, Arc::clone(&drain_cancelled));
     let deadline = std::time::Instant::now() + Duration::from_secs(5);
     match wait_deadline(child, deadline)? {
         Some(output) => {
@@ -119,7 +116,9 @@ pub(super) fn run_probe(command: &str, args: &[&str]) -> std::io::Result<std::pr
                 Err(_) => {
                     drain_cancelled.store(true, Ordering::Relaxed);
                     join_bounded(out_handle);
-                    let (stdout, _) = out_rx.recv_timeout(Duration::from_millis(500)).unwrap_or_default();
+                    let (stdout, _) = out_rx
+                        .recv_timeout(Duration::from_millis(500))
+                        .unwrap_or_default();
                     Ok(std::process::Output {
                         status: output.status,
                         stdout,
@@ -315,7 +314,8 @@ pub(super) fn run_command_raw(
         budget.clone(),
         Arc::clone(&drain_cancelled),
     );
-    let (err_rx, err_handle) = drain_stream(child.stderr.take(), budget, Arc::clone(&drain_cancelled));
+    let (err_rx, err_handle) =
+        drain_stream(child.stderr.take(), budget, Arc::clone(&drain_cancelled));
     // Stops both readers (releasing their pipes) and reaps them with a
     // bounded wait. Callable on every exit path so no reader outlives the
     // call, whether collection succeeded, timed out, or the child did.
@@ -510,6 +510,26 @@ fn feed_stdin(
     stdin
 }
 
+/// Close a Windows pipe handle. Declared locally to avoid a Windows-only
+/// dependency for one call.
+#[cfg(windows)]
+mod win_pipe {
+    type Handle = *mut core::ffi::c_void;
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn CloseHandle(handle: Handle) -> i32;
+    }
+
+    /// Close `raw`. SAFETY: the caller must guarantee unique ownership —
+    /// exactly one close for the handle's lifetime (the feeder protocol in
+    /// `run_command_raw_with_stdin` serializes this through `pipe_open`).
+    pub(super) unsafe fn close(raw: std::os::windows::io::RawHandle) {
+        unsafe {
+            CloseHandle(raw);
+        }
+    }
+}
+
 /// Spawn, pipe `stdin_data` in, drain, and wait; timeouts kill without
 /// closing anything. The writer thread drops stdin after writing so the
 /// child always sees EOF; secrets passed this way never appear in argv.
@@ -547,11 +567,8 @@ pub(super) fn run_command_raw_with_stdin(
         budget.clone(),
         Arc::clone(&drain_cancelled),
     );
-    let (err_rx, err_handle) = drain_stream(
-        child.stderr.take(),
-        budget,
-        Arc::clone(&drain_cancelled),
-    );
+    let (err_rx, err_handle) =
+        drain_stream(child.stderr.take(), budget, Arc::clone(&drain_cancelled));
     // Stops both readers (releasing their pipes) and reaps them with a
     // bounded wait. Callable on every exit path below so no reader
     // outlives the call — whether collection succeeded, timed out while a
@@ -591,25 +608,85 @@ pub(super) fn run_command_raw_with_stdin(
             data: None,
         });
     }
+    // On Windows the stdin pipe stays blocking, so a write already in
+    // flight cannot observe `cancelled`. The feeder thread and the
+    // shutdown path below share single-close ownership of the pipe through
+    // `pipe_open`: exactly one side closes, so the joined writer never
+    // outlives the call and a stale close can never hit a recycled handle.
+    #[cfg(windows)]
+    let (pipe_open, pipe_raw) = {
+        use std::os::windows::io::AsRawHandle as _;
+        (
+            std::sync::Arc::new(std::sync::Mutex::new(true)),
+            stdin_opt.as_ref().map(|stdin| stdin.as_raw_handle()),
+        )
+    };
     let writer = stdin_opt.map(|stdin| {
         let owned = stdin_data.to_vec();
         let cancelled = Arc::new(AtomicBool::new(false));
         let cancel_writer = Arc::clone(&cancelled);
-        let handle =
-            std::thread::spawn(move || feed_stdin(stdin, owned, &cancel_writer));
+        #[cfg(windows)]
+        let pipe_open = Arc::clone(&pipe_open);
+        let handle = std::thread::spawn(move || {
+            let stdin = feed_stdin(stdin, owned, &cancel_writer);
+            #[cfg(windows)]
+            {
+                // Normal completion drops here (delivering EOF) only if the
+                // shutdown path has not already closed the pipe to fail a
+                // blocked write — otherwise forget instead of double-closing.
+                let mut open = pipe_open.lock().unwrap_or_else(|e| e.into_inner());
+                if *open {
+                    *open = false;
+                    drop(stdin);
+                } else {
+                    std::mem::forget(stdin);
+                }
+            }
+            #[cfg(not(windows))]
+            drop(stdin);
+        });
         (handle, cancelled)
     });
+    // Stop the feeder and join it before returning, on every exit path, so
+    // no blocked writer outlives the call holding the pipe and script.
+    let mut writer = writer;
+    let mut stop_writer = || {
+        if let Some((handle, cancelled)) = writer.take() {
+            cancelled.store(true, Ordering::Relaxed);
+            #[cfg(windows)]
+            {
+                // Fail a blocked write so the feeder observes cancellation:
+                // `pipe_open` serializes with the feeder thread, so this is
+                // the single close when the thread is still blocked.
+                if let Some(raw) = pipe_raw {
+                    let mut open = pipe_open.lock().unwrap_or_else(|e| e.into_inner());
+                    if *open {
+                        *open = false;
+                        // SAFETY: `raw` is the live pipe write end; the
+                        // feeder forgets (never closes) once `pipe_open` is
+                        // false, so this is the single close.
+                        unsafe { win_pipe::close(raw) };
+                    }
+                }
+            }
+            join_bounded(handle);
+        }
+    };
     let deadline = std::time::Instant::now() + std::time::Duration::from_millis(deadline_ms);
-    let waited = wait_deadline(child, deadline).map_err(|e| CallError {
-        code: "driver_error",
-        message: format!("could not wait for {command}: {e}"),
-        data: None,
-    });
-    if let Some((handle, cancelled)) = writer {
-        cancelled.store(true, Ordering::Relaxed);
-        join_bounded(handle);
-    }
-    match waited? {
+    let waited = match wait_deadline(child, deadline) {
+        Ok(waited) => waited,
+        Err(e) => {
+            stop_writer();
+            stop_readers();
+            return Err(CallError {
+                code: "driver_error",
+                message: format!("could not wait for {command}: {e}"),
+                data: None,
+            });
+        }
+    };
+    stop_writer();
+    match waited {
         Some(_) => {
             let remaining = deadline.saturating_duration_since(std::time::Instant::now());
             let out = match out_rx.recv_timeout(remaining) {
@@ -715,7 +792,10 @@ mod tests {
         let start = std::time::Instant::now();
         let out = match run_command_raw_with_stdin("true", &[], &big, 10_000, "test") {
             Ok(out) => out,
-            Err(e) => panic!("instant exit must not hang the writer: {} ({})", e.message, e.code),
+            Err(e) => panic!(
+                "instant exit must not hang the writer: {} ({})",
+                e.message, e.code
+            ),
         };
         assert!(start.elapsed() < std::time::Duration::from_secs(10));
         assert!(out.stdout.is_empty());
@@ -726,11 +806,11 @@ mod tests {
     #[test]
     fn stdin_writer_cancelled_on_timeout() {
         let big = vec![7u8; 1024 * 1024];
-        let err = match run_command_raw_with_stdin("sleep", &["30".to_string()], &big, 2_000, "test")
-        {
-            Ok(_) => panic!("sleep 30 must time out"),
-            Err(e) => e,
-        };
+        let err =
+            match run_command_raw_with_stdin("sleep", &["30".to_string()], &big, 2_000, "test") {
+                Ok(_) => panic!("sleep 30 must time out"),
+                Err(e) => e,
+            };
         assert_eq!(err.code, "timeout");
     }
 
@@ -743,15 +823,19 @@ mod tests {
         let big = vec![7u8; 2 * 1024 * 1024];
         let start = std::time::Instant::now();
         let script = "sleep 30 >/dev/null 2>&1 & exit 0".to_string();
-        let out =
-            match run_command_raw_with_stdin("sh", &["-c".to_string(), script], &big, 10_000, "test")
-            {
-                Ok(out) => out,
-                Err(e) => panic!(
-                    "exited child must not hang the writer: {} ({})",
-                    e.message, e.code
-                ),
-            };
+        let out = match run_command_raw_with_stdin(
+            "sh",
+            &["-c".to_string(), script],
+            &big,
+            10_000,
+            "test",
+        ) {
+            Ok(out) => out,
+            Err(e) => panic!(
+                "exited child must not hang the writer: {} ({})",
+                e.message, e.code
+            ),
+        };
         assert!(
             start.elapsed() < std::time::Duration::from_secs(10),
             "returned only after the deadline"
@@ -771,12 +855,7 @@ mod tests {
         // NOTE: stderr alone is silenced so the grandchild keeps the stdout
         // write end inherited from the direct child.
         let script = "sleep 30 2>/dev/null & exit 0".to_string();
-        let err = match run_command_raw(
-            "sh",
-            &["-c".to_string(), script],
-            3_000,
-            "test",
-        ) {
+        let err = match run_command_raw("sh", &["-c".to_string(), script], 3_000, "test") {
             Ok(_) => panic!("wedged stdout must time out collection"),
             Err(e) => e,
         };
@@ -799,14 +878,16 @@ mod tests {
     fn drain_reader_exits_on_cancel() {
         use super::{drain_stream, join_bounded, set_fd_nonblocking};
         use std::os::unix::net::UnixStream;
-        use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, AtomicUsize, Ordering},
+        };
         use std::time::{Duration, Instant};
         let (reader, _writer) = UnixStream::pair().unwrap();
         set_fd_nonblocking(&reader).unwrap();
         let budget = Arc::new(AtomicUsize::new(1024));
         let cancelled = Arc::new(AtomicBool::new(false));
-        let (_rx, handle) =
-            drain_stream(Some(reader), Arc::clone(&budget), Arc::clone(&cancelled));
+        let (_rx, handle) = drain_stream(Some(reader), Arc::clone(&budget), Arc::clone(&cancelled));
         std::thread::sleep(Duration::from_millis(50));
         cancelled.store(true, Ordering::Relaxed);
         let start = Instant::now();

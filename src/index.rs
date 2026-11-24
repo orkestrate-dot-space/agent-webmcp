@@ -99,8 +99,7 @@ pub struct Search {
 }
 
 /// Monotonic build identity for [`Search`].
-static SEARCH_GENERATION: std::sync::atomic::AtomicU64 =
-    std::sync::atomic::AtomicU64::new(1);
+static SEARCH_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 /// Native hits plus the merge state for the custom catalog: the truncated
 /// native list, seen ids, the site filter, and the content words.
@@ -376,8 +375,7 @@ impl Search {
         limit: usize,
     ) -> Vec<Hit> {
         if clean.len() < limit {
-            let mut customs =
-                self.custom_hits_loaded(words, site, seen_ids, &loaded_hosts);
+            let mut customs = self.custom_hits_loaded(words, site, seen_ids, &loaded_hosts);
             customs.sort_by(|a, b| {
                 b.relevance
                     .partial_cmp(&a.relevance)

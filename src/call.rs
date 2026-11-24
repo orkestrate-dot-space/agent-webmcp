@@ -472,7 +472,9 @@ pub fn resolve_in(
             ));
         }
         if tool.contains('#')
-            || tool.chars().any(|c| c == '/' || c == '?' || c == '&' || c.is_whitespace())
+            || tool
+                .chars()
+                .any(|c| c == '/' || c == '?' || c == '&' || c.is_whitespace())
         {
             return Err(CallError::usage(
                 "target must be site/tool (from find) or https://page#tool",
@@ -1703,8 +1705,14 @@ mod tests {
             "https://example.com/app#/reports",
             "https://example.com/app#/reports"
         ));
-        assert!(same_indexed_page("https://example.com/", "https://example.com/"));
-        assert!(same_indexed_page("https://example.com", "https://example.com/"));
+        assert!(same_indexed_page(
+            "https://example.com/",
+            "https://example.com/"
+        ));
+        assert!(same_indexed_page(
+            "https://example.com",
+            "https://example.com/"
+        ));
         // Different paths or origins never match.
         assert!(!same_indexed_page(
             "https://example.com/app#/reports",

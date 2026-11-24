@@ -138,7 +138,13 @@ impl Lightpanda {
             .filter(|c| !c.common.headed && c.auth != crate::tools::AuthMode::Session)
             .cloned()
             .collect();
-        let script = render_custom_inspect_script(url, &runnable, opts.timeout_ms, settle_ms, !custom.is_empty());
+        let script = render_custom_inspect_script(
+            url,
+            &runnable,
+            opts.timeout_ms,
+            settle_ms,
+            !custom.is_empty(),
+        );
         let file = write_temp("lightpanda-inspect", &script)?;
         let argv = vec!["run".to_string(), file.path.display().to_string()];
         let out = run_command_raw(&self.command, &argv, total_ms, "inspect")?;
@@ -495,7 +501,9 @@ fn render_custom_script(
         // spoof an operator). The in-page wrapper guard remains as defense
         // in depth.
         "const __cOrigin = await page.evaluate(\"location.origin\");".to_string(),
-        format!("if (__cOrigin !== {expected_origin_json}) return JSON.stringify({{ok: false, code: \"origin_mismatch\", error: \"page origin does not match \" + {expected_origin_json}}});"),
+        format!(
+            "if (__cOrigin !== {expected_origin_json}) return JSON.stringify({{ok: false, code: \"origin_mismatch\", error: \"page origin does not match \" + {expected_origin_json}}});"
+        ),
     ];
     lines.extend(vec![
         "const __t0 = Date.now();".to_string(),
@@ -913,7 +921,14 @@ fn render_custom_inspect_script(
                 "  const __probe{group_idx} = {expr_json}.replace('\"{token}\"', JSON.stringify({unfiltered}));"
             ));
         }
-        lines.push(format!("  const __s = await page.evaluate({});", if literal_probe { expr_json.clone() } else { format!("__probe{group_idx}") }));
+        lines.push(format!(
+            "  const __s = await page.evaluate({});",
+            if literal_probe {
+                expr_json.clone()
+            } else {
+                format!("__probe{group_idx}")
+            }
+        ));
         lines.push("  const __inner = JSON.parse(__s || \"{}\");".to_string());
         lines.push("  if (__inner.ok && __inner.tools) {".to_string());
         lines.push(
@@ -1104,7 +1119,8 @@ mod tests {
             description: "d".to_string(),
         };
         let runnable = vec![mk("get_item"), mk("other")];
-        let script = render_custom_inspect_script("https://example.com/", &runnable, 1000, 500, true);
+        let script =
+            render_custom_inspect_script("https://example.com/", &runnable, 1000, 500, true);
         assert!(script.contains("__nativeNames"), "{script}");
         assert!(script.contains("__un0"), "{script}");
         assert!(
@@ -1152,7 +1168,8 @@ mod tests {
         };
         // Allow: one goto, host-side origin gate, settle poll, origin-bound
         // invoke, custom eval.
-        let script = render_custom_script(&req, &custom(), &opts(), 500, true, "example.com/get_item");
+        let script =
+            render_custom_script(&req, &custom(), &opts(), 500, true, "example.com/get_item");
         assert_eq!(script.matches("page.goto").count(), 1, "{script}");
         assert_eq!(script.matches("new Page()").count(), 1, "{script}");
         assert!(script.contains("navigator.modelContext"), "{script}");
@@ -1202,7 +1219,8 @@ mod tests {
         assert!(script.contains("native_needs_confirmation"), "{script}");
         assert!(!script.contains("callPageTool"), "{script}");
         // Invalid input gates the custom evaluation behind the native check.
-        let script = render_custom_script(&req, &custom(), &opts(), 500, false, "example.com/get_item");
+        let script =
+            render_custom_script(&req, &custom(), &opts(), 500, false, "example.com/get_item");
         assert!(script.contains("input_invalid"), "{script}");
         let gate = script.find("input_invalid").unwrap();
         let eval_pos = script.find("__webmcpCustom").unwrap();
@@ -1210,7 +1228,8 @@ mod tests {
         // Headed tools report before evaluating.
         let mut headed = custom();
         headed.common.headed = true;
-        let script = render_custom_script(&req, &headed, &opts(), 500, true, "example.com/get_item");
+        let script =
+            render_custom_script(&req, &headed, &opts(), 500, true, "example.com/get_item");
         assert!(script.contains("needs_headed"), "{script}");
         let gate = script.find("needs_headed").unwrap();
         let eval_pos = script.find("__webmcpCustom").unwrap();

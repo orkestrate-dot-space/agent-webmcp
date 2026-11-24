@@ -377,9 +377,7 @@ fn direct_http_url_for_session_tool_is_rejected() {
         "direct http session target must fail: {err:?}"
     );
     // The https form still resolves.
-    assert!(
-        call::resolve_in("https://example.com/app#get_item", &search, Some(&root)).is_ok()
-    );
+    assert!(call::resolve_in("https://example.com/app#get_item", &search, Some(&root)).is_ok());
 }
 
 #[test]
@@ -608,8 +606,7 @@ fn port_specific_catalog_wins_over_bare_host_for_direct_url() {
         "{resolved:?}"
     );
     // The short form agrees.
-    let short =
-        call::resolve_in("localhost:3000/get_item", &search, Some(tools.path())).unwrap();
+    let short = call::resolve_in("localhost:3000/get_item", &search, Some(tools.path())).unwrap();
     assert_eq!(
         short.custom.as_ref().unwrap().tool_hash,
         resolved.custom.as_ref().unwrap().tool_hash,
@@ -711,7 +708,8 @@ fn bare_host_catalog_does_not_cover_other_ports() {
     )
     .unwrap_err();
     assert!(
-        err.message.contains("not defined for https://example.com:8443"),
+        err.message
+            .contains("not defined for https://example.com:8443"),
         "{err:?}"
     );
 }
@@ -991,8 +989,7 @@ fn browse_custom_http_page_is_denied() {
         "__webmcpCustom({ get_item: { execute: async (i) => ({}) } });",
     );
     let search = empty_search();
-    let resolved =
-        call::resolve_in("example.com/get_item", &search, Some(&root)).unwrap();
+    let resolved = call::resolve_in("example.com/get_item", &search, Some(&root)).unwrap();
     assert!(resolved.is_custom());
     let logdir = tempfile::tempdir().unwrap();
     let log = logdir.path().join("browse.log");
@@ -1221,11 +1218,7 @@ fn browse_custom_eval_runs_over_stdin_without_leaking_argv() {
 /// Fake `browse` whose `execute` aborts without the marked result line:
 /// `stderr_msg` goes to stderr, stdout keeps only the relay chatter.
 #[cfg(unix)]
-fn browse_fake_execute_aborts(
-    dir: &tempfile::TempDir,
-    log: &Path,
-    stderr_msg: &str,
-) -> PathBuf {
+fn browse_fake_execute_aborts(dir: &tempfile::TempDir, log: &Path, stderr_msg: &str) -> PathBuf {
     use std::os::unix::fs::PermissionsExt;
     assert!(!stderr_msg.contains('\''), "stderr must avoid apostrophes");
     let script = format!(
@@ -1338,7 +1331,10 @@ fn browse_inspect_surfaces_eval_failure_remediation() {
         "{tool:?}"
     );
     assert!(
-        tool.remediation.as_deref().unwrap_or("").contains("frame detached"),
+        tool.remediation
+            .as_deref()
+            .unwrap_or("")
+            .contains("frame detached"),
         "remediation carries the eval detail: {tool:?}"
     );
 }
@@ -1358,11 +1354,8 @@ fn browse_inspect_timeout_propagates() {
     );
     let dir = tempfile::tempdir().unwrap();
     let log = dir.path().join("browse.log");
-    let path = browse_fake_execute_aborts(
-        &dir,
-        &log,
-        "TimeoutError: eval timed out after 60000 ms",
-    );
+    let path =
+        browse_fake_execute_aborts(&dir, &log, "TimeoutError: eval timed out after 60000 ms");
     let mut cfg = config::Config::default();
     cfg.driver = config::DriverChoice::Browse;
     cfg.drivers.browse.command = path.display().to_string();
@@ -1471,12 +1464,7 @@ fn lightpanda_headed_without_native_match_needs_headed() {
     // the headed gate precedes the evaluation.
     let dir = tempfile::tempdir().unwrap();
     let log = dir.path().join("lp.log");
-    let path = lightpanda_fake(
-        &dir,
-        &log,
-        r#"{"ok":false,"code":"needs_headed"}"#,
-        "{}",
-    );
+    let path = lightpanda_fake(&dir, &log, r#"{"ok":false,"code":"needs_headed"}"#, "{}");
     let mut cfg = config::Config::default();
     cfg.driver = config::DriverChoice::Lightpanda;
     cfg.drivers.lightpanda.command = path.display().to_string();
@@ -1609,12 +1597,7 @@ fn lightpanda_headless_custom_runs_when_no_native() {
     let resolved = call::resolve_in("example.com/get_item", &search, Some(tools.path())).unwrap();
     let dir = tempfile::tempdir().unwrap();
     let log = dir.path().join("lp.log");
-    let path = lightpanda_fake(
-        &dir,
-        &log,
-        r#"{"ok":true,"output":{"answer":3}}"#,
-        "{}",
-    );
+    let path = lightpanda_fake(&dir, &log, r#"{"ok":true,"output":{"answer":3}}"#, "{}");
     let mut cfg = config::Config::default();
     cfg.driver = config::DriverChoice::Lightpanda;
     cfg.drivers.lightpanda.command = path.display().to_string();
@@ -1831,7 +1814,10 @@ fn agent_browser_custom_https_installs_http_abort_route() {
     assert!(route.contains("--abort"), "{route}");
     let open_at = lines.iter().position(|l| l.contains(" open ")).unwrap();
     let route_at = lines.iter().position(|l| l.contains(" network ")).unwrap();
-    assert!(route_at < open_at, "route installs before navigation: {lines:?}");
+    assert!(
+        route_at < open_at,
+        "route installs before navigation: {lines:?}"
+    );
     // The restriction is scoped to the operation: dropping the guard
     // removes it so later calls reusing the session are unaffected.
     let route_line = lines.iter().find(|l| l.contains(" network ")).unwrap();
@@ -1840,7 +1826,9 @@ fn agent_browser_custom_https_installs_http_abort_route() {
         "owned route pattern (independent of operator http://* routes): {route_line}"
     );
     assert!(
-        lines.iter().any(|l| l.contains("unroute") && l.contains("http://***/***")),
+        lines
+            .iter()
+            .any(|l| l.contains("unroute") && l.contains("http://***/***")),
         "route is removed after the call: {lines:?}"
     );
 }
@@ -1862,8 +1850,7 @@ fn agent_browser_custom_http_with_persistent_session_is_denied() {
         "__webmcpCustom({ get_item: { execute: async (i) => ({}) } });",
     );
     let search = empty_search();
-    let resolved =
-        call::resolve_in("example.com/get_item", &search, Some(&root)).unwrap();
+    let resolved = call::resolve_in("example.com/get_item", &search, Some(&root)).unwrap();
     assert!(resolved.is_custom());
     let logdir = tempfile::tempdir().unwrap();
     let script = common::Fake::new().install(&logdir, "ab");
@@ -2685,7 +2672,10 @@ fn inspect_sibling_of_denied_tool_is_not_probed() {
     let _home = HomeGuard::isolate();
     let tools = tempfile::tempdir().unwrap();
     let dir_name = agent_webmcp::tools::host_dir_name("example.com").unwrap();
-    let tools_json = json!([tool_def("allow_me", json!({})), tool_def("deny_me", json!({}))]);
+    let tools_json = json!([
+        tool_def("allow_me", json!({})),
+        tool_def("deny_me", json!({}))
+    ]);
     let m = manifest("example.com", "https://example.com/app", tools_json);
     write_host(
         tools.path(),

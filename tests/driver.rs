@@ -141,30 +141,24 @@ fn browse_custom_plan_allowists_expected_origin() {
     assert_eq!(cmd[0], serde_json::json!("agent-webmcp"));
     assert_eq!(cmd[1], serde_json::json!("call"));
     assert!(
-        cmd.windows(2).any(|w| w
-            == [
-                serde_json::json!("--driver"),
-                serde_json::json!("browse")
-            ]),
+        cmd.windows(2)
+            .any(|w| w == [serde_json::json!("--driver"), serde_json::json!("browse")]),
         "emitted call must pin the browse driver: {plan:?}"
     );
     assert!(
-        cmd.windows(2).any(|w| w
-            == [
-                serde_json::json!("--params"),
-                serde_json::json!("@-")
-            ]),
+        cmd.windows(2)
+            .any(|w| w == [serde_json::json!("--params"), serde_json::json!("@-")]),
         "input travels over stdin, never argv (CWE-214): {plan:?}"
     );
     assert!(
-        !plan.steps.iter().any(|s| {
-            s.args.to_string().contains("<render_call_iife>")
-        }),
+        !plan
+            .steps
+            .iter()
+            .any(|s| { s.args.to_string().contains("<render_call_iife>") }),
         "no literal placeholder: {plan:?}"
     );
     assert!(
-        !cmd
-            .iter()
+        !cmd.iter()
             .any(|v| v.as_str().is_some_and(|s| s.contains("hi"))),
         "no raw input in the printed command: {plan:?}"
     );
@@ -188,17 +182,15 @@ fn browse_opted_out_plan_routes_native_through_guarded_cli() {
     assert_eq!(plan.steps[1].tool, "shell");
     let cmd = plan.steps[1].args["command"].as_array().unwrap();
     assert!(
-        cmd.windows(2).any(|w| w
-            == [
-                serde_json::json!("--driver"),
-                serde_json::json!("browse")
-            ]),
+        cmd.windows(2)
+            .any(|w| w == [serde_json::json!("--driver"), serde_json::json!("browse")]),
         "emitted call must pin the browse driver: {plan:?}"
     );
 }
 
 #[test]
-fn browse_custom_plan_refuses_http_navigation() {    let cfg = config_with(config::DriverChoice::Browse, "agent-browser");
+fn browse_custom_plan_refuses_http_navigation() {
+    let cfg = config_with(config::DriverChoice::Browse, "agent-browser");
     let driver = driver::by_choice(config::DriverChoice::Browse, &cfg).unwrap();
     // Opted-in and opted-out custom tools alike: no navigation step for
     // cleartext pages, mirroring the runtime refusal.
@@ -234,16 +226,12 @@ fn agent_browser_custom_plan_uses_guarded_cli() {
         "emitted call must pin the agent-browser driver: {plan:?}"
     );
     assert!(
-        cmd.windows(2).any(|w| w
-            == [
-                serde_json::json!("--params"),
-                serde_json::json!("@-")
-            ]),
+        cmd.windows(2)
+            .any(|w| w == [serde_json::json!("--params"), serde_json::json!("@-")]),
         "input travels over stdin, never argv (CWE-214): {plan:?}"
     );
     assert!(
-        !cmd
-            .iter()
+        !cmd.iter()
             .any(|v| v.as_str().is_some_and(|s| s.contains("hi"))),
         "no raw input in the printed command: {plan:?}"
     );
@@ -817,24 +805,20 @@ fn generic_custom_plan_routes_through_guarded_cli() {
         "emitted call must name a run driver: {plan:?}"
     );
     assert!(
-        cmd.windows(2).any(|w| w
-            == [
-                serde_json::json!("--params"),
-                serde_json::json!("@-")
-            ]),
+        cmd.windows(2)
+            .any(|w| w == [serde_json::json!("--params"), serde_json::json!("@-")]),
         "input travels over stdin, never argv (CWE-214): {plan:?}"
     );
     assert!(
-        !plan.steps.iter().any(|s| {
-            s.args.to_string().contains("untrusted local code")
-                || s.tool == "call"
-        }),
+        !plan
+            .steps
+            .iter()
+            .any(|s| { s.args.to_string().contains("untrusted local code") || s.tool == "call" }),
         "no manual open/call steps for unregistered custom tools: {plan:?}"
     );
     assert!(
-        !cmd.iter().any(|v| v
-            .as_str()
-            .is_some_and(|s| s.contains("hi"))),
+        !cmd.iter()
+            .any(|v| v.as_str().is_some_and(|s| s.contains("hi"))),
         "no raw input in the printed command: {plan:?}"
     );
 }
@@ -858,22 +842,19 @@ fn lightpanda_custom_plan_uses_guarded_cli() {
         "emitted call must pin the lightpanda driver: {plan:?}"
     );
     assert!(
-        cmd.windows(2).any(|w| w
-            == [
-                serde_json::json!("--params"),
-                serde_json::json!("@-")
-            ]),
+        cmd.windows(2)
+            .any(|w| w == [serde_json::json!("--params"), serde_json::json!("@-")]),
         "input travels over stdin, never argv (CWE-214): {plan:?}"
     );
     assert!(
-        !plan.steps.iter().any(|s| {
-            s.args.to_string().contains("<render_call_promise_expr>")
-        }),
+        !plan
+            .steps
+            .iter()
+            .any(|s| { s.args.to_string().contains("<render_call_promise_expr>") }),
         "no literal placeholder: {plan:?}"
     );
     assert!(
-        !cmd
-            .iter()
+        !cmd.iter()
             .any(|v| v.as_str().is_some_and(|s| s.contains("hi"))),
         "no raw input in the printed command: {plan:?}"
     );

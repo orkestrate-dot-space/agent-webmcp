@@ -176,9 +176,7 @@ impl Browse {
         // done so tabs never leak across calls (Chrome's cookies and
         // session persist across tabs regardless). Only a timeout leaves
         // the tab open, so an in-flight action is not interrupted.
-        if !timed_out
-            && let Ok(ms) = budgets.phase(10_000, "close")
-        {
+        if !timed_out && let Ok(ms) = budgets.phase(10_000, "close") {
             let close_args = serde_json::json!({"action": "close", "tab": tab});
             let _ = run_browse_json(&self.command, "tabs", &close_args, ms, "close");
         }
@@ -773,8 +771,7 @@ impl Browse {
         // drop `{"__proto__": ...}` (prototype assignment, not an own
         // property) and mis-deliver user input to the tool.
         let input_str = serde_json::to_string(input).unwrap_or_else(|_| "{}".to_string());
-        let input_json =
-            serde_json::to_string(&input_str).unwrap_or_else(|_| "\"{}\"".to_string());
+        let input_json = serde_json::to_string(&input_str).unwrap_or_else(|_| "\"{}\"".to_string());
         let script = match frame.filter(|f| !f.is_empty()) {
             Some(frame) => {
                 let frame_json =
@@ -788,8 +785,7 @@ impl Browse {
             }
             None => format!(
                 "const __res = await webmcp.call({name_json}, JSON.parse({input_json}));\nreturn {marker_json} + JSON.stringify(__res);",
-                marker_json =
-                    serde_json::to_string(&marker).unwrap_or_else(|_| "\"\"".to_string()),
+                marker_json = serde_json::to_string(&marker).unwrap_or_else(|_| "\"\"".to_string()),
             ),
         };
         self.browse_execute(tab, &script, &marker, budgets)
@@ -823,7 +819,9 @@ impl Browse {
         // inspected URL has no derivable origin.
         let mut origins = vec![crate::tools::expected_origin(url).map_err(|e| CallError {
             code: "denied",
-            message: format!("refusing to inspect {url}: cannot derive a safe origin allowlist ({e})"),
+            message: format!(
+                "refusing to inspect {url}: cannot derive a safe origin allowlist ({e})"
+            ),
             data: None,
         })?];
         origins.extend(
@@ -861,9 +859,7 @@ impl Browse {
         // done so tabs never leak across inspects (Chrome's cookies and
         // session persist across tabs regardless). Only a timeout leaves
         // the tab open, so an in-flight action is not interrupted.
-        if !timed_out
-            && let Ok(ms) = budgets.phase(10_000, "close")
-        {
+        if !timed_out && let Ok(ms) = budgets.phase(10_000, "close") {
             let close_args = serde_json::json!({"action": "close", "tab": tab});
             let _ = run_browse_json(&self.command, "tabs", &close_args, ms, "close");
         }
@@ -1386,8 +1382,8 @@ fn map_call_result(res: serde_json::Value, tool: &str) -> Result<serde_json::Val
 
 #[cfg(test)]
 mod tests {
-    use super::unmarked_execute_error;
     use super::super::exec::ChildOutput;
+    use super::unmarked_execute_error;
 
     fn child_out(stdout: &str, stderr: &str) -> ChildOutput {
         ChildOutput {

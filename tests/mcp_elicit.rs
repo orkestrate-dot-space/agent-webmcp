@@ -301,9 +301,7 @@ async fn continuation_denied_when_current_decision_is_deny() -> anyhow::Result<(
     // validated against the current resolution first.
     let mut cfg = agent_webmcp::config::Config::default();
     cfg.driver = agent_webmcp::config::DriverChoice::None;
-    cfg.permissions
-        .deny
-        .push("cal.com/ask_cal_com".into());
+    cfg.permissions.deny.push("cal.com/ask_cal_com".into());
     let denied = Server::with_config(Search::build(ask_index()).unwrap(), cfg);
     with_pair(
         denied,
@@ -377,9 +375,7 @@ async fn retry_with_stale_page_is_invalid_input() -> anyhow::Result<()> {
             // Move the tool to a different page, as an index refresh would.
             let mut moved = ask_index();
             moved.sites[0].tools[0].page = "https://cal.com/other".to_string();
-            *shared
-                .lock()
-                .unwrap_or_else(|e| e.into_inner()) = Search::build(moved).unwrap();
+            *shared.lock().unwrap_or_else(|e| e.into_inner()) = Search::build(moved).unwrap();
             let mut responses = BTreeMap::new();
             responses.insert(
                 "approve".into(),
@@ -475,10 +471,7 @@ async fn approved_retry_cannot_replay() -> anyhow::Result<()> {
             let envelope = envelope_of(&second);
             assert_eq!(envelope["code"], json!("invalid_input"));
             assert!(
-                envelope["error"]
-                    .as_str()
-                    .unwrap()
-                    .contains("already-used"),
+                envelope["error"].as_str().unwrap().contains("already-used"),
                 "{envelope}"
             );
             assert_eq!(opens(), 1, "replay must not run the tool again");

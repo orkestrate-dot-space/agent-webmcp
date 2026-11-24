@@ -1,6 +1,9 @@
 //! MCP server exposing `find`, `inspect`, and `call`.
 
-use std::sync::{Arc, Mutex, atomic::{AtomicU64, Ordering}};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicU64, Ordering},
+};
 use std::time::Duration;
 
 use rmcp::model::{
@@ -231,7 +234,9 @@ impl Server {
                 .await;
         }
         if !matches!(prepared.decision, crate::call::Decision::Ask) {
-            return self.run_prepared(prepared, mcp_opts(confirm), cfg, None).await;
+            return self
+                .run_prepared(prepared, mcp_opts(confirm), cfg, None)
+                .await;
         }
         // The model asked for an `ask` tool: with form elicitation the human
         // decides, and the model's `confirm` is ignored entirely.
@@ -395,18 +400,16 @@ impl Server {
             return complete_envelope(
                 crate::call::CallError {
                     code: "denied",
-                    message: format!("{id} is denied by config; a prior approval cannot override it"),
+                    message: format!(
+                        "{id} is denied by config; a prior approval cannot override it"
+                    ),
                     data: None,
                 }
                 .envelope(),
             );
         }
         let driver = effective_driver_name(&fresh_cfg);
-        let tool_hash = fresh
-            .resolved
-            .custom
-            .as_ref()
-            .map(|c| c.tool_hash.as_str());
+        let tool_hash = fresh.resolved.custom.as_ref().map(|c| c.tool_hash.as_str());
         let page = fresh.resolved.page.as_str();
         let session = crate::call::effective_session(&fresh_cfg, &fresh.resolved);
         let current = crate::call::approval_state(
@@ -437,8 +440,9 @@ impl Server {
                     return complete_envelope(
                         crate::call::CallError {
                             code: "invalid_input",
-                            message: "unknown or already-used approval; approve again for a new one"
-                                .to_string(),
+                            message:
+                                "unknown or already-used approval; approve again for a new one"
+                                    .to_string(),
                             data: None,
                         }
                         .envelope(),
@@ -550,7 +554,9 @@ impl Server {
                     return complete_envelope(
                         crate::call::CallError {
                             code: "denied",
-                            message: format!("{id} is denied by config; the prior approval cannot override it"),
+                            message: format!(
+                                "{id} is denied by config; the prior approval cannot override it"
+                            ),
                             data: None,
                         }
                         .envelope(),
@@ -562,13 +568,8 @@ impl Server {
                 // profile/CDP change, a one-byte tool edit) invalidates the
                 // accept and forces a fresh prompt.
                 let fresh_driver = effective_driver_name(&fresh_cfg);
-                let fresh_tool_hash = fresh
-                    .resolved
-                    .custom
-                    .as_ref()
-                    .map(|c| c.tool_hash.as_str());
-                let current_session =
-                    crate::call::effective_session(&fresh_cfg, &fresh.resolved);
+                let fresh_tool_hash = fresh.resolved.custom.as_ref().map(|c| c.tool_hash.as_str());
+                let current_session = crate::call::effective_session(&fresh_cfg, &fresh.resolved);
                 let prompt_state = crate::call::approval_state(
                     target,
                     input,
@@ -604,13 +605,11 @@ impl Server {
                         .envelope(),
                     );
                 }
-                let approved_scope = Some(
-                    crate::call::ApprovedScope::capture_for_resolved(
-                        fresh_driver,
-                        &fresh_cfg,
-                        &fresh.resolved,
-                    ),
-                );
+                let approved_scope = Some(crate::call::ApprovedScope::capture_for_resolved(
+                    fresh_driver,
+                    &fresh_cfg,
+                    &fresh.resolved,
+                ));
                 self.run_prepared(
                     fresh,
                     crate::call::CallOptions {
@@ -728,7 +727,14 @@ impl Server {
             if native_hits.len() >= limit {
                 return CallToolResult::structured(json!({ "matches": native_hits }));
             }
-            search.merge_custom_hits(native_hits, &words, site.as_deref(), &seen_ids, loaded, limit)
+            search.merge_custom_hits(
+                native_hits,
+                &words,
+                site.as_deref(),
+                &seen_ids,
+                loaded,
+                limit,
+            )
         };
         if hits.is_empty() {
             return CallToolResult::structured(json!({
@@ -1012,7 +1018,10 @@ impl ServerHandler for Server {
         context: RequestContext<RoleServer>,
     ) -> Result<CallToolResponse, McpError> {
         match request.name.as_ref() {
-            "find" => Ok(self.find(&request.arguments.unwrap_or_default()).await.into()),
+            "find" => Ok(self
+                .find(&request.arguments.unwrap_or_default())
+                .await
+                .into()),
             "inspect" => Ok(self.inspect(&request.arguments.unwrap_or_default()).await),
             "call" => Ok(self.call(&request, &context).await),
             other => Err(McpError::invalid_params(

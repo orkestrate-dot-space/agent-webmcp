@@ -298,12 +298,7 @@ fn inspect_http_with_persistent_session_is_denied() {
         "no driver navigation may run"
     );
     // A throwaway session carries no prior cookies, so --fresh stays allowed.
-    let res = run_inspect(
-        "http://example.com/",
-        &InspectOptions { fresh: true },
-        &cfg,
-    )
-    .unwrap();
+    let res = run_inspect("http://example.com/", &InspectOptions { fresh: true }, &cfg).unwrap();
     assert_eq!(res.driver, "agent-browser");
 }
 
@@ -369,12 +364,8 @@ fn inspect_http_with_profile_or_cdp_is_denied_even_when_fresh() {
         let mut cfg = common::run_config(&script);
         cfg.driver = DriverChoice::AgentBrowser;
         configure(&mut cfg);
-        let err = run_inspect(
-            "http://example.com/",
-            &InspectOptions { fresh: true },
-            &cfg,
-        )
-        .unwrap_err();
+        let err =
+            run_inspect("http://example.com/", &InspectOptions { fresh: true }, &cfg).unwrap_err();
         assert_eq!(err.code, "denied", "{err:?}");
         assert!(err.message.contains("https"), "{err:?}");
     }

@@ -364,11 +364,12 @@ impl AgentBrowser {
         if Self::is_http_url(url) && self.uses_persistent_session(opts.fresh) {
             return Err(Self::http_session_refused(url));
         }
-        let _http_route_guard = if !Self::is_http_url(url) && self.uses_persistent_session(opts.fresh) {
-            Some(self.block_http_hops(base, session, budgets)?)
-        } else {
-            None
-        };
+        let _http_route_guard =
+            if !Self::is_http_url(url) && self.uses_persistent_session(opts.fresh) {
+                Some(self.block_http_hops(base, session, budgets)?)
+            } else {
+                None
+            };
         let opened = run_step(
             &self.command,
             open_argv,
@@ -1752,14 +1753,13 @@ impl Drop for UnblockHttpHops<'_> {
         // blocking here would deadlock. If the global is contended the
         // slot stays for a later drop to release.
         let mut removed = false;
-        if let Ok(mut routes) = SESSION_HTTP_ROUTES.try_lock() {
-            if routes
+        if let Ok(mut routes) = SESSION_HTTP_ROUTES.try_lock()
+            && routes
                 .get(&self.session)
                 .is_some_and(|current| std::sync::Arc::ptr_eq(current, &slot))
-            {
-                routes.remove(&self.session);
-                removed = true;
-            }
+        {
+            routes.remove(&self.session);
+            removed = true;
         }
         // A missing entry we did not remove means a timeout evicted the
         // slot after closing the session: unrouting now would implicitly

@@ -164,10 +164,7 @@ fn resolve_route_fragment_target_resolves_tool() {
     // A page that keeps its own route fragment still addresses its tool:
     // the tool name follows the last `#` and the page keeps its route.
     for (target, page) in [
-        (
-            "https://cal.com/#frag#ask_cal_com",
-            "https://cal.com/#frag",
-        ),
+        ("https://cal.com/#frag#ask_cal_com", "https://cal.com/#frag"),
         (
             "https://cal.com/book#frag#ask_cal_com",
             "https://cal.com/book#frag",
