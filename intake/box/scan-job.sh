@@ -20,6 +20,6 @@ if [ ! -s "$OUT/result.json" ]; then
     "$HOST" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$OUT/result.json"
 fi
 
-curl -sS -m 90 -X POST "$CALLBACK?id=$ID&token=$TOKEN" \
+curl -sS -m 90 --retry 3 --retry-delay 2 -X POST "$CALLBACK?id=$ID&token=$TOKEN" \
   -H 'content-type: application/json' \
   --data-binary "@$OUT/result.json" >/dev/null 2>&1

@@ -198,7 +198,12 @@ pub fn run_opts() -> CallOptions {
 // ---------------------------------------------------------------------------
 
 /// Subcommands the fake can answer, in case-branch order.
-const SUBCOMMANDS: [&str; 7] = ["invoke", "open", "list", "reload", "wait", "eval", "close"];
+const SUBCOMMANDS: [&str; 8] = [
+    "invoke", "open", "list", "reload", "wait", "eval", "close", "network",
+];
+
+/// Canned `network route` response: the cleartext-HTTP abort route installs.
+pub const NETWORK_ROUTED: &str = r#"{"success":true,"data":{"routed":"http://*"}}"#;
 
 /// Fake agent-browser: takes a map of subcommand to response line(s),
 /// served in order with the last one repeating. Argv is logged, `--version`
@@ -220,6 +225,7 @@ impl Fake {
         responses.insert("reload", vec![GENERIC_OK.to_string()]);
         responses.insert("wait", vec![GENERIC_OK.to_string()]);
         responses.insert("close", vec![GENERIC_OK.to_string()]);
+        responses.insert("network", vec![NETWORK_ROUTED.to_string()]);
         Self {
             responses,
             stalls: HashMap::new(),
@@ -310,7 +316,15 @@ impl Fake {
             script.push_str(&base_str);
             script.push('.');
             script.push_str(sub);
-            script.push_str("\"; serve \"");
+            // Custom evals arrive over stdin (`eval --stdin`); capture the
+            // piped script for assertions without touching argv secrets.
+            if sub == "eval" {
+                script.push_str("\"; case \" $* \" in *\" --stdin \"*) cat > \"");
+                script.push_str(&base_str);
+                script.push_str(".eval.stdin\";; esac; serve \"");
+            } else {
+                script.push_str("\"; serve \"");
+            }
             script.push_str(&base_str);
             script.push('.');
             script.push_str(sub);
@@ -352,6 +366,11 @@ impl Fake {
             .lines()
             .map(str::to_string)
             .collect()
+    }
+
+    /// Script piped to `eval --stdin`, captured by the fake.
+    pub fn eval_stdin(dir: &tempfile::TempDir, name: &str) -> String {
+        std::fs::read_to_string(dir.path().join(format!("{name}.eval.stdin"))).unwrap_or_default()
     }
 }
 

@@ -78,6 +78,58 @@ export interface Rejected {
   reason: string;
 }
 
+/// Multi-tenant / public-hosting suffixes: one tenant's subdomain must
+/// never validate another tenant's submission on these.
+const MULTI_TENANT_SUFFIXES = new Set([
+  "github.io",
+  "gitlab.io",
+  "vercel.app",
+  "netlify.app",
+  "pages.dev",
+  "workers.dev",
+  "fly.dev",
+  "onrender.com",
+  "herokuapp.com",
+  "web.app",
+  "firebaseapp.com",
+  "blogspot.com",
+  "wordpress.com",
+  "shopify.com",
+  "myshopify.com",
+  "readthedocs.io",
+  "co.uk",
+  "com.au",
+  "org.uk",
+  "co.jp",
+]);
+
+function stripWww(host: string): string {
+  return host.toLowerCase().replace(/^www\./, "");
+}
+
+/// Whether a record host may stand for the submitted host: the exact host,
+/// or a subdomain of it — except on multi-tenant suffixes, where only the
+/// exact submitted host matches.
+export function hostMatchesSubmission(candidateHost: string, submittedHost: string): boolean {
+  const candidate = stripWww(candidateHost);
+  const submitted = stripWww(submittedHost);
+  if (!candidate || !submitted) return false;
+  if (candidate === submitted) return true;
+  if (MULTI_TENANT_SUFFIXES.has(submitted)) return false;
+  return candidate.endsWith(`.${submitted}`);
+}
+
+/// A submission URL with no scheme is treated as a bare domain when it
+/// looks like a hostname.
+function withScheme(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.includes("://")) return trimmed;
+  if (/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/i.test(trimmed) && trimmed.includes(".") && trimmed.length <= 253) {
+    return `https://${trimmed}`;
+  }
+  return trimmed;
+}
+
 function parseHttps(raw: string): { ok: true; url: URL } | Rejected {
   let u: URL;
   try {
@@ -142,7 +194,7 @@ async function resolvesPublic(host: string): Promise<{ ok: boolean; reason?: str
 }
 
 export async function validateSubmission(input: Submission): Promise<Accepted | Rejected> {
-  const main = parseHttps(input.url ?? "");
+  const main = parseHttps(withScheme(input.url ?? ""));
   if (!main.ok) return main;
   const extra = String(input.pages ?? "")
     .split("\n")
@@ -151,7 +203,7 @@ export async function validateSubmission(input: Submission): Promise<Accepted | 
     .slice(0, EXTRA_PAGES_MAX);
   const urls = [main.url];
   for (const raw of extra) {
-    const p = parseHttps(raw);
+    const p = parseHttps(withScheme(raw));
     if (!p.ok) return { ok: false, reason: `extra page rejected: ${p.reason}` };
     urls.push(p.url);
   }
@@ -174,7 +226,12 @@ export function validateRecord(record: unknown, entry: string): { ok: true; reco
   if (JSON.stringify(record).length > 500_000) return fail("record too large");
   for (const k of Object.keys(rec)) if (!RECORD_KEYS.has(k)) return fail(`unexpected key ${k}`);
   const wantHost = entry.split("/")[0].toLowerCase().replace(/^www\./, "");
-  if (rec.host !== wantHost) return fail(`host ${String(rec.host)} does not match submission ${wantHost}`);
+  // rec.host must be a string: an array like ["example.com"] would coerce
+  // through String() to a matching host while smuggling a non-string into
+  // the published index.
+  if (typeof rec.host !== "string" || !hostMatchesSubmission(rec.host, wantHost)) {
+    return fail(`host ${String(rec.host)} does not match submission ${wantHost}`);
+  }
   if (!["verified", "no_tools", "blocked", "error"].includes(String(rec.status))) return fail("bad status");
   if (typeof rec.checked_at !== "string" || Number.isNaN(Date.parse(rec.checked_at))) return fail("bad checked_at");
   if (!Array.isArray(rec.pages_checked) || rec.pages_checked.length > 30) return fail("bad pages_checked");
@@ -185,7 +242,7 @@ export function validateRecord(record: unknown, entry: string): { ok: true; reco
     } catch {
       return fail("pages_checked has a non-URL");
     }
-    if (u.protocol !== "https:" || u.hostname.toLowerCase().replace(/^www\./, "") !== wantHost) {
+    if (u.protocol !== "https:" || !hostMatchesSubmission(u.hostname, wantHost)) {
       return fail("pages_checked leaves the submitted host");
     }
   }
@@ -206,7 +263,7 @@ export function validateRecord(record: unknown, entry: string): { ok: true; reco
     } catch {
       return fail("tool page is not a URL");
     }
-    if (toolPage.protocol !== "https:" || toolPage.hostname.toLowerCase().replace(/^www\./, "") !== wantHost) {
+    if (toolPage.protocol !== "https:" || !hostMatchesSubmission(toolPage.hostname, wantHost)) {
       return fail("tool page leaves the submitted host");
     }
     if ("flags" in t) {

@@ -1,11 +1,12 @@
 [package]
 name = "agent-webmcp"
-version = "0.3.1"
+version = "0.4.0"
 edition = "2024"
 
 [dependencies]
 anyhow = "1.0.104"
 clap = { version = "4.6.7", features = ["derive"] }
+libc = "0.2"
 rmcp = { version = "3.11.0", default-features = false, features = ["server", "macros", "base64", "transport-io", "elicitation"] }
 rusqlite = { version = "0.43.0", features = ["bundled"] }
 serde = { version = "1.0.229", features = ["derive"] }

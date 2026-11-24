@@ -40,7 +40,7 @@ Useful `call` flags and config keys (`drivers.agent-browser` in [docs/config.md]
 
 - `agent-webmcp status` checks `browse status --json` and marks `browse` ready when the extension is connected.
 - Under `driver: "auto"`, `browse` is used automatically when `agent-browser` is missing and the `browse` extension is connected; or select it explicitly with `--driver browse` / `"driver": "browse"`.
-- Pass `--fresh` to close the opened background tab after the call finishes.
+- `browse` opens a background tab per `call`/`inspect` and closes it automatically when finished on a best-effort basis (leaving it open on timeout so an in-flight action is not interrupted, and closure is not guaranteed if the extension disconnects), while Chrome's cookies/session persist across tabs. If tabs stop closing, reinstall the extension path for `browse` versions below 0.2.1 (`browse` CLI `>= 0.2.1` is required for reliable tab cleanup).
 
 ## Lightpanda (experimental run driver)
 

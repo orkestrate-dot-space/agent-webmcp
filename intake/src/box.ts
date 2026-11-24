@@ -59,7 +59,16 @@ export async function startScan(
     shellQuote((opts.extras ?? []).join("\n")),
     ">/dev/null 2>&1 &",
   ].join(" ");
-  await exec(env, boxes(env)[0], cmd, 30);
+  const res = await exec(env, boxes(env)[0], cmd, 30);
+  // A timeout does NOT throw: the scan runs detached and may survive the
+  // exec timeout, so the row stays `scanning` (the 15-minute stall timer
+  // requeues it) and a late /callback still lands on a `scanning` row
+  // instead of 409ing or double-launching. Only a non-zero exit — a failed
+  // guard.sh or box startup, where no detached scan exists — throws so
+  // pumpQueue requeues immediately.
+  if (!res.timedOut && res.exitCode !== 0) {
+    throw new Error(`scan start failed: exit ${res.exitCode} ${res.stderr.trim().slice(-500)}`);
+  }
 }
 
 /// Start one shard of the weekly rebuild on one box; it posts its partial
@@ -82,7 +91,12 @@ export async function startRebuildShard(
     shellQuote(String(opts.count)),
     ">/dev/null 2>&1 &",
   ].join(" ");
-  await exec(env, opts.boxId, cmd, 30);
+  const res = await exec(env, opts.boxId, cmd, 30);
+  // Same as startScan: a timeout leaves the rebuild row `scanning` for the
+  // stall handling; only a failed start throws.
+  if (!res.timedOut && res.exitCode !== 0) {
+    throw new Error(`rebuild shard start failed: exit ${res.exitCode} ${res.stderr.trim().slice(-500)}`);
+  }
 }
 
 /// A POSIX single-quoted argument. Hosts and ids are validated before they get

@@ -66,12 +66,43 @@ fn resolve_unknown_tool_suggests_find() {
 }
 
 #[test]
-fn resolve_url_with_index_entry_uses_schema() {
-    let r = resolve("https://cal.com/book#ask_cal_com", &search()).unwrap();
-    assert_eq!(r.page, "https://cal.com/book");
+fn resolve_url_with_index_entry_uses_schema_on_same_page() {
+    // The indexed schema applies when the direct URL names the indexed page.
+    let r = resolve("https://cal.com/#ask_cal_com", &search()).unwrap();
+    assert_eq!(r.page, "https://cal.com/");
     assert_eq!(r.site, "cal.com");
     assert_eq!(r.schema, Some(ask_schema()));
     assert_eq!(r.kind, ToolKind::Consequential);
+}
+
+#[test]
+fn resolve_url_on_other_page_drops_indexed_schema() {
+    // `/book` is not the indexed page (`/`): the indexed schema belongs to
+    // a different page and must not gate this call's input — and neither
+    // may the indexed read-only kind auto-allow a same-named consequential
+    // tool there. Both fall back to Unspecified (Ask without an explicit
+    // rule).
+    let r = resolve("https://cal.com/book#ask_cal_com", &search()).unwrap();
+    assert_eq!(r.page, "https://cal.com/book");
+    assert_eq!(r.site, "cal.com");
+    assert_eq!(r.schema, None);
+    assert_eq!(r.kind, ToolKind::Unspecified);
+}
+
+#[test]
+fn resolve_fragment_route_must_match_exactly() {
+    // `list_slots` is indexed on `https://cal.com/slots` (read-only): an
+    // exact route match keeps the indexed kind and schema ...
+    let same = resolve("https://cal.com/slots#list_slots", &search()).unwrap();
+    assert_eq!(same.kind, ToolKind::Read);
+    assert!(same.schema.is_some());
+    // ... while a different fragment route on the same page is a different
+    // tool contract: Unspecified (Ask) with no indexed schema.
+    let other = resolve("https://cal.com/slots#other#list_slots", &search()).unwrap();
+    assert_eq!(other.page, "https://cal.com/slots#other");
+    assert_eq!(other.schema, None);
+    assert_eq!(other.kind, ToolKind::Unspecified);
+    assert!(!other.kind_inferred);
 }
 
 #[test]
@@ -100,7 +131,7 @@ fn resolve_garbage_is_usage() {
 
 #[test]
 fn resolve_uppercase_host_matches_index() {
-    let r = resolve("https://CAL.COM/book#ask_cal_com", &search()).unwrap();
+    let r = resolve("https://CAL.COM/#ask_cal_com", &search()).unwrap();
     assert_eq!(r.site, "cal.com");
     assert_eq!(r.schema, Some(ask_schema()));
 }
@@ -129,15 +160,28 @@ fn resolve_ipv6_host_strips_brackets_and_port() {
 }
 
 #[test]
-fn resolve_double_fragment_is_usage() {
-    for target in [
-        "https://cal.com/#frag#ask_cal_com",
-        "https://cal.com/book#frag#ask_cal_com",
+fn resolve_route_fragment_target_resolves_tool() {
+    // A page that keeps its own route fragment still addresses its tool:
+    // the tool name follows the last `#` and the page keeps its route.
+    for (target, page) in [
+        ("https://cal.com/#frag#ask_cal_com", "https://cal.com/#frag"),
+        (
+            "https://cal.com/book#frag#ask_cal_com",
+            "https://cal.com/book#frag",
+        ),
+        (
+            "https://cal.com/dash#/route#ask_cal_com",
+            "https://cal.com/dash#/route",
+        ),
     ] {
-        let e = resolve(target, &search()).unwrap_err();
-        assert_eq!(e.code, "usage", "{target}");
-        assert!(e.message.contains("https://page#tool"), "{target}");
+        let r = resolve(target, &search()).unwrap();
+        assert_eq!(r.tool, "ask_cal_com", "{target}");
+        assert_eq!(r.page, page, "{target}");
     }
+    // A bare route fragment names no tool: `/route` is not a tool name.
+    let e = resolve("https://cal.com/dash#/route", &search()).unwrap_err();
+    assert_eq!(e.code, "usage");
+    assert!(e.message.contains("https://page#tool"));
 }
 
 // --- input ---
@@ -1509,4 +1553,110 @@ fn ambiguous_tool_names_tool_and_frames() {
     assert!(e.message.contains("ask_cal_com"), "{}", e.message);
     assert!(e.message.contains("2 frames"), "{}", e.message);
     assert!(e.message.contains("browser driver"), "{}", e.message);
+}
+
+#[test]
+fn finish_with_driver_rejects_stale_approval() {
+    // The approved driver must be the driver that runs: a pinned approval
+    // for another driver stops with needs_confirmation instead of running.
+    let s = search();
+    let mut cfg = config::Config::default();
+    cfg.driver = config::DriverChoice::None;
+    let prepared = call::prepare("cal.com/list_slots", json!({}), &cfg, &s).unwrap();
+    let opts = plan_opts();
+    let out = call::finish_with_driver(
+        prepared.clone(),
+        &opts,
+        &cfg,
+        Some(&call::ApprovedScope {
+            driver: "generic".to_string(),
+            profile: None,
+            cdp: None,
+            session: Some("agent-webmcp".to_string()),
+        }),
+    )
+    .unwrap();
+    assert!(
+        matches!(out, Outcome::Planned { .. }),
+        "matching approval plans: {out:?}"
+    );
+    let e = call::finish_with_driver(
+        prepared,
+        &opts,
+        &cfg,
+        Some(&call::ApprovedScope {
+            driver: "agent-browser".to_string(),
+            profile: None,
+            cdp: None,
+            session: None,
+        }),
+    )
+    .unwrap_err();
+    assert_eq!(e.code, "needs_confirmation", "{e:?}");
+    assert!(e.message.contains("agent-browser"), "{e:?}");
+    assert!(e.message.contains("generic"), "{e:?}");
+}
+
+#[test]
+fn finish_with_driver_rejects_profile_change() {
+    // A profile/CDP change after approval stops with needs_confirmation,
+    // even when the driver id matches: the browser context differs.
+    let s = search();
+    let mut cfg = config::Config::default();
+    cfg.driver = config::DriverChoice::None;
+    let prepared = call::prepare("cal.com/list_slots", json!({}), &cfg, &s).unwrap();
+    let opts = plan_opts();
+    let approved = call::ApprovedScope {
+        driver: "generic".to_string(),
+        profile: Some("work".to_string()),
+        cdp: None,
+        session: None,
+    };
+    let e = call::finish_with_driver(prepared, &opts, &cfg, Some(&approved)).unwrap_err();
+    assert_eq!(e.code, "needs_confirmation", "{e:?}");
+    assert!(e.message.contains("profile"), "{e:?}");
+}
+
+#[test]
+fn finish_with_driver_rejects_session_change() {
+    // A named-session change after approval stops with needs_confirmation,
+    // even when the driver id matches: the browser context differs.
+    let s = search();
+    let mut cfg = config::Config::default();
+    cfg.driver = config::DriverChoice::None;
+    let prepared = call::prepare("cal.com/list_slots", json!({}), &cfg, &s).unwrap();
+    let opts = plan_opts();
+    let approved = call::ApprovedScope {
+        driver: "generic".to_string(),
+        profile: None,
+        cdp: None,
+        session: Some("other-session".to_string()),
+    };
+    let e = call::finish_with_driver(prepared, &opts, &cfg, Some(&approved)).unwrap_err();
+    assert_eq!(e.code, "needs_confirmation", "{e:?}");
+    assert!(e.message.contains("session"), "{e:?}");
+}
+
+#[test]
+fn finish_with_driver_redacts_cdp_credentials() {
+    // CDP endpoints can carry userinfo and token query params: the
+    // scope-mismatch diagnostic must never print them raw.
+    let s = search();
+    let mut cfg = config::Config::default();
+    cfg.driver = config::DriverChoice::None;
+    cfg.drivers.agent_browser.cdp = Some("http://127.0.0.1:9222".into());
+    let prepared = call::prepare("cal.com/list_slots", json!({}), &cfg, &s).unwrap();
+    let opts = plan_opts();
+    let approved = call::ApprovedScope {
+        driver: "generic".to_string(),
+        profile: None,
+        cdp: Some("ws://user:s3cret@remote:9222/devtools?token=abc123".to_string()),
+        session: Some("agent-webmcp".to_string()),
+    };
+    let e = call::finish_with_driver(prepared, &opts, &cfg, Some(&approved)).unwrap_err();
+    assert_eq!(e.code, "needs_confirmation", "{e:?}");
+    assert!(!e.message.contains("s3cret"), "{e:?}");
+    assert!(!e.message.contains("abc123"), "{e:?}");
+    assert!(!e.message.contains("token="), "{e:?}");
+    assert!(e.message.contains("…"), "{e:?}");
 }

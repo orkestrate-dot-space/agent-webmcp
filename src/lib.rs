@@ -1,12 +1,15 @@
 pub mod call;
 pub mod config;
 pub mod driver;
+pub mod hardened;
 pub mod index;
 pub mod inspect;
 pub mod mcp;
 pub mod model;
 pub mod platform;
 pub mod setup;
+pub mod skills;
 pub mod store;
 pub mod text;
+pub mod tools;
 pub mod upgrade;

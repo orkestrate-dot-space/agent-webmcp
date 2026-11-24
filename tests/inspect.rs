@@ -140,6 +140,29 @@ fn inspect_agent_browser_missing_api_is_webmcp_unsupported() {
 
 #[cfg(unix)]
 #[test]
+fn inspect_reload_timeout_stops_inspect() {
+    // A reload that times out closes the session: the timeout propagates
+    // instead of listing and probing custom availability against a fresh
+    // browser under the same session name.
+    let dir = tempfile::tempdir().unwrap();
+    let open_empty = r#"{"success":true,"data":{"url":"https://example.com/","title":"Example","webmcp":{"tools":[]}}}"#;
+    let list_empty = r#"{"success":true,"data":{"tools":[]}}"#;
+    let script = common::Fake::new()
+        .open(open_empty)
+        .lists(&[list_empty])
+        .evals(&[r#"{"success":true,"data":{"result":"object"}}"#])
+        .stall("reload", 30)
+        .install(&dir, "agent-browser");
+    let mut cfg = common::run_config(&script);
+    cfg.driver = DriverChoice::AgentBrowser;
+    cfg.call.timeout = 200;
+    cfg.call.settle_ms = 1000;
+    let err = run_inspect("https://example.com/", &InspectOptions::default(), &cfg).unwrap_err();
+    assert_eq!(err.code, "timeout", "{err:?}");
+}
+
+#[cfg(unix)]
+#[test]
 fn inspect_browse_returns_tools_and_fresh_closes_tab() {
     use std::os::unix::fs::PermissionsExt;
     let dir = tempfile::tempdir().unwrap();
@@ -158,6 +181,16 @@ esac\n",
     let path = dir.path().join("browse");
     std::fs::write(&path, script).unwrap();
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    // Exec-visibility barrier: a just-written script can answer ETXTBSY
+    // under concurrency. Warm it up once so detection never sees a busy
+    // exec as a missing driver.
+    let _ = std::fs::read(&path);
+    for _ in 0..100 {
+        match std::process::Command::new(&path).output() {
+            Ok(_) => break,
+            Err(_) => std::thread::sleep(std::time::Duration::from_millis(2)),
+        }
+    }
 
     let mut cfg = common::allow_all();
     cfg.driver = DriverChoice::Browse;
@@ -191,6 +224,7 @@ printf '{\"ok\":true,\"tools\":[{\"name\":\"get_docs\",\"description\":\"Docs\",
     let out = d
         .inspect(
             "https://cal.com/",
+            &[],
             &RunOptions {
                 timeout_ms: 5000,
                 settle_ms: 300,
@@ -210,6 +244,131 @@ fn mcp_inspect_tool_has_expected_schema() {
         tool.annotations.as_ref().unwrap().read_only_hint,
         Some(true)
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn inspect_fragment_page_emits_resolvable_target() {
+    // The advertised `call.target` keeps the page route and resolves back
+    // to the same tool on the same page.
+    let dir = tempfile::tempdir().unwrap();
+    let open = r#"{"success":true,"data":{"url":"https://cal.com/dash#/route","lifecycle":{"reused":true},"webmcp":{"tools":[]}}}"#;
+    let list = r#"{"success":true,"data":{"tools":[{"name":"ask_cal_com","description":"Ask","inputSchema":{"type":"object"}}]}}"#;
+    let script = common::Fake::new()
+        .open(open)
+        .lists(&[list])
+        .install(&dir, "agent-browser");
+    let mut cfg = common::run_config(&script);
+    cfg.driver = DriverChoice::AgentBrowser;
+    let res = run_inspect(
+        "https://cal.com/dash#/route",
+        &InspectOptions::default(),
+        &cfg,
+    )
+    .unwrap();
+    assert_eq!(res.page, "https://cal.com/dash#/route");
+    let env = res.envelope();
+    let target = env["data"]["tools"][0]["call"]["target"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(target, "https://cal.com/dash#/route#ask_cal_com");
+    let resolved = agent_webmcp::call::resolve(&target, &common::sample_search()).unwrap();
+    assert_eq!(resolved.tool, "ask_cal_com");
+    assert_eq!(resolved.page, "https://cal.com/dash#/route");
+}
+
+#[cfg(unix)]
+#[test]
+fn inspect_http_with_persistent_session_is_denied() {
+    // agent-browser reuses its named session: an http:// inspect would send
+    // its cookies in cleartext, so it is refused before any navigation.
+    let dir = tempfile::tempdir().unwrap();
+    let script = common::Fake::new().install(&dir, "agent-browser");
+    let mut cfg = common::run_config(&script);
+    cfg.driver = DriverChoice::AgentBrowser;
+    let err = run_inspect("http://example.com/", &InspectOptions::default(), &cfg).unwrap_err();
+    assert_eq!(err.code, "denied", "{err:?}");
+    assert!(err.message.contains("https"), "{err:?}");
+    assert!(
+        !std::fs::read_to_string(dir.path().join("agent-browser.argv"))
+            .unwrap_or_default()
+            .lines()
+            .any(|l| l.contains(" open ")),
+        "no driver navigation may run"
+    );
+    // A throwaway session carries no prior cookies, so --fresh stays allowed.
+    let res = run_inspect("http://example.com/", &InspectOptions { fresh: true }, &cfg).unwrap();
+    assert_eq!(res.driver, "agent-browser");
+}
+
+#[cfg(unix)]
+#[test]
+fn inspect_http_with_browse_is_denied() {
+    // Browse always runs in the user's personal (persistent) profile, so
+    // http:// inspection is refused even with `fresh` (which only closes
+    // the tab afterwards).
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let log = dir.path().join("browse.log");
+    let script = format!(
+        "#!/bin/sh\n\
+printf '%s\\n' \"$*\" >> '{}'\n\
+case \"$1\" in\n\
+  status) printf '{{\"connected\":true,\"relay\":{{\"version\":\"0.1.5\"}}}}\\n' ;;\n\
+  navigate) printf '{{\"tab\":7,\"url\":\"https://cal.com/\",\"title\":\"Cal.com\"}}\\n' ;;\n\
+esac\n",
+        log.display()
+    );
+    let path = dir.path().join("browse");
+    std::fs::write(&path, script).unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    // Exec-visibility barrier: a just-written script can answer ETXTBSY
+    // under concurrency. Warm it up once so detection never sees a busy
+    // exec as a missing driver.
+    let _ = std::fs::read(&path);
+    for _ in 0..100 {
+        match std::process::Command::new(&path).output() {
+            Ok(_) => break,
+            Err(_) => std::thread::sleep(std::time::Duration::from_millis(2)),
+        }
+    }
+
+    let mut cfg = common::allow_all();
+    cfg.driver = DriverChoice::Browse;
+    cfg.drivers.browse.command = path.display().to_string();
+    let err = run_inspect("http://cal.com/", &InspectOptions { fresh: true }, &cfg).unwrap_err();
+    assert_eq!(err.code, "denied", "{err:?}");
+    let logged = std::fs::read_to_string(log).unwrap_or_default();
+    assert!(
+        !logged.contains("navigate"),
+        "no personal-Chrome navigation over http: {logged}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn inspect_http_with_profile_or_cdp_is_denied_even_when_fresh() {
+    // A configured profile or CDP endpoint carries persistent state even
+    // into a throwaway session, so plain HTTP stays refused with `fresh`.
+    for configure in [
+        (|cfg: &mut config::Config| {
+            cfg.drivers.agent_browser.profile = Some("persistent-profile".into());
+        }) as fn(&mut config::Config),
+        |cfg: &mut config::Config| {
+            cfg.drivers.agent_browser.cdp = Some("http://127.0.0.1:9222".into());
+        },
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let script = common::Fake::new().install(&dir, "agent-browser");
+        let mut cfg = common::run_config(&script);
+        cfg.driver = DriverChoice::AgentBrowser;
+        configure(&mut cfg);
+        let err =
+            run_inspect("http://example.com/", &InspectOptions { fresh: true }, &cfg).unwrap_err();
+        assert_eq!(err.code, "denied", "{err:?}");
+        assert!(err.message.contains("https"), "{err:?}");
+    }
 }
 
 #[cfg(unix)]

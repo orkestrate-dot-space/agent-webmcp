@@ -79,7 +79,7 @@ function isAdmin(request: Request, env: Env): boolean {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const origin = request.headers.get("origin");
 
@@ -94,6 +94,11 @@ export default {
         request.headers.get("cf-connecting-ip"),
         isAdmin(request, env),
       );
+      // A fresh submission starts scanning immediately instead of waiting
+      // up to a minute for the cron tick.
+      if (out.status === 202) {
+        ctx.waitUntil(pumpQueue(env).catch((e) => console.error("submit pump failed", e)));
+      }
       return json(out.body, out.status, origin);
     }
 

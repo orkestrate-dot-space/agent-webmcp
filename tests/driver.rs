@@ -12,6 +12,7 @@ fn sample() -> CallRequest {
         page: "https://cal.com/".to_string(),
         tool: "ask_cal_com".to_string(),
         input: serde_json::json!({"question": "hi"}),
+        custom: None,
     }
 }
 
@@ -95,6 +96,174 @@ fn agent_browser_plan_argv_comes_from_config() {
     assert_eq!(
         plan.steps[1].args,
         serde_json::json!({"command": ["agent-browser", "--session", "work", "--json", "webmcp", "invoke", "ask_cal_com", "--params", "{\"question\":\"hi\"}"]})
+    );
+}
+
+fn browse_custom_req(page: &str, allow_browse: bool) -> CallRequest {
+    use std::sync::Arc;
+    CallRequest {
+        page: page.to_string(),
+        tool: "get_item".to_string(),
+        input: serde_json::json!({}),
+        custom: Some(driver::CustomExec {
+            host: "example.com".to_string(),
+            common: driver::CustomCommon {
+                expected_origin: "https://example.com".to_string(),
+                js_source: Arc::from("__webmcpCustom({});"),
+                tool_hash: "abc123def456".to_string(),
+                input_schema: serde_json::json!({}),
+                headed: false,
+                allow_browse,
+            },
+            dir: std::path::PathBuf::from("/tmp/x"),
+            auth: agent_webmcp::tools::AuthMode::None,
+            native_policy: driver::NativeCollisionPolicy::Ask,
+        }),
+    }
+}
+
+#[test]
+fn browse_custom_plan_allowists_expected_origin() {
+    let cfg = config_with(config::DriverChoice::Browse, "agent-browser");
+    let driver = driver::by_choice(config::DriverChoice::Browse, &cfg).unwrap();
+    let plan = driver.plan(&browse_custom_req("https://example.com/app", true));
+    assert_eq!(plan.steps.len(), 2);
+    assert_eq!(plan.steps[0].tool, "navigate");
+    assert_eq!(
+        plan.steps[0].args,
+        serde_json::json!({
+            "url": "https://example.com/app",
+            "allowedOrigins": ["https://example.com"],
+        })
+    );
+    assert_eq!(plan.steps[1].tool, "shell");
+    let cmd = plan.steps[1].args["command"].as_array().unwrap();
+    assert_eq!(cmd[0], serde_json::json!("agent-webmcp"));
+    assert_eq!(cmd[1], serde_json::json!("call"));
+    assert!(
+        cmd.windows(2)
+            .any(|w| w == [serde_json::json!("--driver"), serde_json::json!("browse")]),
+        "emitted call must pin the browse driver: {plan:?}"
+    );
+    assert!(
+        cmd.windows(2)
+            .any(|w| w == [serde_json::json!("--params"), serde_json::json!("@-")]),
+        "input travels over stdin, never argv (CWE-214): {plan:?}"
+    );
+    assert!(
+        !plan
+            .steps
+            .iter()
+            .any(|s| { s.args.to_string().contains("<render_call_iife>") }),
+        "no literal placeholder: {plan:?}"
+    );
+    assert!(
+        !cmd.iter()
+            .any(|v| v.as_str().is_some_and(|s| s.contains("hi"))),
+        "no raw input in the printed command: {plan:?}"
+    );
+}
+
+#[test]
+fn browse_opted_out_plan_routes_native_through_guarded_cli() {
+    let cfg = config_with(config::DriverChoice::Browse, "agent-browser");
+    let driver = driver::by_choice(config::DriverChoice::Browse, &cfg).unwrap();
+    let plan = driver.plan(&browse_custom_req("https://example.com/app", false));
+    assert_eq!(plan.steps.len(), 2);
+    assert_eq!(plan.steps[0].tool, "navigate");
+    // The native tool must go through the guarded CLI call path, which
+    // enforces the native Ask/Deny policy, the origin match, and the
+    // same-origin frame binding — never a direct agent-side webmcp
+    // invocation that would skip all three (CWE-863).
+    assert!(
+        plan.steps.iter().all(|s| s.tool != "webmcp"),
+        "no direct webmcp step: {plan:?}"
+    );
+    assert_eq!(plan.steps[1].tool, "shell");
+    let cmd = plan.steps[1].args["command"].as_array().unwrap();
+    assert!(
+        cmd.windows(2)
+            .any(|w| w == [serde_json::json!("--driver"), serde_json::json!("browse")]),
+        "emitted call must pin the browse driver: {plan:?}"
+    );
+}
+
+#[test]
+fn browse_custom_plan_refuses_http_navigation() {
+    let cfg = config_with(config::DriverChoice::Browse, "agent-browser");
+    let driver = driver::by_choice(config::DriverChoice::Browse, &cfg).unwrap();
+    // Opted-in and opted-out custom tools alike: no navigation step for
+    // cleartext pages, mirroring the runtime refusal.
+    for allow_browse in [true, false] {
+        let plan = driver.plan(&browse_custom_req("http://example.com/app", allow_browse));
+        assert!(
+            plan.steps.iter().all(|s| s.tool != "navigate"),
+            "no navigate step for http: {plan:?}"
+        );
+        assert!(
+            plan.note.as_deref().unwrap_or("").contains("http"),
+            "refusal must name the reason: {plan:?}"
+        );
+    }
+}
+
+#[test]
+fn agent_browser_custom_plan_uses_guarded_cli() {
+    let cfg = config_with(config::DriverChoice::AgentBrowser, "agent-browser");
+    let driver = driver::by_choice(config::DriverChoice::AgentBrowser, &cfg).unwrap();
+    let plan = driver.plan(&browse_custom_req("https://example.com/app", true));
+    assert_eq!(plan.steps.len(), 1);
+    assert_eq!(plan.steps[0].tool, "shell");
+    let cmd = plan.steps[0].args["command"].as_array().unwrap();
+    assert_eq!(cmd[0], serde_json::json!("agent-webmcp"));
+    assert_eq!(cmd[1], serde_json::json!("call"));
+    assert!(
+        cmd.windows(2).any(|w| w
+            == [
+                serde_json::json!("--driver"),
+                serde_json::json!("agent-browser")
+            ]),
+        "emitted call must pin the agent-browser driver: {plan:?}"
+    );
+    assert!(
+        cmd.windows(2)
+            .any(|w| w == [serde_json::json!("--params"), serde_json::json!("@-")]),
+        "input travels over stdin, never argv (CWE-214): {plan:?}"
+    );
+    assert!(
+        !cmd.iter()
+            .any(|v| v.as_str().is_some_and(|s| s.contains("hi"))),
+        "no raw input in the printed command: {plan:?}"
+    );
+    assert!(
+        !plan
+            .steps
+            .iter()
+            .any(|s| s.args.to_string().contains("<render_call_iife>")),
+        "no literal placeholder: {plan:?}"
+    );
+}
+
+#[test]
+fn agent_browser_custom_plan_uses_fresh_for_http_navigation() {
+    let cfg = config_with(config::DriverChoice::AgentBrowser, "agent-browser");
+    let driver = driver::by_choice(config::DriverChoice::AgentBrowser, &cfg).unwrap();
+    let plan = driver.plan(&browse_custom_req("http://example.com/app", true));
+    // An http:// page needs a clean throwaway session: the plan recommends
+    // the guarded CLI with --fresh (a command the runtime accepts) instead
+    // of refusing with no steps.
+    assert_eq!(plan.steps.len(), 1, "one guarded call: {plan:?}");
+    let cmd = plan.steps[0].args["command"].as_array().unwrap();
+    assert!(
+        cmd.iter().any(|v| v == "--fresh"),
+        "http plan must pass --fresh: {plan:?}"
+    );
+    assert!(
+        !plan
+            .steps
+            .iter()
+            .any(|s| s.args.to_string().contains("<render_call_iife>")),
+        "no literal placeholder: {plan:?}"
     );
 }
 
@@ -378,6 +547,7 @@ fn lp_run(
         page: "https://cal.com/".to_string(),
         tool: tool.to_string(),
         input: serde_json::json!({"question": "hi"}),
+        custom: None,
     };
     driver.run(&req, &lp_run_opts())
 }
@@ -522,6 +692,7 @@ fn lightpanda_run_navigation_failed_is_page_unreachable() {
         page: "https://cal.com/".to_string(),
         tool: "ask_cal_com".to_string(),
         input: serde_json::json!({}),
+        custom: None,
     };
     match driver.run(&req, &lp_run_opts()) {
         Err(e) => assert_eq!(e.code, "page_unreachable"),
@@ -542,6 +713,7 @@ fn lightpanda_run_stalled_child_times_out() {
         page: "https://cal.com/".to_string(),
         tool: "ask_cal_com".to_string(),
         input: serde_json::json!({}),
+        custom: None,
     };
     let mut opts = lp_run_opts();
     opts.timeout_ms = 200;
@@ -564,6 +736,7 @@ fn lightpanda_script_embeds_the_tool_as_json() {
         page: "https://cal.com/".to_string(),
         tool: tool.to_string(),
         input: serde_json::json!({"q": "hi\"there"}),
+        custom: None,
     };
     let _ = driver.run(&req, &lp_run_opts());
     let saved = std::fs::read_to_string(dir.path().join("lp.script")).unwrap();
@@ -571,9 +744,14 @@ fn lightpanda_script_embeds_the_tool_as_json() {
         saved.contains(&serde_json::to_string(tool).unwrap()),
         "tool name must be JSON-encoded: {saved}"
     );
+    // Input crosses as data: the script double-encodes it for JSON.parse,
+    // so `{"__proto__": ...}` survives as an own property instead of
+    // becoming a prototype assignment in an object literal.
+    let input_json = serde_json::to_string(&serde_json::json!({"q": "hi\"there"})).unwrap();
+    let double = serde_json::to_string(&input_json).unwrap();
     assert!(
-        saved.contains(&serde_json::to_string("hi\"there").unwrap()),
-        "input must be JSON-encoded: {saved}"
+        saved.contains("JSON.parse(") && saved.contains(&double),
+        "input must be double-encoded for JSON.parse: {saved}"
     );
 }
 
@@ -601,6 +779,84 @@ fn lightpanda_plan_uses_its_own_tool_names() {
         plan.note.as_deref().unwrap().contains("pageTools"),
         "{:?}",
         plan.note
+    );
+}
+
+#[test]
+fn generic_custom_plan_routes_through_guarded_cli() {
+    // With no run driver configured, nothing can register the local
+    // script: the plan must not emit a manual `call` step that would fail
+    // against the unregistered name. It points at a run driver and the
+    // guarded CLI workflow instead.
+    let cfg = config_with(config::DriverChoice::None, "agent-browser");
+    let driver = driver::by_choice(config::DriverChoice::None, &cfg).unwrap();
+    let plan = driver.plan(&browse_custom_req("https://example.com/app", true));
+    assert_eq!(plan.steps.len(), 1);
+    assert_eq!(plan.steps[0].tool, "shell");
+    let cmd = plan.steps[0].args["command"].as_array().unwrap();
+    assert_eq!(cmd[0], serde_json::json!("agent-webmcp"));
+    assert_eq!(cmd[1], serde_json::json!("call"));
+    assert!(
+        cmd.windows(2).any(|w| w
+            == [
+                serde_json::json!("--driver"),
+                serde_json::json!("agent-browser")
+            ]),
+        "emitted call must name a run driver: {plan:?}"
+    );
+    assert!(
+        cmd.windows(2)
+            .any(|w| w == [serde_json::json!("--params"), serde_json::json!("@-")]),
+        "input travels over stdin, never argv (CWE-214): {plan:?}"
+    );
+    assert!(
+        !plan
+            .steps
+            .iter()
+            .any(|s| { s.args.to_string().contains("untrusted local code") || s.tool == "call" }),
+        "no manual open/call steps for unregistered custom tools: {plan:?}"
+    );
+    assert!(
+        !cmd.iter()
+            .any(|v| v.as_str().is_some_and(|s| s.contains("hi"))),
+        "no raw input in the printed command: {plan:?}"
+    );
+}
+
+#[test]
+fn lightpanda_custom_plan_uses_guarded_cli() {
+    let cfg = config_with(config::DriverChoice::Lightpanda, "lightpanda");
+    let driver = driver::by_choice(config::DriverChoice::Lightpanda, &cfg).unwrap();
+    let plan = driver.plan(&browse_custom_req("https://example.com/app", true));
+    assert_eq!(plan.steps.len(), 1);
+    assert_eq!(plan.steps[0].tool, "shell");
+    let cmd = plan.steps[0].args["command"].as_array().unwrap();
+    assert_eq!(cmd[0], serde_json::json!("agent-webmcp"));
+    assert_eq!(cmd[1], serde_json::json!("call"));
+    assert!(
+        cmd.windows(2).any(|w| w
+            == [
+                serde_json::json!("--driver"),
+                serde_json::json!("lightpanda")
+            ]),
+        "emitted call must pin the lightpanda driver: {plan:?}"
+    );
+    assert!(
+        cmd.windows(2)
+            .any(|w| w == [serde_json::json!("--params"), serde_json::json!("@-")]),
+        "input travels over stdin, never argv (CWE-214): {plan:?}"
+    );
+    assert!(
+        !plan
+            .steps
+            .iter()
+            .any(|s| { s.args.to_string().contains("<render_call_promise_expr>") }),
+        "no literal placeholder: {plan:?}"
+    );
+    assert!(
+        !cmd.iter()
+            .any(|v| v.as_str().is_some_and(|s| s.contains("hi"))),
+        "no raw input in the printed command: {plan:?}"
     );
 }
 
@@ -696,6 +952,13 @@ case \"$1\" in\n\
       *list*) printf '%s\\n' '{}' ;;\n\
       *) printf '%s\\n' '{}' ;;\n\
     esac ;;\n\
+  execute)\n\
+    body=$(cat);\n\
+    marker=$(printf '%s' \"$body\" | grep -o '__AWM_[^_]*_[^_]*__' | head -n 1);\n\
+    case \"$body\" in\n\
+      *location.origin*) printf '%s\"https://cal.com\"\\n' \"$marker\" ;;\n\
+      *) printf '%s%s\\n' \"$marker\" '{}' ;;\n\
+    esac ;;\n\
   tabs) printf '{{\"ok\":true}}\\n' ;;\n\
   *) echo \"unknown: $*\" >&2; exit 2 ;;\n\
 esac\n",
@@ -703,11 +966,22 @@ esac\n",
             status_json,
             self.nav_json,
             self.list_json,
+            self.call_json,
             self.call_json
         );
         let path = dir.path().join(name);
         std::fs::write(&path, script).unwrap();
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        // Exec-visibility barrier (mirrors `common::Fake::install`): a
+        // just-written script can answer ETXTBSY under concurrency. Warm it
+        // up once so the argv log starts clean.
+        let _ = std::fs::read(&path);
+        for _ in 0..100 {
+            match std::process::Command::new(&path).output() {
+                Ok(_) => break,
+                Err(_) => std::thread::sleep(std::time::Duration::from_millis(2)),
+            }
+        }
         (path, log)
     }
 }
@@ -776,7 +1050,11 @@ fn browse_run_happy_path_and_fresh_closes_tab() {
     let logged = std::fs::read_to_string(log).unwrap();
     assert!(logged.contains("navigate --json"), "{logged}");
     assert!(logged.contains("webmcp --json"), "{logged}");
+    // The native call travels over `execute --file -` (stdin), never argv.
+    assert!(logged.contains("execute --file -"), "{logged}");
     assert!(logged.contains("tabs --json"), "{logged}");
+    // Secret-bearing input must not appear in child argv.
+    assert!(!logged.contains("question"), "{logged}");
 }
 
 #[cfg(unix)]
@@ -820,6 +1098,25 @@ fn browse_run_maps_challenge_unsupported_and_missing_tool() {
         .run(&sample(), &opts3)
         .unwrap_err();
     assert_eq!(err3.code, "tool_not_found");
+}
+
+#[cfg(unix)]
+#[test]
+fn browse_native_error_field_maps_to_tool_error() {
+    // A native tool failure surfacing as a top-level string `error` field
+    // must not masquerade as a successful result.
+    let dir = tempfile::tempdir().unwrap();
+    let mut fake = BrowseFake::ready();
+    fake.call_json = r#"{"error":"boom"}"#.to_string();
+    let (br, _) = fake.install(&dir, "browse");
+    let mut cfg = config_with(config::DriverChoice::Browse, "agent-browser");
+    cfg.drivers.browse.command = br.display().to_string();
+    let err = driver::by_choice(config::DriverChoice::Browse, &cfg)
+        .unwrap()
+        .run(&sample(), &lp_run_opts())
+        .unwrap_err();
+    assert_eq!(err.code, "tool_error");
+    assert!(err.message.contains("boom"), "{err:?}");
 }
 
 #[cfg(unix)]

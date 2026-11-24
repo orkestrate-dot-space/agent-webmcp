@@ -15,6 +15,7 @@ use serde_json::Value;
 
 use crate::call::CallError;
 use crate::config::{Config, DriverChoice};
+use crate::tools::AuthMode;
 
 /// Whether agent-webmcp drives the browser itself or hands back steps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,6 +33,84 @@ pub struct CallRequest {
     pub tool: String,
     /// Object, already validated (phase 3).
     pub input: serde_json::Value,
+    /// Local custom tool to run when set; native tools shadow it at runtime.
+    pub custom: Option<CustomExec>,
+}
+
+/// Permission for a live native tool that shadows a resolved custom tool.
+///
+/// Evaluated in `call.rs` strictly against the native identity
+/// `<site>/<tool>` with `Kind::Unspecified` (the live tool is unindexed, so
+/// its kind is unknown): `custom/*` rules and the custom tool's `readOnly`
+/// flag never apply. The decision itself lives in `call.rs`
+/// (`native_collision_policy`); drivers only enforce the verdict.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NativeCollisionPolicy {
+    /// The native tool is explicitly allowed: the driver may invoke it and
+    /// report `used_native: true`.
+    Allow,
+    /// The native tool needs confirmation: the driver must neither invoke
+    /// it nor fall back to custom code, returning a `native_needs_confirmation`
+    /// signal for `call.rs` to map to `Outcome::NeedsConfirmation`.
+    Ask,
+    /// The native tool is denied: the driver must neither invoke it nor
+    /// fall back to custom code, returning a `native_denied` signal for
+    /// `call.rs` to map to `Outcome::Blocked`.
+    Deny,
+}
+
+/// Fields shared by [`CustomExec`] and [`CustomInspect`]: the origin-gated
+/// script identity plus the run gates. Bundled so the two structs change
+/// together instead of drifting field by field.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CustomCommon {
+    /// Full expected origin (`scheme://host[:port]`) the page must be on,
+    /// derived from the target URL via `tools::expected_origin`.
+    pub expected_origin: String,
+    /// Raw `tools.js` source, inlined by the `tools::render_*` wrappers.
+    pub js_source: std::sync::Arc<str>,
+    /// Hex SHA-256 over `manifest.json` + `tools.js` (code-hash pinning).
+    pub tool_hash: String,
+    /// The tool needs a headed browser.
+    pub headed: bool,
+    /// The tool may run in personal Chrome (`browse`).
+    pub allow_browse: bool,
+    /// Input schema from the manifest; validated right before custom JS
+    /// runs (never against a shadowing live native tool's input).
+    pub input_schema: Value,
+}
+
+/// A local custom tool to run instead of (or shadowed by) a native tool.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CustomExec {
+    /// Normalized host (with port, e.g. `localhost:3000`) for the native
+    /// identity `<site>/<tool>` used in collision messages.
+    pub host: String,
+    /// Shared script identity and run gates.
+    pub common: CustomCommon,
+    /// Auth requirement from the manifest: drivers without a logged-in
+    /// session (lightpanda) refuse `Session` tools before any navigation.
+    pub auth: AuthMode,
+    /// Host directory (`<tools-root>/<dir-name>`), named in plans.
+    pub dir: std::path::PathBuf,
+    /// What to do if a live native tool with the same name is registered.
+    pub native_policy: NativeCollisionPolicy,
+}
+
+/// A local custom tool to probe for `inspect` availability (never executed).
+#[derive(Debug, Clone, PartialEq)]
+pub struct CustomInspect {
+    /// Tool name.
+    pub name: String,
+    /// Normalized catalog host (with explicit port, e.g. `localhost:3000`),
+    /// matching `call`'s resolved `site` for deny/permission identity.
+    pub host: String,
+    /// Shared script identity and run gates.
+    pub common: CustomCommon,
+    /// Auth requirement for availability display.
+    pub auth: AuthMode,
+    /// Human description from the manifest.
+    pub description: String,
 }
 
 /// What detection found: ready to run, what to install, or unknowable.
@@ -93,8 +172,15 @@ pub trait Driver {
         })
     }
     /// Inspect a live page and return its registered WebMCP tools without calling them.
-    fn inspect(&self, url: &str, opts: &RunOptions) -> Result<InspectOutcome, CallError> {
-        let _ = (url, opts);
+    /// `custom` holds the non-shadowed local custom tools for the page host;
+    /// drivers probe them for live `available` status without calling `execute()`.
+    fn inspect(
+        &self,
+        url: &str,
+        custom: &[CustomInspect],
+        opts: &RunOptions,
+    ) -> Result<InspectOutcome, CallError> {
+        let _ = (url, custom, opts);
         Err(CallError {
             code: "driver_error",
             message: format!("{} cannot inspect live pages", self.id()),
@@ -113,6 +199,24 @@ pub struct InspectedTool {
     pub input_schema: Value,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub read_only: Option<bool>,
+    /// `"native"` for index/live tools, `"custom"` for local custom tools.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// Live availability for custom tools (`None` for native tools).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub available: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unavailable_reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remediation: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub headed: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auth: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allow_browse: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_hash: Option<String>,
 }
 
 /// What `inspect` found on a live page.
@@ -154,6 +258,14 @@ pub(crate) fn parse_inspected_tools(value: &Value, pointer: &str) -> Vec<Inspect
                 description,
                 input_schema,
                 read_only,
+                source: Some("native".to_string()),
+                available: None,
+                unavailable_reason: None,
+                remediation: None,
+                headed: None,
+                auth: None,
+                allow_browse: None,
+                tool_hash: None,
             })
         })
         .collect()
@@ -176,6 +288,147 @@ pub struct RunOutcome {
     pub reused: bool,
     /// timeout + settle + 30 s grace, the budget the run lived under.
     pub budget_ms: u64,
+    /// True when a live native tool shadowed the custom tool and ran instead.
+    pub used_native: bool,
+}
+
+/// Map a custom-tool IIFE/promise envelope to output or a typed error.
+/// Envelopes: `{ok:true, output}`, `{ok:false, code:"unavailable",
+/// reason, remediation}`, `{ok:false, code:"origin_mismatch", error}`,
+/// `{ok:false, code:"tool_error"/"unknown_tool", error}`.
+pub(crate) fn map_custom_envelope(
+    inner: &Value,
+    tool: &str,
+) -> Result<Value, crate::call::CallError> {
+    if inner.get("ok").and_then(Value::as_bool).unwrap_or(false) {
+        return Ok(inner.get("output").cloned().unwrap_or(Value::Null));
+    }
+    let code = inner.get("code").and_then(Value::as_str).unwrap_or("");
+    match code {
+        "unavailable" => {
+            let reason = inner
+                .get("reason")
+                .and_then(Value::as_str)
+                .unwrap_or("unavailable");
+            let remediation = inner.get("remediation").cloned().unwrap_or(Value::Null);
+            Err(crate::call::CallError {
+                code: "unavailable",
+                message: format!("{tool} is unavailable: {reason}"),
+                data: Some(serde_json::json!({
+                    "reason": reason,
+                    "remediation": remediation,
+                })),
+            })
+        }
+        "origin_mismatch" => {
+            let error = inner
+                .get("error")
+                .and_then(Value::as_str)
+                .unwrap_or("page origin does not match the custom tool host");
+            Err(crate::call::CallError {
+                code: "origin_mismatch",
+                message: error.to_string(),
+                data: Some(inner.clone()),
+            })
+        }
+        "unknown_tool" => Err(exec::tool_not_found(tool)),
+        _ => {
+            let error = inner
+                .get("error")
+                .and_then(Value::as_str)
+                .unwrap_or("the custom tool reported an error");
+            Err(crate::call::CallError {
+                code: "tool_error",
+                message: error.to_string(),
+                data: Some(inner.clone()),
+            })
+        }
+    }
+}
+
+/// Build an `InspectedTool` for a custom tool with live availability.
+pub fn custom_inspected(
+    c: &CustomInspect,
+    available: bool,
+    reason: Option<String>,
+    remediation: Option<String>,
+) -> InspectedTool {
+    InspectedTool {
+        name: c.name.clone(),
+        description: if c.description.trim().is_empty() {
+            None
+        } else {
+            Some(c.description.clone())
+        },
+        input_schema: c.common.input_schema.clone(),
+        read_only: None,
+        source: Some("custom".to_string()),
+        available: Some(available),
+        unavailable_reason: if available { None } else { reason },
+        remediation: if available { None } else { remediation },
+        headed: Some(c.common.headed),
+        auth: Some(c.auth.as_str().to_string()),
+        allow_browse: Some(c.common.allow_browse),
+        tool_hash: Some(c.common.tool_hash.clone()),
+    }
+}
+
+/// Custom tools shadowed by a live native tool of the same name.
+pub fn unshadowed<'a>(
+    custom: &'a [CustomInspect],
+    native: &[InspectedTool],
+) -> Vec<&'a CustomInspect> {
+    custom
+        .iter()
+        .filter(|c| !native.iter().any(|n| n.name == c.name))
+        .collect()
+}
+
+/// Grouped custom-inspect entries: `((expected_origin, js_source), tools)`.
+pub type CustomInspectGroup<'a> = ((String, std::sync::Arc<str>), Vec<&'a CustomInspect>);
+
+/// Group custom-inspect entries by `(expected_origin, js_source)` so one
+/// eval covers every tool from a host. Stable group order (`BTreeMap`).
+pub fn group_custom_inspects<'a>(
+    pending: impl IntoIterator<Item = &'a CustomInspect>,
+) -> Vec<CustomInspectGroup<'a>> {
+    use std::collections::BTreeMap;
+    let mut groups: BTreeMap<(String, std::sync::Arc<str>), Vec<&'a CustomInspect>> =
+        BTreeMap::new();
+    for c in pending {
+        groups
+            .entry((c.common.expected_origin.clone(), c.common.js_source.clone()))
+            .or_default()
+            .push(c);
+    }
+    groups.into_iter().collect()
+}
+
+/// Signal from a driver that a live native tool shadows the resolved custom
+/// tool and the native policy forbids invoking it. `call.rs` maps these to
+/// `Outcome::Blocked` / `Outcome::NeedsConfirmation` instead of running
+/// anything; the codes are driver→`call.rs` contract, never user-facing.
+pub(crate) fn native_denied(native_id: &str) -> crate::call::CallError {
+    crate::call::CallError {
+        code: "native_denied",
+        message: format!(
+            "live native tool {native_id} shadows the custom tool and is denied by config; refusing to run either"
+        ),
+        data: Some(serde_json::json!({ "nativeId": native_id })),
+    }
+}
+
+/// Signal from a driver that a live native tool shadows the resolved custom
+/// tool and needs an explicit native grant. `call.rs` maps this to
+/// `Outcome::NeedsConfirmation`.
+pub(crate) fn native_needs_confirmation(native_id: &str) -> crate::call::CallError {
+    crate::call::CallError {
+        code: "native_needs_confirmation",
+        message: format!(
+            "live native tool {native_id} shadows the custom tool; it needs an explicit native allow rule"
+        ),
+        data: Some(serde_json::json!({ "nativeId": native_id })),
+    }
 }
 
 /// Every driver, agent-browser first; sessions come from config.

@@ -15,6 +15,11 @@ search) are not indexed yet.
 site, so "search stripe docs" never answers with another company's docs. When
 nothing matches, it says so instead of returning a loose word match.
 
+`find` searches your local custom tools alongside the public index (see the
+Custom tools section in the README), so a host you authored tools for
+matches even with no native WebMCP on the site; a same-named native tool
+automatically shadows the custom one.
+
 ## Listing and removal
 
 To list a site, use **Add your site** on

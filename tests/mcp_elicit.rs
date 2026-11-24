@@ -1,6 +1,8 @@
 //! MCP elicitation: the user approves `ask` calls through the client.
 //! In-process client/server pairs over a duplex stream; no network.
 
+mod common;
+
 use std::collections::BTreeMap;
 use std::sync::{
     Arc,
@@ -294,6 +296,192 @@ async fn mismatched_retry_is_invalid_input() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn continuation_denied_when_current_decision_is_deny() -> anyhow::Result<()> {
+    // A prior approval never overrides a current deny: the continuation is
+    // validated against the current resolution first.
+    let mut cfg = agent_webmcp::config::Config::default();
+    cfg.driver = agent_webmcp::config::DriverChoice::None;
+    cfg.permissions.deny.push("cal.com/ask_cal_com".into());
+    let denied = Server::with_config(Search::build(ask_index()).unwrap(), cfg);
+    with_pair(
+        denied,
+        AnswerClient::accept(),
+        ProtocolVersion::V_2026_07_28,
+        true,
+        |client| async move {
+            // Denial wins before any token is consulted: even a forged
+            // `request_state` cannot run a denied tool.
+            let mut responses = BTreeMap::new();
+            responses.insert(
+                "approve".into(),
+                json!({"action": "accept", "content": {"approve": true}}),
+            );
+            let params = CallToolRequestParams::new("call")
+                .with_arguments(args(
+                    "cal.com/ask_cal_com",
+                    json!({"question": "hi"}),
+                    false,
+                ))
+                .with_input_responses(responses)
+                .with_request_state("forged-state".to_string());
+            let result = client.call_tool(params).await?;
+            let envelope = envelope_of(&result);
+            assert_eq!(envelope["code"], json!("denied"));
+            assert!(
+                envelope["error"]
+                    .as_str()
+                    .unwrap()
+                    .contains("cannot override"),
+                "{envelope}"
+            );
+            Ok(())
+        },
+    )
+    .await
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn retry_with_stale_page_is_invalid_input() -> anyhow::Result<()> {
+    // The approval binds the resolved page: prompt while the tool lives on
+    // the index page, move it (simulating an index refresh), then retry
+    // with the issued state. The bound page no longer matches, so the
+    // retry is rejected before anything runs.
+    let search = Search::build(ask_index()).unwrap();
+    let srv = Server::with_config(search, {
+        let mut cfg = agent_webmcp::config::Config::default();
+        cfg.driver = agent_webmcp::config::DriverChoice::None;
+        cfg
+    });
+    let shared = srv.shared();
+    with_pair(
+        srv,
+        AnswerClient::accept(),
+        ProtocolVersion::V_2026_07_28,
+        true,
+        |client| async move {
+            let pending = client
+                .call_tool_once(call_params(
+                    "cal.com/ask_cal_com",
+                    json!({"question": "hi"}),
+                    false,
+                ))
+                .await?;
+            let state = match pending {
+                rmcp::model::CallToolResponse::InputRequired(input) => {
+                    input.request_state.expect("approval state")
+                }
+                other => panic!("expected an approval round, got {other:?}"),
+            };
+            // Move the tool to a different page, as an index refresh would.
+            let mut moved = ask_index();
+            moved.sites[0].tools[0].page = "https://cal.com/other".to_string();
+            *shared.lock().unwrap_or_else(|e| e.into_inner()) = Search::build(moved).unwrap();
+            let mut responses = BTreeMap::new();
+            responses.insert(
+                "approve".into(),
+                json!({"action": "accept", "content": {"approve": true}}),
+            );
+            let params = CallToolRequestParams::new("call")
+                .with_arguments(args(
+                    "cal.com/ask_cal_com",
+                    json!({"question": "hi"}),
+                    false,
+                ))
+                .with_input_responses(responses)
+                .with_request_state(state);
+            let result = client.call_tool(params).await?;
+            let envelope = envelope_of(&result);
+            assert_eq!(envelope["code"], json!("invalid_input"));
+            assert!(
+                envelope["error"]
+                    .as_str()
+                    .unwrap()
+                    .contains("does not match"),
+                "{envelope}"
+            );
+            Ok(())
+        },
+    )
+    .await
+}
+
+#[cfg(unix)]
+#[tokio::test(flavor = "current_thread")]
+async fn approved_retry_cannot_replay() -> anyhow::Result<()> {
+    // An approval authorizes exactly one execution: repeating the same
+    // approved retry is rejected and the tool does not run a second time.
+    let _home = common::HomeGuard::isolate();
+    let dir = tempfile::tempdir().unwrap();
+    let script = common::Fake::new().install(&dir, "agent-browser");
+    let mut cfg = agent_webmcp::config::Config::default();
+    cfg.driver = agent_webmcp::config::DriverChoice::AgentBrowser;
+    cfg.drivers.agent_browser.command = script.display().to_string();
+    cfg.drivers.agent_browser.session = format!("replay-s-{}", std::process::id());
+    cfg.call.timeout = 1234;
+    cfg.call.settle_ms = 0;
+    let server = Server::with_config(Search::build(ask_index()).unwrap(), cfg);
+    let opens = || {
+        common::Fake::argv(&dir, "agent-browser")
+            .iter()
+            .filter(|l| l.contains(" open "))
+            .count()
+    };
+    with_pair(
+        server,
+        AnswerClient::accept(),
+        ProtocolVersion::V_2026_07_28,
+        true,
+        |client| async move {
+            // First leg: the prompt issues a fresh single-use state.
+            let pending = client
+                .call_tool_once(call_params(
+                    "cal.com/ask_cal_com",
+                    json!({"question": "hi"}),
+                    false,
+                ))
+                .await?;
+            let state = match pending {
+                rmcp::model::CallToolResponse::InputRequired(input) => {
+                    input.request_state.expect("approval state")
+                }
+                other => panic!("expected an approval round, got {other:?}"),
+            };
+            let mut responses = BTreeMap::new();
+            responses.insert(
+                "approve".into(),
+                json!({"action": "accept", "content": {"approve": true}}),
+            );
+            let retry = || {
+                CallToolRequestParams::new("call")
+                    .with_arguments(args(
+                        "cal.com/ask_cal_com",
+                        json!({"question": "hi"}),
+                        false,
+                    ))
+                    .with_input_responses(responses.clone())
+                    .with_request_state(state.clone())
+            };
+            // First retry consumes the approval and runs.
+            let first = client.call_tool(retry()).await?;
+            let envelope = envelope_of(&first);
+            assert_eq!(envelope["success"], json!(true));
+            assert_eq!(opens(), 1, "first retry runs the tool once");
+            // An identical second retry is rejected before anything runs.
+            let second = client.call_tool(retry()).await?;
+            let envelope = envelope_of(&second);
+            assert_eq!(envelope["code"], json!("invalid_input"));
+            assert!(
+                envelope["error"].as_str().unwrap().contains("already-used"),
+                "{envelope}"
+            );
+            assert_eq!(opens(), 1, "replay must not run the tool again");
+            Ok(())
+        },
+    )
+    .await
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn no_elicitation_capability_keeps_confirm_flow() -> anyhow::Result<()> {
     with_pair(
         server(),
@@ -325,6 +513,11 @@ async fn no_elicitation_capability_keeps_confirm_flow() -> anyhow::Result<()> {
                     true,
                 ))
                 .await?;
+            assert_ne!(
+                result.is_error,
+                Some(true),
+                "a completed call is not a tool error"
+            );
             let envelope = envelope_of(&result);
             assert_eq!(envelope["success"], json!(true));
             assert_eq!(envelope["data"]["plan"]["driver"], json!("generic"));

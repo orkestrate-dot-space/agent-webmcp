@@ -36,6 +36,17 @@ pub struct Hit {
     /// How well this matched, higher is better. Only comparable within one
     /// search, and only useful for spotting a weak match.
     pub relevance: f64,
+    /// `"custom"` for local custom tools (`None` for native index hits).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "toolHash")]
+    pub tool_hash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub headed: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auth: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "allowBrowse")]
+    pub allow_browse: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -81,7 +92,18 @@ pub struct Search {
     rows: Vec<Row>,
     index: Index,
     platform_sites: BTreeMap<String, usize>,
+    /// Build identity: refresh swaps in a new `Search`, so two lock
+    /// acquisitions can observe different indexes. Callers that split work
+    /// across locks carry this and rerun the first phase when it changes.
+    generation: u64,
 }
+
+/// Monotonic build identity for [`Search`].
+static SEARCH_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+/// Native hits plus the merge state for the custom catalog: the truncated
+/// native list, seen ids, the site filter, and the content words.
+type NativeParts = (Vec<Hit>, Vec<String>, Option<String>, Vec<String>);
 
 impl Search {
     /// Build the search over verified sites only.
@@ -122,7 +144,13 @@ impl Search {
             rows,
             index,
             platform_sites,
+            generation: SEARCH_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
         })
+    }
+
+    /// Build identity for generation-guarded two-phase searches.
+    pub fn generation(&self) -> u64 {
+        self.generation
     }
 
     /// First verified tool named `name` on `host`, in index order.
@@ -162,9 +190,47 @@ impl Search {
     /// best-ranked site), with the number of sites that share it. Flagged
     /// tools come after clean ones.
     pub fn find(&self, query: &str, limit: usize) -> Result<Vec<Hit>> {
+        self.find_in(query, limit, None)
+    }
+
+    /// [`find`] with an explicit custom-tools root (tests pass `Some`; the
+    /// CLI passes `None` to read the process environment).
+    pub fn find_in(
+        &self,
+        query: &str,
+        limit: usize,
+        tools_dir: Option<&std::path::Path>,
+    ) -> Result<Vec<Hit>> {
+        let (mut clean, seen_ids, site, words) = self.native_in(query, limit)?;
+        if words.is_empty() {
+            return Ok(clean);
+        }
+        // Merge matching local custom tools below native hits. Native indexed
+        // tools always rank ahead; an exact (host, tool) native match shadows
+        // the custom one.
+        if clean.len() < limit {
+            let mut customs = self.custom_hits(&words, site.as_deref(), &seen_ids, tools_dir);
+            customs.sort_by(|a, b| {
+                b.relevance
+                    .partial_cmp(&a.relevance)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+            let room = limit.saturating_sub(clean.len());
+            customs.truncate(room);
+            clean.extend(customs);
+        }
+        Ok(clean)
+    }
+
+    /// Native-only phase of [`find_in`]: FTS lookup, scoring, and the
+    /// truncated native hit list, plus the state the custom merge needs
+    /// (`seen_ids`, the site filter, and the content words). No filesystem
+    /// work happens here, so MCP can run this under the search lock, scan
+    /// the local custom catalog after releasing it, and merge below.
+    pub fn native_in(&self, query: &str, limit: usize) -> Result<NativeParts> {
         let words = content_words(query);
         if words.is_empty() {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), Vec::new(), None, words));
         }
         // A word that names an indexed site narrows the search to that site, so
         // "search stripe docs" never answers with another company's docs.
@@ -276,6 +342,11 @@ impl Search {
                 platform,
                 flags: tool.flags.clone(),
                 relevance,
+                source: None,
+                tool_hash: None,
+                headed: None,
+                auth: None,
+                allow_browse: None,
             };
             if hit.flags.is_empty() {
                 clean.push(hit)
@@ -288,7 +359,125 @@ impl Search {
         }
         clean.extend(flagged);
         clean.truncate(limit);
-        Ok(clean)
+        Ok((clean, seen_ids, site, words))
+    }
+
+    /// Merge pre-loaded custom hosts (scanned without the search lock) below
+    /// the native hits from [`native_in`]. Native indexed tools always rank
+    /// ahead; an exact (host, tool) native match shadows the custom one.
+    pub fn merge_custom_hits(
+        &self,
+        mut clean: Vec<Hit>,
+        words: &[String],
+        site: Option<&str>,
+        seen_ids: &[String],
+        loaded_hosts: Vec<crate::tools::LoadedHostTools>,
+        limit: usize,
+    ) -> Vec<Hit> {
+        if clean.len() < limit {
+            let mut customs = self.custom_hits_loaded(words, site, seen_ids, &loaded_hosts);
+            customs.sort_by(|a, b| {
+                b.relevance
+                    .partial_cmp(&a.relevance)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+            let room = limit.saturating_sub(clean.len());
+            customs.truncate(room);
+            clean.extend(customs);
+        }
+        clean
+    }
+
+    /// Matching valid local custom tools, excluding any shadowed by a native
+    /// indexed tool with the same `(host, tool_name)`.
+    fn custom_hits(
+        &self,
+        words: &[String],
+        site_filter: Option<&str>,
+        seen_ids: &[String],
+        tools_dir: Option<&std::path::Path>,
+    ) -> Vec<Hit> {
+        let loaded_hosts = match tools_dir {
+            Some(root) => crate::tools::load_all_valid_in(root),
+            None => crate::tools::load_all_valid(),
+        };
+        self.custom_hits_loaded(words, site_filter, seen_ids, &loaded_hosts)
+    }
+
+    /// [`custom_hits`] over already-loaded hosts: the filesystem reads and
+    /// hashing happen before this call (outside the search lock), so this
+    /// only scores and filters.
+    fn custom_hits_loaded(
+        &self,
+        words: &[String],
+        site_filter: Option<&str>,
+        seen_ids: &[String],
+        loaded_hosts: &[crate::tools::LoadedHostTools],
+    ) -> Vec<Hit> {
+        let mut out = Vec::new();
+        for loaded in loaded_hosts {
+            // When the query names a site, keep custom answers on that site.
+            if let Some(s) = site_filter
+                && !contains_word(&loaded.host, s)
+            {
+                continue;
+            }
+            for def in &loaded.manifest.tools {
+                let id = format!("{}/{}", loaded.host, def.name);
+                if seen_ids.contains(&id) {
+                    continue;
+                }
+                // Native indexed tool with the same (host, tool) shadows us.
+                if self.tool(&loaded.host, &def.name).is_some() {
+                    continue;
+                }
+                let score = relevance(
+                    words,
+                    &loaded.host,
+                    &def.name,
+                    &def.description,
+                    &def.input_schema,
+                );
+                if score <= 0.0 {
+                    continue;
+                }
+                let page = def.effective_page(&loaded.manifest).to_string();
+                let call = CallInfo {
+                    target: id.clone(),
+                    input: crate::call::example_input(&def.input_schema),
+                };
+                let (kind, kind_inferred) = if def.read_only {
+                    (crate::call::kind_str(crate::call::ToolKind::Read), false)
+                } else {
+                    (
+                        crate::call::kind_str(crate::call::ToolKind::Unspecified),
+                        false,
+                    )
+                };
+                let auth = def.auth.as_str().to_string();
+                out.push(Hit {
+                    id,
+                    site: loaded.host.clone(),
+                    tool: def.name.clone(),
+                    description: def.description.clone(),
+                    open: page,
+                    kind,
+                    kind_inferred,
+                    input_schema: def.input_schema.clone(),
+                    checked_at: String::new(),
+                    call,
+                    platform: None,
+                    flags: Vec::new(),
+                    relevance: score,
+                    source: Some("custom".to_string()),
+                    tool_hash: Some(loaded.sha256.clone()),
+                    headed: Some(def.headed),
+                    auth: Some(auth),
+                    allow_browse: Some(def.allow_browse),
+                });
+            }
+        }
+        out
     }
 
     /// Rows matching every content word, best first.
