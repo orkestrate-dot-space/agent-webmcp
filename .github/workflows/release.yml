@@ -27,6 +27,18 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: check wrapper package.json matches Cargo.toml
+        run: |
+          CARGO="$(sed -n 's/^version *= *"\(.*\)"/\1/p' Cargo.toml | head -1)"
+          node -e '
+            const fs = require("fs");
+            const want = process.argv[1];
+            const pkg = JSON.parse(fs.readFileSync("packages/agent-webmcp/package.json", "utf8"));
+            if (pkg.version !== want) throw new Error(`wrapper version ${pkg.version} !== Cargo.toml ${want}`);
+            for (const [k, v] of Object.entries(pkg.optionalDependencies || {})) {
+              if (v !== want) throw new Error(`${k} version ${v} !== Cargo.toml ${want}`);
+            }
+          ' "$CARGO"
       - if: github.ref_type == 'tag'
         run: |
           TAG="${GITHUB_REF_NAME#v}"
